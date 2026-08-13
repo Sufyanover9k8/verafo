@@ -103,6 +103,26 @@
                    radial-gradient(60% 50% at 100% 100%, rgba(63, 191, 135, 0.07), transparent 55%),
                    var(--v-ink-950);
   --v-hairline: linear-gradient(90deg, transparent 5%, var(--v-purple-400) 40%, var(--v-safe) 60%, transparent 95%);
+
+  /* ── 8 · Metallic & medal accents ─────────────── */
+  --v-gold:      #E9C46A;
+  --v-gold-2:    #B98E3E;
+  --v-gold-hi:   #FFF3CF;
+  --v-silver:    #C9CDD8;
+  --v-silver-2:  #8E93A6;
+  --v-silver-hi: #EDF0F6;
+  --v-bronze:    #D2A47A;
+  --v-bronze-2:  #8A5F38;
+  --v-bronze-hi: #F5DFC8;
+  --v-grad-metal: linear-gradient(165deg,
+      color-mix(in srgb, var(--v-purple-500) 26%, var(--v-ink-800)) 0%,
+      var(--v-ink-850) 40%,
+      var(--v-ink-800) 70%,
+      color-mix(in srgb, var(--v-purple-700) 36%, var(--v-ink-900)) 100%);
+  --v-grad-safe: linear-gradient(120deg,
+      color-mix(in srgb, var(--v-safe) 70%, var(--v-ink-050)),
+      var(--v-safe) 55%,
+      color-mix(in srgb, var(--v-safe) 55%, var(--v-ink-900)));
 }
 
 /* ── Light theme — alternate token ramp ─────────────── */
