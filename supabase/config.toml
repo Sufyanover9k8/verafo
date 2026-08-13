@@ -1,0 +1,6 @@
+project_id = "verafo"
+
+[functions.verafo-ai]
+enabled = true
+verify_jwt = false
+timeout = 120

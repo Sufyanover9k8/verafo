@@ -1,0 +1,9 @@
+/* ============================================================
+   index.css — Verafo entry stylesheet
+   Tokens live in styles/tokens.css; nothing raw is defined here.
+   ============================================================ */
+
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/utilities.css';
+@import './styles/components.css';

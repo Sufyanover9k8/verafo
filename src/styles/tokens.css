@@ -1,0 +1,174 @@
+/* ============================================================
+   tokens.css — Verafo design system
+   Single source of truth. Do not add raw values elsewhere.
+   Sections: 1 colour · 2 type · 3 space · 4 radius · 5 motion · 6 z-index
+   ============================================================ */
+
+:root {
+  /* ── 1 · Colour — brand ─────────────────────────── */
+  --v-purple-50:  #F3EFFB;
+  --v-purple-100: #E4DAF7;
+  --v-purple-200: #C9B5EF;
+  --v-purple-300: #AD8FE6;
+  --v-purple-400: #8C68D8;
+  --v-purple-500: #6A4CBB;   /* PRIMARY — brand anchor */
+  --v-purple-600: #573C9E;
+  --v-purple-700: #452F80;
+  --v-purple-800: #332360;
+  --v-purple-900: #211741;
+
+  /* ── 1 · Colour — neutrals (warm-shifted black) ── */
+  --v-ink-950: #08070B;   /* deepest — page background */
+  --v-ink-900: #0B0A0F;   /* app background (default) */
+  --v-ink-850: #100E16;   /* raised surface */
+  --v-ink-800: #16131E;   /* card background */
+  --v-ink-700: #1F1B29;   /* card hover / input background */
+  --v-ink-600: #2A2537;   /* borders, dividers */
+  --v-ink-500: #3D3650;   /* disabled, subtle strokes */
+  --v-ink-400: #6B6480;   /* placeholder text */
+  --v-ink-300: #948DA8;   /* secondary text */
+  --v-ink-200: #C4BFD1;   /* body text */
+  --v-ink-100: #E6E3ED;   /* primary text */
+  --v-ink-050: #F7F6FA;   /* highest-contrast text, rare */
+
+  /* ── 1 · Colour — semantic (risk verdicts) ─────── */
+  --v-safe:    #3FBF87;   /* low risk — desaturated green, not neon */
+  --v-safe-bg: rgba(63, 191, 135, 0.10);
+  --v-watch:   #E0A32E;   /* medium risk — amber */
+  --v-watch-bg:rgba(224, 163, 46, 0.10);
+  --v-risk:    #E05252;   /* high risk — red */
+  --v-risk-bg: rgba(224, 82, 82, 0.10);
+  --v-unknown: #6B6480;   /* insufficient data — deliberately grey, NOT a colour */
+  --v-unknown-bg: rgba(107, 100, 128, 0.10);
+
+  /* ── 2 · Type — families ───────────────────────── */
+  --v-font-sans:  'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --v-font-serif: 'Instrument Serif', 'Spectral', Georgia, serif;
+  --v-font-mono:  'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  /* ── 2 · Type — scale ──────────────────────────── */
+  --t-display: 56px;      /* verdict numeral only */
+  --t-h1: 32px;           /* page titles (serif) */
+  --t-h2: 22px;           /* section headers */
+  --t-h3: 17px;           /* card titles */
+  --t-body: 14px;         /* body copy */
+  --t-body-sm: 13px;      /* secondary text */
+  --t-caption: 12px;      /* labels, helper text */
+  --t-micro: 11px;        /* eyebrows — uppercase, tracked */
+  --t-data: 13px;         /* identifiers, values (mono) */
+  --t-data-lg: 15px;      /* emphasised metrics (mono) */
+
+  /* ── 3 · Space — 4px scale ─────────────────────── */
+  --s-1: 4px;   --s-2: 8px;    --s-3: 12px;
+  --s-4: 16px;  --s-5: 20px;   --s-6: 24px;
+  --s-8: 32px;  --s-10: 40px;  --s-12: 48px;
+  --s-16: 64px; --s-20: 80px;  --s-24: 96px;
+
+  /* ── 4 · Radius ────────────────────────────────── */
+  --r-6: 6px;    /* chips, inputs */
+  --r-10: 10px;  /* buttons */
+  --r-12: 12px;  /* cards */
+  --r-16: 16px;  /* modals */
+  --r-full: 999px; /* pills */
+
+  /* ── 5 · Motion ────────────────────────────────── */
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:  cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* ── 6 · Z-index ───────────────────────────────── */
+  --z-base: 0;  --z-sticky: 10;  --z-sidebar: 20;  --z-topbar: 30;
+  --z-dropdown: 40;  --z-modal-backdrop: 50;  --z-modal: 60;  --z-toast: 70;
+
+  /* ── Layout ────────────────────────────────────── */
+  --v-sidebar-w: 260px;
+  --v-sidebar-w-collapsed: 68px;
+  --v-topbar-h: 60px;
+  --v-content-max: 1320px;
+  --v-outline: var(--v-purple-400);
+
+  /* ── 7 · Gradient & glow — decorative, optional ── */
+  --v-grad-brand: linear-gradient(135deg, var(--v-purple-200), var(--v-purple-400) 55%, var(--v-purple-600));
+  --v-grad-accent: linear-gradient(120deg, var(--v-purple-300), var(--v-purple-500));
+  --v-grad-chip: linear-gradient(140deg, color-mix(in srgb, var(--v-purple-500) 22%, var(--v-ink-800)), color-mix(in srgb, var(--v-purple-600) 7%, var(--v-ink-800)));
+  --v-glow-soft: 0 6px 22px -10px rgba(106, 76, 187, 0.45);
+  --v-glow-md: 0 10px 34px -12px rgba(106, 76, 187, 0.55);
+  --v-glow-ring: 0 0 0 4px color-mix(in srgb, var(--v-outline) 20%, transparent);
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(128, 104, 216, 0.16), transparent 62%),
+              radial-gradient(42% 42% at -8% 104%, rgba(63, 191, 135, 0.08), transparent 58%),
+              radial-gradient(30% 30% at 96% 88%, rgba(224, 163, 46, 0.06), transparent 58%);
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(128, 104, 216, 0.18), transparent 60%),
+                   radial-gradient(60% 50% at 100% 100%, rgba(63, 191, 135, 0.07), transparent 55%),
+                   var(--v-ink-950);
+  --v-hairline: linear-gradient(90deg, transparent 5%, var(--v-purple-400) 40%, var(--v-safe) 60%, transparent 95%);
+}
+
+/* ── Light theme — alternate token ramp ─────────────── */
+[data-theme='light'] {
+  --v-ink-950: #F3F1F7;
+  --v-ink-900: #F7F6FA;
+  --v-ink-850: #FFFFFF;
+  --v-ink-800: #FFFFFF;
+  --v-ink-700: #F1EEF6;
+  --v-ink-600: #E5E1EC;
+  --v-ink-500: #CDC7D8;
+  --v-ink-400: #8F89A0;
+  --v-ink-300: #6B6480;
+  --v-ink-200: #4A4558;
+  --v-ink-100: #241F33;
+  --v-ink-050: #0B0A0F;
+  --v-safe:    #2E9E6B;
+  --v-watch:   #C98F1E;
+  --v-risk:    #D14343;
+  --v-unknown: #6B6480;
+}
+
+/* ── Legacy aliases — the pre-design-system variable
+      names map onto the design tokens so every existing
+      component complies without a hex in sight. ───────── */
+:root {
+  --accent: var(--v-purple-500);
+  --accent-2: var(--v-purple-600);
+  --accent-glow: rgba(106, 76, 187, 0.30);
+  --accent-soft: rgba(106, 76, 187, 0.14);
+  --green: var(--v-safe);
+  --green-soft: var(--v-safe-bg);
+  --amber: var(--v-watch);
+  --amber-soft: var(--v-watch-bg);
+  --red: var(--v-risk);
+  --red-soft: var(--v-risk-bg);
+
+  --radius: var(--r-12);
+  --radius-sm: var(--r-10);
+  --radius-xs: var(--r-6);
+  --font: var(--v-font-sans);
+
+  --bg: var(--v-ink-900);
+  --bg-2: var(--v-ink-800);
+  --bg-3: var(--v-ink-700);
+  --border: var(--v-ink-600);
+  --border-2: var(--v-ink-500);
+  --text: var(--v-ink-100);
+  --muted: var(--v-ink-300);
+  --muted-2: var(--v-ink-400);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --glass: var(--v-ink-850);
+  --glass-strong: rgba(11, 10, 15, 0.82);
+  --input-bg: var(--v-ink-700);
+  --hover: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='light'] {
+  --glass-strong: rgba(255, 255, 255, 0.86);
+  --hover: rgba(16, 14, 22, 0.05);
+  --v-grad-accent: linear-gradient(120deg, var(--v-purple-400), var(--v-purple-600));
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(128, 104, 216, 0.13), transparent 62%),
+              radial-gradient(42% 42% at -8% 104%, rgba(46, 158, 107, 0.08), transparent 58%);
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(128, 104, 216, 0.14), transparent 60%),
+                   radial-gradient(60% 50% at 100% 100%, rgba(46, 158, 107, 0.06), transparent 55%),
+                   var(--v-ink-950);
+  --v-grad-chip: linear-gradient(140deg, color-mix(in srgb, var(--v-purple-500) 14%, var(--v-ink-100)), color-mix(in srgb, var(--v-purple-600) 5%, var(--v-ink-100)));
+}

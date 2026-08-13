@@ -1,0 +1,35 @@
+/* ============================================================
+   utilities.css — .stack, .cluster, .grid-12
+   ============================================================ */
+
+.stack { display: flex; flex-direction: column; }
+.stack > * + * { margin-top: var(--s-4); }
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--s-6);
+}
+
+.col-12 { grid-column: span 12; }
+.col-8  { grid-column: span 8; }
+.col-7  { grid-column: span 7; }
+.col-5  { grid-column: span 5; }
+.col-4  { grid-column: span 4; }
+
+@media (max-width: 1023px) {
+  .col-8, .col-7, .col-5, .col-4 { grid-column: span 12; }
+}
+
+.grow { flex: 1; }
+.hide-mobile { display: initial; }
+@media (max-width: 767px) {
+  .hide-mobile { display: none; }
+}
