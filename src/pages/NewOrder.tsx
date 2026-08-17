@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader'
 import { VerdictBlock } from '../components/verdict/VerdictBlock'
 import { VerdictInline } from '../components/verdict/VerdictInline'
 import { EmptyState, NeedsSetup } from '../components/States'
+import { Reveal } from '../components/Reveal'
 import { normalizePhone, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
@@ -157,7 +158,7 @@ export function NewOrder() {
         subtitle="Log an order and see the buyer's risk profile instantly — across every connected store."
       />
 
-      <div className="order-layout">
+      <Reveal stagger className="order-layout">
         <form className="card form-card" onSubmit={handleSubmit}>
           <div className="phone-field-row">
             <label className="field">
@@ -354,9 +355,10 @@ export function NewOrder() {
             </div>
           )}
         </aside>
-      </div>
+      </Reveal>
 
       {lastOrder && (
+        <Reveal>
         <div className="card result-card">
           <div className="result-row">
             <span className="result-icon">
@@ -374,6 +376,7 @@ export function NewOrder() {
             </Link>
           </div>
         </div>
+        </Reveal>
       )}
     </div>
   )

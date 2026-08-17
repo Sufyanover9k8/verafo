@@ -7,6 +7,7 @@ import { Skeleton } from '../components/primitives/Skeleton'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { CountUpNumber } from '../components/CountUpNumber'
 import { Avatar } from '../components/Avatar'
+import { Reveal } from '../components/Reveal'
 import { useIsAdmin } from '../lib/admin'
 import { phone, dateOnly } from '../lib/format'
 import { computeStoreOverview, type StoreLite } from '../lib/storeStats'
@@ -162,12 +163,11 @@ export function Stores() {
                 }
               />
             ) : (
-              <div className="store-list">
-                {filtered.map((s, i) => (
+              <Reveal stagger className="store-list">
+                {filtered.map((s) => (
                   <div
                     className="store-row"
                     key={s.id}
-                    style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
                   >
                     <Avatar name={s.name} size={38} className="store-row-avatar" />
                     <div className="store-row-main">
@@ -218,7 +218,7 @@ export function Stores() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </Reveal>
             )}
           </Card>
         </section>

@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { Card } from '../components/primitives/Card'
 import { EmptyState, NeedsSetup } from '../components/States'
+import { Reveal } from '../components/Reveal'
 import { useIsAdmin } from '../lib/admin'
 import { normalizePhone, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
@@ -106,7 +107,7 @@ export function AddStore() {
           </div>
         </Card>
       ) : (
-        <div className="add-store-layout">
+        <Reveal stagger className="add-store-layout">
           <Card className="add-store-card">
             <form className="add-store-form" onSubmit={handleSubmit}>
               <label className="add-store-field">
@@ -213,7 +214,7 @@ export function AddStore() {
               </p>
             </div>
           </div>
-        </div>
+        </Reveal>
       )}
     </div>
   )

@@ -14,6 +14,7 @@ import { LineChart } from '../components/charts/LineChart'
 import { CountUpNumber } from '../components/CountUpNumber'
 import { Avatar } from '../components/Avatar'
 import { Sparkline } from '../components/Sparkline'
+import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { dateTime, money, phone } from '../lib/format'
@@ -213,7 +214,7 @@ export function StoreDashboard() {
               ))}
             </div>
           ) : (
-            <div className="kpi-grid">
+            <Reveal stagger className="kpi-grid">
               <Card>
                 <span className="kpi-label">Sales today</span>
                 <strong className="kpi-value">
@@ -256,10 +257,11 @@ export function StoreDashboard() {
                   )}
                 </span>
               </Card>
-            </div>
+            </Reveal>
           )}
 
           <section className="chart-section">
+            <Reveal stagger>
             <div className="verdict-panel-head">
               <h3 className="card-title">Sales — last {range} days</h3>
               <span className="verdict-conf">gross order value · PKR</span>
@@ -271,9 +273,10 @@ export function StoreDashboard() {
                 <LineChart data={salesData} series={[{ key: 'a', name: 'Sales' }]} height={220} begin={140} />
               )}
             </Card>
+          </Reveal>
           </section>
 
-          <div className="grid-12 chart-section">
+          <Reveal stagger className="grid-12 chart-section">
             <section className="col-6">
               <div className="verdict-panel-head">
                 <h3 className="card-title">Sales by city</h3>
@@ -305,9 +308,10 @@ export function StoreDashboard() {
                 )}
               </Card>
             </section>
-          </div>
+          </Reveal>
 
           <section className="chart-section">
+            <Reveal stagger>
             <div className="verdict-panel-head">
               <h3 className="card-title">Recent orders</h3>
               <Link className="link" to="/orders/pending">
@@ -330,6 +334,7 @@ export function StoreDashboard() {
                 />
               )}
             </Card>
+          </Reveal>
           </section>
         </>
       )}

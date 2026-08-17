@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
+import { Reveal } from '../components/Reveal'
 import { NeedsSetup } from '../components/States'
 import { normalizePhone } from '../lib/format'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
@@ -336,6 +337,7 @@ export function BulkImport() {
         subtitle="Load many orders (and their outcomes) from a CSV. Risk scores recompute automatically."
       />
 
+      <Reveal stagger>
       <div className="card import-card">
         <div className="import-head">
           <h3 className="card-title">
@@ -559,6 +561,7 @@ export function BulkImport() {
           </div>
         )}
       </div>
+      </Reveal>
     </div>
   )
 }

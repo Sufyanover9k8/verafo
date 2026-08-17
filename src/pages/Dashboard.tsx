@@ -11,6 +11,7 @@ import { GeoMap } from '../components/charts/GeoMap'
 import { LineChart } from '../components/charts/LineChart'
 import { CountUpNumber } from '../components/CountUpNumber'
 import { Sparkline } from '../components/Sparkline'
+import { Reveal } from '../components/Reveal'
 import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { NeedsSetup } from '../components/States'
 import { phone, timeAgo } from '../lib/format'
@@ -171,7 +172,7 @@ export function Dashboard() {
 
   return (
     <div className="stack">
-      <div className="dash-hero">
+      <Reveal className="dash-hero">
         <div className="dash-hero-row">
           <div>
             <h1 className="dash-hero-title">{greetingForName(getProfile().name)}</h1>
@@ -188,7 +189,7 @@ export function Dashboard() {
           </div>
           <RangeFilter range={range} onChange={setRange} />
         </div>
-      </div>
+      </Reveal>
 
       {loading ? (
         <div className="stack">
@@ -203,7 +204,7 @@ export function Dashboard() {
           </div>
         </div>
       ) : (
-        <div className="kpi-grid">
+        <Reveal stagger className="kpi-grid">
           <Card>
             <span className="kpi-label">Orders today</span>
             <strong className="kpi-value">
@@ -246,10 +247,11 @@ export function Dashboard() {
               </Link>
             </span>
           </Card>
-        </div>
+        </Reveal>
       )}
 
       <section className="chart-section">
+        <Reveal stagger>
         <div className="verdict-panel-head">
           <h3 className="card-title">Sales — last {range} days</h3>
           <span className="verdict-conf">gross order value · PKR</span>
@@ -261,9 +263,10 @@ export function Dashboard() {
             <LineChart data={salesData} series={[{ key: 'a', name: 'Sales' }]} height={220} begin={140} />
           )}
         </Card>
+        </Reveal>
       </section>
 
-      <div className="grid-12 chart-section">
+      <Reveal stagger className="grid-12 chart-section">
         <section className="col-8">
           <Card>
             <div className="verdict-panel-head">
@@ -290,9 +293,9 @@ export function Dashboard() {
             )}
           </Card>
         </section>
-      </div>
+      </Reveal>
 
-      <div className="grid-12 chart-section">
+      <Reveal stagger className="grid-12 chart-section">
         <section className="col-6">
           <Card>
             <div className="verdict-panel-head">
@@ -324,9 +327,10 @@ export function Dashboard() {
             )}
           </Card>
         </section>
-      </div>
+      </Reveal>
 
       <section className="chart-section">
+        <Reveal stagger>
         <div className="verdict-panel-head">
           <h3 className="card-title">Recent activity</h3>
           <Link className="link" to="/orders/pending">
@@ -389,6 +393,7 @@ export function Dashboard() {
             </div>
           )}
         </Card>
+        </Reveal>
       </section>
     </div>
   )

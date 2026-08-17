@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,
     port: 5173,
     // Allow public preview tunnels (e.g. cloudflared) to reach the dev server.
     allowedHosts: ['.trycloudflare.com'],

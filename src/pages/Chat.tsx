@@ -4,6 +4,7 @@ import { FileCard } from '../components/FileCard'
 import { Icon } from '../components/Icon'
 import { Avatar } from '../components/Avatar'
 import { Skeleton } from '../components/primitives/Skeleton'
+import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { timeAgo } from '../lib/format'
 import { activeMention, mentionPhones, renderMentions, type ActiveMention } from '../lib/mentions'
@@ -999,7 +1000,7 @@ export function Chat() {
           )}
         </div>
 
-        <div className="chat-items">
+        <Reveal stagger className="chat-items">
           {sortedChats.length === 0 && (
             <div className="chat-items-empty">
               <EmptyState
@@ -1072,7 +1073,7 @@ export function Chat() {
               </span>
             </div>
           ))}
-        </div>
+        </Reveal>
 
         <div className="chat-rail-foot">
           <button className="btn btn-ghost btn-sm" onClick={() => setManageMode((v) => !v)}>

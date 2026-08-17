@@ -6,6 +6,7 @@ import { Badge } from '../components/primitives/Badge'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
 import { Avatar } from '../components/Avatar'
+import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
@@ -214,6 +215,7 @@ export function Outcomes() {
           )}
         </div>
       ) : (
+        <Reveal>
         <div className="card card--flush">
           <Table
             columns={columns}
@@ -228,6 +230,7 @@ export function Outcomes() {
             empty={<EmptyState icon="time" title="Nothing here" />}
           />
         </div>
+        </Reveal>
       )}
     </div>
   )

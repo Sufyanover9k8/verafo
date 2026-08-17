@@ -13,6 +13,7 @@ import {
 import { Icon } from '../components/Icon'
 import type { MapPoint3D } from '../components/Map3D'
 import { PageHeader } from '../components/PageHeader'
+import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { money } from '../lib/format'
 import { RISK, formatScore, riskLevel } from '../lib/score'
@@ -376,7 +377,7 @@ export function BuyerMap() {
         </div>
       )}
 
-      <div className="map-stats">
+      <Reveal className="map-stats">
         <span>
           <strong>{points.length}</strong> buyers
         </span>
@@ -394,14 +395,14 @@ export function BuyerMap() {
             {mode === '3d' && <> · Z: {zDim.label}</>}
           </span>
         )}
-      </div>
+      </Reveal>
 
       {loading ? (
         <EmptyState icon="hourglass-outline" title="Loading buyers…" />
       ) : points.length === 0 ? (
         <EmptyState icon="person-outline" title="No buyers yet" detail="Log some orders first — buyers appear here automatically." />
       ) : (
-        <div className="map-card spotlight">
+        <Reveal className="map-card spotlight">
           <div className="map-legend">
             {(Object.keys(RISK) as (keyof typeof RISK)[]).map((k) => (
               <span key={k} className="map-legend-item">
@@ -523,7 +524,7 @@ export function BuyerMap() {
                 ? 'AI similarity cloud. Drag to rotate, scroll to zoom. Closer dots = more similar buyers.'
                 : 'Drag to rotate, scroll to zoom. Hover a dot for details, click\u2026'}
           </div>
-        </div>
+        </Reveal>
       )}
     </div>
   )

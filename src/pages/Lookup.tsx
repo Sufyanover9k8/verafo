@@ -7,6 +7,7 @@ import { VerdictChip } from '../components/verdict/VerdictChip'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Avatar } from '../components/Avatar'
+import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
 import { riskFactors } from '../lib/risk'
@@ -230,7 +231,7 @@ export function Lookup() {
               <Icon name="trash" size={15} />
             </button>
           </div>
-          <div className="recent-list">
+          <Reveal stagger className="recent-list">
             {recents.map((r) => {
               return (
                 <button key={r.id} className="recent-row" onClick={() => openRecent(r.buyer_phone)}>
@@ -241,7 +242,7 @@ export function Lookup() {
                 </button>
               )
             })}
-          </div>
+          </Reveal>
         </Card>
       )}
 
@@ -277,7 +278,7 @@ export function Lookup() {
       )}
 
       {buyer && (
-        <div className="grid-12">
+        <Reveal stagger className="grid-12">
           <section className="col-7 stack">
             <VerdictBlock
               risk_score={buyer.risk_score}
@@ -313,7 +314,7 @@ export function Lookup() {
                 <p className="card-sub">
                   Nearest neighbours by embedding — how similar people behaved, before this buyer had much history.
                 </p>
-                <div className="similar-list">
+                <Reveal stagger className="similar-list">
                   {state.similar.map((s) => {
                     return (
                       <button key={s.phone} className="similar-row" onClick={() => void search(s.phone)}>
@@ -327,7 +328,7 @@ export function Lookup() {
                       </button>
                     )
                   })}
-                </div>
+                </Reveal>
               </Card>
             )}
 
@@ -429,7 +430,7 @@ export function Lookup() {
               )}
             </Card>
           </section>
-        </div>
+        </Reveal>
       )}
     </div>
   )

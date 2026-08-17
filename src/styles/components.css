@@ -1193,7 +1193,7 @@ code {
    Dashboard
    ──────────────────────────────────────────────────────────── */
 
-.dash-hero { position: relative; margin-bottom: var(--s-8); animation: rise-in var(--dur-slow) var(--ease-out) backwards; }
+.dash-hero { position: relative; margin-bottom: var(--s-8); }
 .dash-hero::before {
   content: '';
   position: fixed;
@@ -2517,8 +2517,6 @@ code {
   gap: var(--s-6);
   align-items: start;
 }
-.add-store-card { animation: rise-in var(--dur-slow) var(--ease-out) 80ms backwards; }
-.add-store-preview { animation: rise-in var(--dur-slow) var(--ease-out) 200ms backwards; }
 .add-store-preview .verdict-conf { display: block; margin-bottom: var(--s-3); }
 .add-store-form { display: grid; gap: var(--s-6); }
 .add-store-field { display: flex; flex-direction: column; gap: var(--s-2); }
@@ -2670,51 +2668,43 @@ code {
 .city-map .leaflet-control-attribution a:hover { color: var(--cyan-bright); }
 
 /* ────────────────────────────────────────────────────────────
-   Staggered list entrances
+   Scroll reveal — sections animate in as they enter the viewport
    ──────────────────────────────────────────────────────────── */
 
-.activity-feed .timeline-item,
-.recent-list .recent-row,
-.similar-list .similar-row,
-.chat-item {
-  animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
 }
-.activity-feed .timeline-item:nth-child(2),
-.recent-list .recent-row:nth-child(2),
-.similar-list .similar-row:nth-child(2),
-.chat-item:nth-child(2) { animation-delay: 40ms; }
-.activity-feed .timeline-item:nth-child(3),
-.recent-list .recent-row:nth-child(3),
-.similar-list .similar-row:nth-child(3),
-.chat-item:nth-child(3) { animation-delay: 80ms; }
-.activity-feed .timeline-item:nth-child(4),
-.recent-list .recent-row:nth-child(4),
-.similar-list .similar-row:nth-child(4),
-.chat-item:nth-child(4) { animation-delay: 120ms; }
-.activity-feed .timeline-item:nth-child(5),
-.recent-list .recent-row:nth-child(5),
-.similar-list .similar-row:nth-child(5),
-.chat-item:nth-child(5) { animation-delay: 160ms; }
-.activity-feed .timeline-item:nth-child(6),
-.recent-list .recent-row:nth-child(6),
-.similar-list .similar-row:nth-child(6),
-.chat-item:nth-child(6) { animation-delay: 200ms; }
-.activity-feed .timeline-item:nth-child(7),
-.chat-item:nth-child(7) { animation-delay: 240ms; }
-.activity-feed .timeline-item:nth-child(8),
-.chat-item:nth-child(8) { animation-delay: 280ms; }
-.activity-feed .timeline-item:nth-child(9) { animation-delay: 320ms; }
-.activity-feed .timeline-item:nth-child(10) { animation-delay: 360ms; }
-
-.table tbody tr { animation: rise-in 280ms var(--ease-out) backwards; }
-.table tbody tr:nth-child(2) { animation-delay: 30ms; }
-.table tbody tr:nth-child(3) { animation-delay: 60ms; }
-.table tbody tr:nth-child(4) { animation-delay: 90ms; }
-.table tbody tr:nth-child(5) { animation-delay: 120ms; }
-.table tbody tr:nth-child(6) { animation-delay: 150ms; }
-.table tbody tr:nth-child(7) { animation-delay: 180ms; }
-.table tbody tr:nth-child(8) { animation-delay: 210ms; }
-.table tbody tr:nth-child(9) { animation-delay: 240ms; }
-.table tbody tr:nth-child(10) { animation-delay: 270ms; }
-.table tbody tr:nth-child(11) { animation-delay: 300ms; }
-.table tbody tr:nth-child(12) { animation-delay: 330ms; }
+.reveal.in-view {
+  opacity: 1;
+  animation: reveal-item 520ms var(--ease-out) backwards;
+}
+.reveal-group > * {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.reveal-group.in-view > * {
+  opacity: 1;
+  animation: reveal-item 520ms var(--ease-out) backwards;
+}
+.reveal-group.in-view > *:nth-child(2) { animation-delay: 60ms; }
+.reveal-group.in-view > *:nth-child(3) { animation-delay: 120ms; }
+.reveal-group.in-view > *:nth-child(4) { animation-delay: 180ms; }
+.reveal-group.in-view > *:nth-child(5) { animation-delay: 240ms; }
+.reveal-group.in-view > *:nth-child(6) { animation-delay: 300ms; }
+.reveal-group.in-view > *:nth-child(7) { animation-delay: 360ms; }
+.reveal-group.in-view > *:nth-child(8) { animation-delay: 420ms; }
+.reveal-group.in-view > *:nth-child(9) { animation-delay: 480ms; }
+.reveal-group.in-view > *:nth-child(10) { animation-delay: 540ms; }
+@keyframes reveal-item {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+[data-motion='off'] .reveal,
+[data-motion='off'] .reveal-group,
+[data-motion='off'] .reveal > *,
+[data-motion='off'] .reveal-group > * {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
