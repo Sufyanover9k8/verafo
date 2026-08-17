@@ -124,7 +124,8 @@ function drawPdfChart(doc: jsPDF, spec: FileSpec, x: number, y: number, w: numbe
       doc.setFillColor(...PALETTE[i % PALETTE.length])
       doc.rect(x, legendY, 3, 3, 'F')
       doc.setTextColor(...MUTED)
-      doc.text(`${chart.labels[i].slice(0, 22)}  ${data[i].toLocaleString('en-PK')}`, x + 5, legendY + 2.5)
+      const val = ds.format === 'pkr' ? `PKR ${data[i].toLocaleString('en-PK')}` : data[i].toLocaleString('en-PK')
+      doc.text(`${chart.labels[i].slice(0, 22)}  ${val}`, x + 5, legendY + 2.5)
       legendY += 5
     }
   } else {

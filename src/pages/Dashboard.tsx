@@ -295,7 +295,7 @@ export function Dashboard() {
                             {c.orders} order{c.orders === 1 ? '' : 's'}
                           </span>
                         </span>
-                        <strong className="loc-value">{c.revenue.toLocaleString('en-PK')}</strong>
+                        <strong className="loc-value">{money(c.revenue)}</strong>
                       </div>
                       <div className="loc-track">
                         <span className={`loc-fill${i === 0 ? ' top' : ''}`} style={{ width: `${Math.max(3, c.share)}%` }} />

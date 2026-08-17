@@ -16,8 +16,9 @@ describe('currency', () => {
 })
 
 describe('money', () => {
-  it('formats bare numbers', () => {
-    expect(money(2200)).toBe('2,200')
+  it('renders PKR with thousands separators', () => {
+    expect(money(2200)).toBe('PKR 2,200')
+    expect(money(123456.5)).toBe('PKR 123,456.5')
     expect(money(null)).toBe('—')
   })
 })

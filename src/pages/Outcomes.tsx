@@ -5,7 +5,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Badge } from '../components/primitives/Badge'
 import { Table, type Column } from '../components/primitives/Table'
 import { EmptyState, NeedsSetup } from '../components/States'
-import { dateTime, phone } from '../lib/format'
+import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
@@ -115,7 +115,7 @@ export function Outcomes() {
       key: 'price',
       label: 'Total',
       num: true,
-      render: (o) => `${(o.price ?? 0).toLocaleString('en-PK')}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
+      render: (o) => `${money(o.price)}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
     },
     {
       key: 'ordered_at',

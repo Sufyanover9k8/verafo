@@ -11,7 +11,7 @@ import { GeoMap } from '../components/charts/GeoMap'
 import { LineChart } from '../components/charts/LineChart'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
-import { dateTime, phone } from '../lib/format'
+import { dateTime, money, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { computeCityStats, computeDailySales, computeStoreOverview } from '../lib/storeStats'
@@ -132,7 +132,7 @@ export function StoreDashboard() {
       label: 'Total',
       num: true,
       render: (o) =>
-        `${(o.price ?? 0).toLocaleString('en-PK')}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
+        `${money(o.price)}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
     },
     {
       key: 'status',
@@ -274,7 +274,7 @@ export function StoreDashboard() {
                               {c.orders} order{c.orders === 1 ? '' : 's'}
                             </span>
                           </span>
-                          <strong className="loc-value">{c.revenue.toLocaleString('en-PK')}</strong>
+                          <strong className="loc-value">{money(c.revenue)}</strong>
                         </div>
                         <div className="loc-track">
                           <span

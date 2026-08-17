@@ -7,7 +7,7 @@ export function currency(n: number | null | undefined): string {
 
 export function money(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return '—'
-  return new Intl.NumberFormat('en-PK').format(Number(n))
+  return `PKR ${new Intl.NumberFormat('en-PK').format(Number(n))}`
 }
 
 export function phone(p: string | null | undefined): string {
