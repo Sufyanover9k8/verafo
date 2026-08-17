@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Icon } from './components/Icon'
 import { Sidebar } from './components/layout/Sidebar'
 import { Topbar } from './components/layout/Topbar'
 import { Dashboard } from './pages/Dashboard'
+import { LayoutTickContext } from './lib/motion'
 
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })))
 const BulkImport = lazy(() => import('./pages/BulkImport').then((m) => ({ default: m.BulkImport })))
@@ -14,6 +15,8 @@ const NewOrder = lazy(() => import('./pages/NewOrder').then((m) => ({ default: m
 const Outcomes = lazy(() => import('./pages/Outcomes').then((m) => ({ default: m.Outcomes })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 const StoreDashboard = lazy(() => import('./pages/StoreDashboard').then((m) => ({ default: m.StoreDashboard })))
+const Stores = lazy(() => import('./pages/Stores').then((m) => ({ default: m.Stores })))
+const AddStore = lazy(() => import('./pages/AddStore').then((m) => ({ default: m.AddStore })))
 
 function RouteFallback() {
   return (
@@ -46,17 +49,28 @@ export function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const collapsed = !belowMd && (belowLg ? true : userCollapsed)
+  const [layoutTick, setLayoutTick] = useState(0)
+  const firstRender = useRef(true)
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, userCollapsed ? '1' : '0')
   }, [userCollapsed])
 
   useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false
+      return
+    }
+    setLayoutTick((t) => t + 1)
+  }, [collapsed, mobileOpen])
+
+  useEffect(() => {
     setMobileOpen(false)
   }, [location.pathname])
 
   const shell = (
-    <div className={`app${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' sidebar-open' : ''}`}>
+    <LayoutTickContext.Provider value={layoutTick}>
+      <div className={`app${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' sidebar-open' : ''}`}>
       <Sidebar
         collapsed={collapsed}
         mobileOpen={belowMd && mobileOpen}
@@ -64,7 +78,7 @@ export function App() {
         onNavigate={() => setMobileOpen(false)}
       />
       <Topbar onMenu={() => setMobileOpen(true)} />
-      <main className="main">
+      <main className={`main${location.pathname === '/chat' ? ' chat-main' : ''}`}>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -73,6 +87,8 @@ export function App() {
             <Route path="/orders/pending" element={<Outcomes />} />
             <Route path="/outcomes" element={<Navigate to="/orders/pending" replace />} />
             <Route path="/map" element={<BuyerMap />} />
+            <Route path="/stores" element={<Stores />} />
+            <Route path="/stores/add" element={<AddStore />} />
             <Route path="/stores/:id" element={<StoreDashboard />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/import" element={<BulkImport />} />
@@ -81,7 +97,8 @@ export function App() {
           </Routes>
         </Suspense>
       </main>
-    </div>
+      </div>
+    </LayoutTickContext.Provider>
   )
 
   if (location.pathname === '/login') {

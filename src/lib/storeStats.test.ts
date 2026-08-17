@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts, isIdleSince } from './storeStats'
+import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts } from './storeStats'
 import type { OrderRow } from './types'
 
 const stores = [
@@ -42,16 +42,6 @@ describe('computeStoreOverview', () => {
     expect(s1.avg_order_value).toBe(900)
     expect(result[1].orders).toBe(0)
     expect(result[1].revenue).toBe(0)
-  })
-})
-
-describe('isIdleSince', () => {
-  it('treats missing or stale last-order dates as idle, recent as active', () => {
-    expect(isIdleSince(null)).toBe(true)
-    const stale = new Date(Date.now() - 20 * 86400000).toISOString()
-    const fresh = new Date(Date.now() - 2 * 86400000).toISOString()
-    expect(isIdleSince(stale)).toBe(true)
-    expect(isIdleSince(fresh)).toBe(false)
   })
 })
 

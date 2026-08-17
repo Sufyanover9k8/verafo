@@ -7,6 +7,7 @@ import {
   PlusSquare,
   Search,
   Settings,
+  Store,
   UploadCloud,
 } from 'lucide-react'
 
@@ -15,6 +16,7 @@ export interface NavItem {
   label: string
   icon: LucideIcon
   end?: boolean
+  adminOnly?: boolean
 }
 
 export interface NavSection {
@@ -29,6 +31,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/orders/new', label: 'New Order', icon: PlusSquare },
       { to: '/orders/pending', label: 'Outcomes', icon: ClipboardList },
+      { to: '/stores', label: 'Stores', icon: Store, adminOnly: true },
     ],
   },
   {

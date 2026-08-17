@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useAnimatedWidth } from './useAnimatedWidth'
 
 export interface SeriesPoint {
   label: string
@@ -23,13 +24,14 @@ const tooltipStyle = {
   fontSize: 12,
 }
 const tickStyle = { fill: 'var(--v-ink-400)', fontSize: 11 }
-const STROKE = 'var(--v-purple-400)'
-const FILL = 'rgba(106, 76, 187, 0.10)'
+const STROKE = 'var(--cyan-primary)'
+const FILL = 'rgba(45, 212, 191, 0.08)'
 
 /** Pre-themed line/area chart. Max two series. Grid is horizontal only. */
 export function LineChart({ data, series, height = 280, begin = 0 }: LineChartProps) {
   const showSecond = series.length > 1
   const [ready, setReady] = useState(false)
+  const { ref, key } = useAnimatedWidth<HTMLDivElement>()
 
   useEffect(() => {
     const id = setTimeout(() => setReady(true), begin + 40)
@@ -37,8 +39,9 @@ export function LineChart({ data, series, height = 280, begin = 0 }: LineChartPr
   }, [begin])
 
   return ready ? (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+    <div ref={ref} style={{ width: '100%' }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart key={key} data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="vfAreaA" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={FILL} />
@@ -65,7 +68,7 @@ export function LineChart({ data, series, height = 280, begin = 0 }: LineChartPr
             type="monotone"
             dataKey="b"
             name={series[1]?.name ?? ''}
-            stroke="var(--v-ink-300)"
+            stroke="var(--cyan-dim)"
             strokeWidth={2}
             fill="transparent"
             dot={false}
@@ -75,6 +78,7 @@ export function LineChart({ data, series, height = 280, begin = 0 }: LineChartPr
         )}
       </AreaChart>
     </ResponsiveContainer>
+    </div>
   ) : (
     <div style={{ height }} />
   )

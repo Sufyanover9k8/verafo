@@ -6,6 +6,7 @@ import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { DistributionBar } from '../components/charts/DistributionBar'
 import { LineChart } from '../components/charts/LineChart'
+import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { NeedsSetup } from '../components/States'
 import { money, phone, timeAgo } from '../lib/format'
 import { greetingForName } from '../lib/greeting'
@@ -14,9 +15,9 @@ import { getProfile } from '../lib/profile'
 import { hasEnoughData, toneFromScore } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
 import { cityPoint } from '../lib/cities'
-import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts, isIdleSince, type StoreLite } from '../lib/storeStats'
+import { computeCityStats, computeDailySales, computeTopProducts } from '../lib/storeStats'
 import { useToast } from '../lib/toast'
-import type { DailySalesRow, NetworkKpis, OrderRow, StoreOverview } from '../lib/types'
+import type { DailySalesRow, NetworkKpis, OrderRow } from '../lib/types'
 
 interface BuyerLight {
   risk_score: number
@@ -27,117 +28,28 @@ function keyOf(d: Date): string {
   return d.toDateString()
 }
 
-function StoreCard({ store, rank }: { store: StoreOverview; rank: number }) {
-  const revenue = useCountUp(store.revenue)
-  const idle = useMemo(() => isIdleSince(store.last_order_at), [store.last_order_at])
-  return (
-    <Link className="store-card store-spotlight metal spotlight" to={`/stores/${store.id}`}>
-      <div className="store-card-head">
-        <span className="store-card-avatar">{store.name ? store.name.charAt(0).toUpperCase() : '?'}</span>
-        <span className="store-card-id">
-          <span className="store-card-name">{store.name}</span>
-          <span className="store-card-domain">{store.shopify_domain ?? 'Shopify store'}</span>
-        </span>
-        {rank < 3 && <span className={`rank-medal m${rank + 1}`}>{rank + 1}</span>}
-      </div>
-      <div className="store-card-main">
-        <strong className="store-card-revenue">{revenue.toLocaleString('en-PK')}</strong>
-        <span className="store-card-revenue-label">PKR · all-time sales</span>
-      </div>
-      <div className="store-card-stats">
-        <div>
-          <strong>{store.orders}</strong>
-          <span>orders</span>
-        </div>
-        <div>
-          <strong>{store.buyers}</strong>
-          <span>buyers</span>
-        </div>
-        <div>
-          <strong>{(store.avg_order_value || 0).toLocaleString('en-PK')}</strong>
-          <span>avg order</span>
-        </div>
-      </div>
-      <div className="store-card-foot">
-        <span className={`status-pill${idle ? ' idle' : ''}`}>
-          <span className="status-dot" />
-          {idle ? 'Idle' : 'Active'}
-        </span>
-        <span className="store-card-when">{store.last_order_at ? timeAgo(store.last_order_at) : 'no orders yet'}</span>
-        <Icon name="arrow-forward" size={14} />
-      </div>
-    </Link>
-  )
-}
-
-function StoreRow({ store, rank }: { store: StoreOverview; rank: number }) {
-  const idle = useMemo(() => isIdleSince(store.last_order_at), [store.last_order_at])
-  const verdicts = store.accepted + store.refused
-  const rate = verdicts > 0 ? Math.round((store.accepted / verdicts) * 100) : null
-  return (
-    <Link className="store-leader-row" to={`/stores/${store.id}`}>
-      <span className={`store-leader-rank${rank < 3 ? ` medal-${rank + 1}` : ''}`}>{rank + 1}</span>
-      <span className="store-leader-id">
-        <span className="store-card-avatar">{store.name ? store.name.charAt(0).toUpperCase() : '?'}</span>
-        <span className="store-card-id">
-          <span className="store-card-name">{store.name}</span>
-          <span className="store-card-domain">{store.shopify_domain ?? 'Shopify store'}</span>
-        </span>
-      </span>
-      <span className={`status-pill sl-status${idle ? ' idle' : ''}`}>
-        <span className="status-dot" />
-        {idle ? 'Idle' : 'Active'}
-      </span>
-      <span className="store-leader-v">
-        <span className="v-ok">
-          <Icon name="check" size={11} />
-          {store.accepted}
-        </span>
-        <span className="v-bad">
-          <Icon name="close" size={11} />
-          {store.refused}
-        </span>
-        {rate !== null && (
-          <span className={`rate c-${rate >= 75 ? 'ok' : rate >= 50 ? 'mid' : 'bad'}`}>{rate}%</span>
-        )}
-      </span>
-      <span className="store-leader-rev">
-        <strong>{money(store.revenue)}</strong>
-        <span>
-          {store.orders} order{store.orders === 1 ? '' : 's'}
-        </span>
-      </span>
-      <Icon name="arrow-forward" size={15} />
-    </Link>
-  )
-}
-
 export function Dashboard() {
   const toast = useToast()
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [buyers, setBuyers] = useState<BuyerLight[]>([])
-  const [overview, setOverview] = useState<StoreOverview[]>([])
   const [sales, setSales] = useState<DailySalesRow[]>([])
   const [kpis, setKpis] = useState<NetworkKpis | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showAll, setShowAll] = useState(false)
+  const [range, setRange] = useState<RangeDays>(7)
 
   const load = useCallback(async () => {
     if (!supabase) return
-    const [ordersRes, buyersRes, storesRes, overviewRes, salesRes, kpisRes] = await Promise.all([
+    const [ordersRes, buyersRes, salesRes, kpisRes] = await Promise.all([
       supabase
         .from('orders')
         .select('*, stores(name), outcomes(status, resolved_at)')
         .order('ordered_at', { ascending: false })
         .limit(500),
       supabase.from('buyers').select('risk_score, total_orders').limit(5000),
-      supabase.from('stores').select('id, name, owner_email, created_at, shopify_domain').order('name'),
-      supabase.rpc('store_overview'),
-      supabase.rpc('daily_sales', { p_days: 14 }),
+      supabase.rpc('daily_sales', { p_days: range }),
       supabase.rpc('network_kpis'),
     ])
     const ordersData = (ordersRes.data ?? []) as OrderRow[]
-    const storesData = (storesRes.data ?? []) as StoreLite[]
 
     if (ordersRes.error) {
       toast.push({ kind: 'error', title: 'Could not load orders', detail: ordersRes.error.message })
@@ -149,22 +61,9 @@ export function Dashboard() {
     } else {
       setBuyers((buyersRes.data ?? []) as BuyerLight[])
     }
-    if (storesRes.error) {
-      toast.push({ kind: 'error', title: 'Could not load stores', detail: storesRes.error.message })
-    }
-    if (overviewRes.error) {
-      // RPC not available (function not applied / stale schema cache) — compute client-side.
-      if (!ordersRes.error && !storesRes.error) {
-        setOverview(computeStoreOverview(ordersData, storesData))
-      } else {
-        toast.push({ kind: 'error', title: 'Could not load store metrics', detail: overviewRes.error.message })
-      }
-    } else {
-      setOverview((overviewRes.data ?? []) as StoreOverview[])
-    }
     if (salesRes.error) {
       if (!ordersRes.error) {
-        setSales(computeDailySales(ordersData, 14))
+        setSales(computeDailySales(ordersData, range))
       } else {
         toast.push({ kind: 'error', title: 'Could not load daily sales', detail: salesRes.error.message })
       }
@@ -177,7 +76,7 @@ export function Dashboard() {
       setKpis((kpisRes.data?.[0] ?? null) as NetworkKpis | null)
     }
     setLoading(false)
-  }, [toast])
+  }, [toast, range])
 
   useEffect(() => {
     void load()
@@ -209,7 +108,7 @@ export function Dashboard() {
     const pending = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending').length
 
     const days: { label: string; a: number }[] = []
-    for (let i = 6; i >= 0; i--) {
+    for (let i = range - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 86400000)
       days.push({ label: d.toLocaleDateString('en-GB', { weekday: 'short' }), a: 0 })
     }
@@ -219,8 +118,8 @@ export function Dashboard() {
       const k = keyOf(new Date(o.ordered_at))
       dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
     }
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now.getTime() - (6 - i) * 86400000)
+    for (let i = 0; i < range; i++) {
+      const d = new Date(now.getTime() - (range - 1 - i) * 86400000)
       days[i].a = dayCount.get(keyOf(d)) ?? 0
     }
 
@@ -244,14 +143,17 @@ export function Dashboard() {
       days,
       distribution,
     }
-  }, [orders, buyers])
+  }, [orders, buyers, range])
 
-  const recent = orders.slice(0, 8)
+  const filteredOrders = useMemo(() => {
+    const cutoff = new Date().getTime() - (range - 1) * 86400000
+    return orders.filter((o) => !o.ordered_at || new Date(o.ordered_at).getTime() >= cutoff)
+  }, [orders, range])
 
-  const ranked = useMemo(() => [...overview].sort((a, b) => b.revenue - a.revenue), [overview])
+  const recent = filteredOrders.slice(0, 8)
 
-  const cityStats = useMemo(() => computeCityStats(orders), [orders])
-  const topProducts = useMemo(() => computeTopProducts(orders), [orders])
+  const cityStats = useMemo(() => computeCityStats(filteredOrders), [filteredOrders])
+  const topProducts = useMemo(() => computeTopProducts(filteredOrders), [filteredOrders])
 
   const cityPins = useMemo(() => {
     const pins: { city: string; x: number; y: number; share: number; orders: number; revenue: number }[] = []
@@ -267,7 +169,7 @@ export function Dashboard() {
   const pending = useCountUp(kpis?.pending_orders ?? stats.pending)
 
   const salesData = sales.map((s) => ({
-    label: new Date(s.day).toLocaleDateString('en-GB', { weekday: 'short' }),
+    label: new Date(s.day).toLocaleDateString('en-GB', range === 30 ? { day: 'numeric', month: 'short' } : { weekday: 'short' }),
     a: s.revenue,
   }))
 
@@ -276,14 +178,19 @@ export function Dashboard() {
   return (
     <div className="stack">
       <div className="dash-hero">
-        <h1 className="dash-hero-title">{greetingForName(getProfile().name)}</h1>
-        <p className="dash-hero-sub">
-          {loading
-            ? 'Loading your network…'
-            : `${(kpis?.buyers ?? buyers.length).toLocaleString('en-PK')} buyers across the network, ${
-                (kpis?.pending_orders ?? stats.pending).toLocaleString('en-PK')
-              } orders awaiting a verdict.`}
-        </p>
+        <div className="dash-hero-row">
+          <div>
+            <h1 className="dash-hero-title">{greetingForName(getProfile().name)}</h1>
+            <p className="dash-hero-sub">
+              {loading
+                ? 'Loading your network…'
+                : `${(kpis?.buyers ?? buyers.length).toLocaleString('en-PK')} buyers across the network, ${
+                    (kpis?.pending_orders ?? stats.pending).toLocaleString('en-PK')
+                  } orders awaiting a verdict.`}
+            </p>
+          </div>
+          <RangeFilter range={range} onChange={setRange} />
+        </div>
       </div>
 
       {loading ? (
@@ -332,7 +239,7 @@ export function Dashboard() {
 
       <section className="chart-section">
         <div className="verdict-panel-head">
-          <h3 className="card-title">Sales — last 14 days</h3>
+          <h3 className="card-title">Sales — last {range} days</h3>
           <span className="verdict-conf">gross order value · PKR</span>
         </div>
         <Card>
@@ -348,7 +255,7 @@ export function Dashboard() {
         <section className="col-8">
           <Card>
             <div className="verdict-panel-head">
-              <h3 className="card-title">Orders — last 7 days</h3>
+              <h3 className="card-title">Orders — last {range} days</h3>
               <span className="verdict-conf">per day</span>
             </div>
             {loading ? (
@@ -456,7 +363,7 @@ export function Dashboard() {
               <div className="prod-list">
                 {topProducts.map((p, i) => (
                   <div className="prod-row" key={p.name}>
-                    <span className={`prod-rank${i < 3 ? ` medal-${i + 1}` : ''}`}>#{i + 1}</span>
+                    <span className="prod-rank">#{i + 1}</span>
                     <div className="prod-main">
                       <div className="prod-head">
                         <span className="prod-name">{p.name}</span>
@@ -474,59 +381,6 @@ export function Dashboard() {
           </Card>
         </section>
       </div>
-
-      <section className="chart-section">
-        <div className="verdict-panel-head">
-          <h3 className="card-title">Onboarded stores</h3>
-          <span className="verdict-conf">
-            {overview.length} {overview.length === 1 ? 'store' : 'stores'} · ranked by sales · click to open
-          </span>
-        </div>
-        {loading ? (
-          <div className="stack">
-            <div className="store-grid">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} className="store-card-skeleton">
-                  <Skeleton height={12} />
-                  <Skeleton height={20} width="70%" />
-                  <Skeleton height={12} width="50%" />
-                </Card>
-              ))}
-            </div>
-            <Skeleton height={320} />
-          </div>
-        ) : ranked.length === 0 ? (
-          <Card>
-            <span className="muted">No stores onboarded yet. Connect a Shopify store or add rows via supabase/seed.sql.</span>
-          </Card>
-        ) : (
-          <>
-            <div className="store-grid">
-              {ranked.slice(0, 3).map((s, i) => (
-                <StoreCard key={s.id} store={s} rank={i} />
-              ))}
-            </div>
-            <div className="store-leader">
-              <div className="store-leader-head">
-                <span>#</span>
-                <span>Store</span>
-                <span className="sl-status">Status</span>
-                <span>Verdicts</span>
-                <span>Sales</span>
-                <span />
-              </div>
-              {ranked.slice(0, showAll ? ranked.length : 8).map((s, i) => (
-                <StoreRow key={s.id} store={s} rank={i} />
-              ))}
-            </div>
-            {ranked.length > 8 && (
-              <button type="button" className="leader-toggle" onClick={() => setShowAll((v) => !v)}>
-                {showAll ? 'Show fewer stores' : `Show all ${ranked.length} stores`}
-              </button>
-            )}
-          </>
-        )}
-      </section>
 
       <section className="chart-section">
         <div className="verdict-panel-head">

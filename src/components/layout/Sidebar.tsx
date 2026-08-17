@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import { NavLink } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react'
+import { useIsAdmin } from '../../lib/admin'
 import { NAV_SECTIONS, SETTINGS_ITEM } from './nav'
 
 interface SidebarProps {
@@ -10,6 +12,15 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, mobileOpen, onToggle, onNavigate }: SidebarProps) {
+  const { admin } = useIsAdmin()
+  const sections = useMemo(
+    () =>
+      NAV_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !item.adminOnly || admin),
+      })).filter((section) => section.items.length > 0),
+    [admin],
+  )
   return (
     <>
       {mobileOpen && <div className="sidebar-backdrop" onClick={onNavigate} aria-hidden="true" />}
@@ -22,7 +33,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggle, onNavigate }: Sidebar
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <div key={section.label ?? 'main'}>
               {section.label && <span className="sidebar-section-label">{section.label}</span>}
               {section.items.map((item) => (

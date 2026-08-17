@@ -13,6 +13,9 @@ export interface Store {
   id: string
   name: string
   owner_email: string | null
+  shopify_domain?: string | null
+  category?: string | null
+  contact_phone?: string | null
   created_at?: string | null
 }
 
@@ -21,6 +24,8 @@ export interface StoreOverview {
   name: string
   shopify_domain: string | null
   owner_email: string | null
+  category?: string | null
+  contact_phone?: string | null
   created_at: string | null
   orders: number
   accepted: number

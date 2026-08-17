@@ -5,31 +5,46 @@
    ============================================================ */
 
 :root {
-  /* ── 1 · Colour — brand ─────────────────────────── */
-  --v-purple-50:  #F3EFFB;
-  --v-purple-100: #E4DAF7;
-  --v-purple-200: #C9B5EF;
-  --v-purple-300: #AD8FE6;
-  --v-purple-400: #8C68D8;
-  --v-purple-500: #6A4CBB;   /* PRIMARY — brand anchor */
-  --v-purple-600: #573C9E;
-  --v-purple-700: #452F80;
-  --v-purple-800: #332360;
-  --v-purple-900: #211741;
+  /* ── 1 · Colour — brand (cyan) ────────────────── */
+  --cyan-primary: #2DD4BF;   /* buttons, active nav, links, logo, chart primary line */
+  --cyan-bright:  #5EEAD4;   /* hover states, glow highlights */
+  --cyan-dim:     #0F766E;   /* secondary chart lines, emphasis card borders */
 
-  /* ── 1 · Colour — neutrals (warm-shifted black) ── */
-  --v-ink-950: #08070B;   /* deepest — page background */
-  --v-ink-900: #0B0A0F;   /* app background (default) */
-  --v-ink-850: #100E16;   /* raised surface */
-  --v-ink-800: #16131E;   /* card background */
-  --v-ink-700: #1F1B29;   /* card hover / input background */
-  --v-ink-600: #2A2537;   /* borders, dividers */
-  --v-ink-500: #3D3650;   /* disabled, subtle strokes */
-  --v-ink-400: #6B6480;   /* placeholder text */
-  --v-ink-300: #948DA8;   /* secondary text */
-  --v-ink-200: #C4BFD1;   /* body text */
-  --v-ink-100: #E6E3ED;   /* primary text */
-  --v-ink-050: #F7F6FA;   /* highest-contrast text, rare */
+  /* legacy ramp aliases onto the cyan system */
+  --v-purple-50:  #E6FBF8;
+  --v-purple-100: #C9F4EE;
+  --v-purple-200: #A3EBE2;
+  --v-purple-300: #5EEAD4;
+  --v-purple-400: #3DD4C4;
+  --v-purple-500: #2DD4BF;   /* PRIMARY — brand anchor */
+  --v-purple-600: #0F766E;
+  --v-purple-700: #0C5C56;
+  --v-purple-800: #09423E;
+  --v-purple-900: #052B28;
+
+  /* ── 1 · Colour — neutrals (cool-shifted black) ── */
+  --bg-deepest:  #06090A;   /* modals, deepest layer */
+  --bg-app:      #0A0F10;   /* default app background */
+  --bg-surface:  #0F1517;   /* raised surface */
+  --bg-card:     #131B1D;   /* card/panel background */
+  --border-hair: #1B2A2C;   /* hairline borders, low-opacity dividers */
+
+  --v-ink-950: #06090A;   /* deepest — page background */
+  --v-ink-900: #0A0F10;   /* app background (default) */
+  --v-ink-850: #0F1517;   /* raised surface */
+  --v-ink-800: #131B1D;   /* card background */
+  --v-ink-700: #172124;   /* card hover / input background */
+  --v-ink-600: #1B2A2C;   /* borders, dividers */
+  --v-ink-500: #22363A;   /* disabled, subtle strokes */
+  --v-ink-400: #4A5C5C;   /* placeholder text */
+  --v-ink-300: #8BA0A0;   /* secondary text */
+  --v-ink-200: #B4C8C8;   /* body text */
+  --v-ink-100: #E6F0F0;   /* primary text */
+  --v-ink-050: #F4FAFA;   /* highest-contrast text, rare */
+
+  --text-primary:   #E6F0F0;
+  --text-secondary: #8BA0A0;
+  --text-muted:     #4A5C5C;
 
   /* ── 1 · Colour — semantic (risk verdicts) ─────── */
   --v-safe:    #3FBF87;   /* low risk — desaturated green, not neon */
@@ -93,32 +108,17 @@
   --v-grad-brand: linear-gradient(135deg, var(--v-purple-200), var(--v-purple-400) 55%, var(--v-purple-600));
   --v-grad-accent: linear-gradient(120deg, var(--v-purple-300), var(--v-purple-500));
   --v-grad-chip: linear-gradient(140deg, color-mix(in srgb, var(--v-purple-500) 22%, var(--v-ink-800)), color-mix(in srgb, var(--v-purple-600) 7%, var(--v-ink-800)));
-  --v-glow-soft: 0 6px 22px -10px rgba(106, 76, 187, 0.45);
-  --v-glow-md: 0 10px 34px -12px rgba(106, 76, 187, 0.55);
+  --v-glow-soft: 0 6px 22px -10px rgba(45, 212, 191, 0.45);
+  --v-glow-md: 0 10px 34px -12px rgba(45, 212, 191, 0.55);
   --v-glow-ring: 0 0 0 4px color-mix(in srgb, var(--v-outline) 20%, transparent);
-  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(128, 104, 216, 0.16), transparent 62%),
-              radial-gradient(42% 42% at -8% 104%, rgba(63, 191, 135, 0.08), transparent 58%),
-              radial-gradient(30% 30% at 96% 88%, rgba(224, 163, 46, 0.06), transparent 58%);
-  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(128, 104, 216, 0.18), transparent 60%),
-                   radial-gradient(60% 50% at 100% 100%, rgba(63, 191, 135, 0.07), transparent 55%),
+  --v-glow-primary: 0 0 18px -2px rgba(45, 212, 191, 0.20);
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(45, 212, 191, 0.14), transparent 62%),
+              radial-gradient(42% 42% at -8% 104%, rgba(63, 191, 135, 0.06), transparent 58%),
+              radial-gradient(30% 30% at 96% 88%, rgba(45, 212, 191, 0.06), transparent 58%);
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(45, 212, 191, 0.18), transparent 60%),
+                   radial-gradient(60% 50% at 100% 100%, rgba(63, 191, 135, 0.06), transparent 55%),
                    var(--v-ink-950);
   --v-hairline: linear-gradient(90deg, transparent 5%, var(--v-purple-400) 40%, var(--v-safe) 60%, transparent 95%);
-
-  /* ── 8 · Metallic & medal accents ─────────────── */
-  --v-gold:      #E9C46A;
-  --v-gold-2:    #B98E3E;
-  --v-gold-hi:   #FFF3CF;
-  --v-silver:    #C9CDD8;
-  --v-silver-2:  #8E93A6;
-  --v-silver-hi: #EDF0F6;
-  --v-bronze:    #D2A47A;
-  --v-bronze-2:  #8A5F38;
-  --v-bronze-hi: #F5DFC8;
-  --v-grad-metal: linear-gradient(165deg,
-      color-mix(in srgb, var(--v-purple-500) 26%, var(--v-ink-800)) 0%,
-      var(--v-ink-850) 40%,
-      var(--v-ink-800) 70%,
-      color-mix(in srgb, var(--v-purple-700) 36%, var(--v-ink-900)) 100%);
   --v-grad-safe: linear-gradient(120deg,
       color-mix(in srgb, var(--v-safe) 70%, var(--v-ink-050)),
       var(--v-safe) 55%,
@@ -127,18 +127,18 @@
 
 /* ── Light theme — alternate token ramp ─────────────── */
 [data-theme='light'] {
-  --v-ink-950: #F3F1F7;
-  --v-ink-900: #F7F6FA;
+  --v-ink-950: #EFF5F5;
+  --v-ink-900: #F3FAFA;
   --v-ink-850: #FFFFFF;
   --v-ink-800: #FFFFFF;
-  --v-ink-700: #F1EEF6;
-  --v-ink-600: #E5E1EC;
-  --v-ink-500: #CDC7D8;
-  --v-ink-400: #8F89A0;
-  --v-ink-300: #6B6480;
-  --v-ink-200: #4A4558;
-  --v-ink-100: #241F33;
-  --v-ink-050: #0B0A0F;
+  --v-ink-700: #E8F1F1;
+  --v-ink-600: #D8E6E6;
+  --v-ink-500: #BDD0D0;
+  --v-ink-400: #7D9595;
+  --v-ink-300: #4A5C5C;
+  --v-ink-200: #2C3F3F;
+  --v-ink-100: #152223;
+  --v-ink-050: #06090A;
   --v-safe:    #2E9E6B;
   --v-watch:   #C98F1E;
   --v-risk:    #D14343;
@@ -151,8 +151,8 @@
 :root {
   --accent: var(--v-purple-500);
   --accent-2: var(--v-purple-600);
-  --accent-glow: rgba(106, 76, 187, 0.30);
-  --accent-soft: rgba(106, 76, 187, 0.14);
+  --accent-glow: rgba(45, 212, 191, 0.30);
+  --accent-soft: rgba(45, 212, 191, 0.14);
   --green: var(--v-safe);
   --green-soft: var(--v-safe-bg);
   --amber: var(--v-watch);
@@ -185,9 +185,9 @@
   --glass-strong: rgba(255, 255, 255, 0.86);
   --hover: rgba(16, 14, 22, 0.05);
   --v-grad-accent: linear-gradient(120deg, var(--v-purple-400), var(--v-purple-600));
-  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(128, 104, 216, 0.13), transparent 62%),
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(45, 212, 191, 0.13), transparent 62%),
               radial-gradient(42% 42% at -8% 104%, rgba(46, 158, 107, 0.08), transparent 58%);
-  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(128, 104, 216, 0.14), transparent 60%),
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(45, 212, 191, 0.14), transparent 60%),
                    radial-gradient(60% 50% at 100% 100%, rgba(46, 158, 107, 0.06), transparent 55%),
                    var(--v-ink-950);
   --v-grad-chip: linear-gradient(140deg, color-mix(in srgb, var(--v-purple-500) 14%, var(--v-ink-100)), color-mix(in srgb, var(--v-purple-600) 5%, var(--v-ink-100)));

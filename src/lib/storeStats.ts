@@ -6,6 +6,8 @@ export interface StoreLite {
   owner_email?: string | null
   created_at?: string | null
   shopify_domain?: string | null
+  category?: string | null
+  contact_phone?: string | null
 }
 
 /** Client-side equivalent of store_overview(): per-store aggregates from loaded orders. */
@@ -34,6 +36,8 @@ export function computeStoreOverview(orders: OrderRow[], stores: StoreLite[]): S
       name: s.name,
       shopify_domain: s.shopify_domain ?? null,
       owner_email: s.owner_email ?? null,
+      category: s.category ?? null,
+      contact_phone: s.contact_phone ?? null,
       created_at: s.created_at ?? null,
       orders: os.length,
       accepted,
@@ -49,12 +53,6 @@ export function computeStoreOverview(orders: OrderRow[], stores: StoreLite[]): S
 
 function localDayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-/** True when a store has no order, or none within the idle window. */
-export function isIdleSince(lastOrderAt: string | null | undefined, days = 14): boolean {
-  if (!lastOrderAt) return true
-  return new Date().getTime() - new Date(lastOrderAt).getTime() > days * 86400000
 }
 
 /** Client-side equivalent of daily_sales(): gross sales (price × quantity) per local day. */

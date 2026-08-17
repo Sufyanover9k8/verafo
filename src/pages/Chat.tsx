@@ -222,6 +222,8 @@ export function Chat() {
   const [renameValue, setRenameValue] = useState('')
   const [analyzeOpen, setAnalyzeOpen] = useState(false)
   const [analyzePhone, setAnalyzePhone] = useState('')
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [railOpen, setRailOpen] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const mentionId = useRef(0)
@@ -660,7 +662,7 @@ export function Chat() {
   if (!isConfigured) return <NeedsSetup />
 
   return (
-    <div className="chat-page">
+    <div className={`chat-page${railOpen ? '' : ' rail-closed'}`}>
       <aside className="card chat-rail">
         <div className="chat-rail-head">
           <div>
@@ -756,6 +758,13 @@ export function Chat() {
                 </span>
               </div>
               <div className="chat-head-actions">
+                <button
+                  className="icon-btn"
+                  title={railOpen ? 'Hide history' : 'Show history'}
+                  onClick={() => setRailOpen((v) => !v)}
+                >
+                  <Icon name="chatbubbles-outline" size={15} />
+                </button>
                 <button className="icon-btn" title="Rename" onClick={startRename}>
                   <Icon name="pencil-outline" size={15} />
                 </button>
@@ -854,6 +863,16 @@ export function Chat() {
               )}
 
               <div className="composer-row">
+                <button
+                  className={`tools-btn${toolsOpen ? ' active' : ''}`}
+                  title="Tools"
+                  onClick={() => {
+                    setToolsOpen((v) => !v)
+                    setMention(null)
+                  }}
+                >
+                  <Icon name="add" size={18} />
+                </button>
                 <div className="composer-input-wrap">
                   <textarea
                     ref={textareaRef}
@@ -898,47 +917,64 @@ export function Chat() {
                     <Icon name="send" size={17} />
                   )}
                 </button>
-              </div>
-
-              <div className="composer-features">
-                <span className="features-label">
-                  <Icon name="flash-outline" size={12} /> Tools
-                </span>
-                <button
-                  className="feature-btn"
-                  onClick={() => {
-                    setAnalyzeOpen((v) => !v)
-                    setMention(null)
-                  }}
-                >
-                  <Icon name="stats-chart-outline" size={14} /> Analyze buyer
-                </button>
-                <button className="feature-btn" disabled={featureBusy} onClick={() => void runTrends()}>
-                  <Icon name="trending-up-outline" size={14} /> Network trends
-                </button>
-                <button className="feature-btn" disabled={featureBusy} onClick={() => void runSuggest()}>
-                  <Icon name="sparkles-outline" size={14} /> Suggestions
-                </button>
-                {analyzeOpen && (
-                  <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      value={analyzePhone}
-                      onChange={(e) => setAnalyzePhone(e.target.value)}
-                      placeholder="+92 3xx xxxxxxx"
-                      autoFocus
-                    />
-                    <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
-                      Analyze
+                {toolsOpen && (
+                  <div className="tools-pop">
+                    <button
+                      className="tools-pop-item"
+                      onClick={() => {
+                        setAnalyzeOpen((v) => !v)
+                      }}
+                    >
+                      <Icon name="stats-chart-outline" size={15} /> Analyze buyer
                     </button>
-                  </form>
+                    <button
+                      className="tools-pop-item"
+                      disabled={featureBusy}
+                      onClick={() => {
+                        setToolsOpen(false)
+                        void runTrends()
+                      }}
+                    >
+                      <Icon name="trending-up-outline" size={15} /> Network trends
+                    </button>
+                    <button
+                      className="tools-pop-item"
+                      disabled={featureBusy}
+                      onClick={() => {
+                        setToolsOpen(false)
+                        void runSuggest()
+                      }}
+                    >
+                      <Icon name="sparkles-outline" size={15} /> Suggestions
+                    </button>
+                    {analyzeOpen && (
+                      <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          value={analyzePhone}
+                          onChange={(e) => setAnalyzePhone(e.target.value)}
+                          placeholder="+92 3xx xxxxxxx"
+                          autoFocus
+                        />
+                        <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
+                          Analyze
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 )}
               </div>
             </footer>
           </>
         )}
       </section>
+
+      {!railOpen && (
+        <button className="rail-tab" onClick={() => setRailOpen(true)} title="Show chat history">
+          <Icon name="chatbubbles-outline" size={16} />
+        </button>
+      )}
     </div>
   )
 }

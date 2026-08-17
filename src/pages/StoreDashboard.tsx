@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
+import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { Badge } from '../components/primitives/Badge'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
 import { LineChart } from '../components/charts/LineChart'
 import { EmptyState, NeedsSetup } from '../components/States'
+import { useIsAdmin } from '../lib/admin'
 import { dateTime, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
@@ -23,21 +25,26 @@ export function StoreDashboard() {
   const toast = useToast()
   const { id } = useParams<{ id: string }>()
   const { store, setStore } = useStoreScope()
+  const { admin, checking } = useIsAdmin()
 
   const [overview, setOverview] = useState<StoreOverview | null>(null)
   const [sales, setSales] = useState<DailySalesRow[]>([])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [range, setRange] = useState<RangeDays>(7)
 
   const load = useCallback(async () => {
     if (!supabase || !id) return
+    const cutoff = new Date(Date.now() - (range - 1) * 86400000)
+    cutoff.setHours(0, 0, 0, 0)
     const [overviewRes, salesRes, ordersRes, storeRes] = await Promise.all([
       supabase.rpc('store_overview'),
-      supabase.rpc('daily_sales', { p_store_id: id, p_days: 14 }),
+      supabase.rpc('daily_sales', { p_store_id: id, p_days: range }),
       supabase
         .from('orders')
         .select('*, stores(name), outcomes(status, resolved_at)')
         .eq('store_id', id)
+        .gte('ordered_at', cutoff.toISOString())
         .order('ordered_at', { ascending: false })
         .limit(50),
       supabase.from('stores').select('id, name, owner_email, created_at, shopify_domain').eq('id', id).maybeSingle(),
@@ -62,7 +69,7 @@ export function StoreDashboard() {
 
     if (salesRes.error) {
       if (!ordersRes.error) {
-        setSales(computeDailySales(ordersData, 14))
+        setSales(computeDailySales(ordersData, range))
       } else {
         toast.push({ kind: 'error', title: 'Could not load daily sales', detail: salesRes.error.message })
       }
@@ -76,7 +83,7 @@ export function StoreDashboard() {
     }
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, toast])
+  }, [id, toast, range])
 
   useEffect(() => {
     void load()
@@ -92,7 +99,7 @@ export function StoreDashboard() {
   const pendingCount = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending').length
 
   const salesData = sales.map((s) => ({
-    label: new Date(s.day).toLocaleDateString('en-GB', { weekday: 'short' }),
+    label: new Date(s.day).toLocaleDateString('en-GB', range === 30 ? { day: 'numeric', month: 'short' } : { weekday: 'short' }),
     a: s.revenue,
   }))
 
@@ -152,6 +159,7 @@ export function StoreDashboard() {
         actions={
           m ? (
             <div className="cluster">
+              <RangeFilter range={range} onChange={setRange} />
               <Link className="btn btn-secondary btn-sm" to="/orders/pending">
                 <Icon name="clipboard" size={14} /> Mark outcomes
               </Link>
@@ -163,7 +171,20 @@ export function StoreDashboard() {
         }
       />
 
-      {missing ? (
+      {!checking && !admin ? (
+        <div className="card">
+          <EmptyState
+            icon="shield-checkmark"
+            title="Restricted to admins"
+            detail="Only administrators can view store dashboards."
+          />
+          <div className="store-restricted-cta">
+            <Link className="btn btn-primary" to="/">
+              <Icon name="arrow-forward" size={14} /> Back to dashboard
+            </Link>
+          </div>
+        </div>
+      ) : missing ? (
         <div className="card">
           <EmptyState icon="storefront" title="Store not found" detail="This store may have been removed." />
         </div>
@@ -215,7 +236,7 @@ export function StoreDashboard() {
 
           <section className="chart-section">
             <div className="verdict-panel-head">
-              <h3 className="card-title">Sales — last 14 days</h3>
+              <h3 className="card-title">Sales — last {range} days</h3>
               <span className="verdict-conf">gross order value · PKR</span>
             </div>
             <Card>

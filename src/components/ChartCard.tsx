@@ -16,8 +16,9 @@ import {
   YAxis,
 } from 'recharts'
 import type { ChartSpec } from '../lib/types'
+import { useAnimatedWidth } from './charts/useAnimatedWidth'
 
-const PALETTE = ['#06b6d4', '#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e', '#94a3b8', '#22d3ee']
+const PALETTE = ['#2DD4BF', '#0F766E', '#5EEAD4', '#3FBF87', '#E0A32E', '#E05252', '#4A5C5C']
 
 const TOOLTIP_STYLE = {
   background: 'var(--bg-2)',
@@ -37,6 +38,7 @@ const fmtValue = (v: number, format?: string) =>
   format === 'pkr' ? `${Math.round(v).toLocaleString('en-PK')} PKR` : format === 'percent' ? `${Math.round(v)}%` : String(v)
 
 export function ChartCard({ spec }: { spec: ChartSpec }) {
+  const { ref, key } = useAnimatedWidth<HTMLDivElement>()
   const rows = spec.labels.map((label, i) => {
     const row: Record<string, string | number> = { name: label }
     for (const d of spec.datasets) row[d.label] = d.data[i] ?? 0
@@ -51,14 +53,14 @@ export function ChartCard({ spec }: { spec: ChartSpec }) {
   ]
 
   return (
-    <div className="chart-card">
+    <div ref={ref} className="chart-card">
       <div className="chart-title">{spec.title}</div>
       {rows.length === 0 ? (
         <div className="chart-empty">No data to chart yet.</div>
       ) : spec.type === 'pie' ? (
         <div className="chart-holder">
           <ResponsiveContainer width="100%" height={230}>
-            <PieChart>
+            <PieChart key={key}>
               <Pie
                 data={rows}
                 dataKey={series[0] ?? 'value'}
@@ -80,7 +82,7 @@ export function ChartCard({ spec }: { spec: ChartSpec }) {
       ) : spec.type === 'line' ? (
         <div className="chart-holder">
           <ResponsiveContainer width="100%" height={230}>
-            <LineChart data={rows} margin={{ top: 8, right: 14, left: 0, bottom: 0 }}>
+            <LineChart key={key} data={rows} margin={{ top: 8, right: 14, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={GRID_STROKE} />
               <XAxis dataKey="name" tick={TICK_STYLE} />
               <YAxis tick={TICK_STYLE} width={44} />
@@ -102,7 +104,7 @@ export function ChartCard({ spec }: { spec: ChartSpec }) {
       ) : spec.type === 'scatter' ? (
         <div className="chart-holder">
           <ResponsiveContainer width="100%" height={250}>
-            <ScatterChart margin={{ top: 8, right: 14, left: 0, bottom: 0 }}>
+            <ScatterChart key={key} margin={{ top: 8, right: 14, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={GRID_STROKE} />
               <XAxis type="number" dataKey="x" name={spec.datasets[0]?.label ?? 'x'} tick={TICK_STYLE} domain={[0, 1]} />
               <YAxis type="number" dataKey="y" name={spec.datasets[1]?.label ?? 'y'} tick={TICK_STYLE} width={44} />
@@ -123,7 +125,7 @@ export function ChartCard({ spec }: { spec: ChartSpec }) {
       ) : spec.type === 'histogram' ? (
         <div className="chart-holder">
           <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={rows} margin={{ top: 8, right: 14, left: 0, bottom: 0 }} barCategoryGap={0}>
+            <BarChart key={key} data={rows} margin={{ top: 8, right: 14, left: 0, bottom: 0 }} barCategoryGap={0}>
               <CartesianGrid stroke={GRID_STROKE} />
               <XAxis
                 dataKey="name"
@@ -144,7 +146,7 @@ export function ChartCard({ spec }: { spec: ChartSpec }) {
       ) : (
         <div className="chart-holder">
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={rows} margin={{ top: 8, right: 14, left: 0, bottom: 0 }}>
+            <BarChart key={key} data={rows} margin={{ top: 8, right: 14, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={GRID_STROKE} />
               <XAxis
                 dataKey="name"
