@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { NavLink } from 'react-router-dom'
-import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useIsAdmin } from '../../lib/admin'
 import { NAV_SECTIONS, SETTINGS_ITEM } from './nav'
 
@@ -26,10 +26,8 @@ export function Sidebar({ collapsed, mobileOpen, onToggle, onNavigate }: Sidebar
       {mobileOpen && <div className="sidebar-backdrop" onClick={onNavigate} aria-hidden="true" />}
       <aside className="sidebar" aria-label="Main navigation">
         <div className="sidebar-head">
-          <span className="sidebar-brand-mark">
-            <ShieldCheck size={18} strokeWidth={2} />
-          </span>
-          <span className="sidebar-brand-name">Verafo</span>
+          <img className="sidebar-brand-logo" src="/verafo-logo.png" alt="Verafo" />
+          <img className="sidebar-brand-text" src="/verafo-text-logo.png" alt="Verafo" />
         </div>
 
         <nav className="sidebar-nav">

@@ -65,6 +65,21 @@
   background: var(--v-grad-brand);
   box-shadow: var(--v-glow-soft);
 }
+.sidebar-brand-logo {
+  height: 32px;
+  width: auto;
+  max-width: 34px;
+  flex: none;
+  border-radius: var(--r-8);
+}
+.sidebar-brand-text {
+  height: 22px;
+  width: auto;
+  max-width: 150px;
+  min-width: 0;
+  overflow: hidden;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
 .sidebar-brand-name {
   font-size: 16px;
   font-weight: 700;
@@ -157,6 +172,7 @@
 .sidebar-toggle:hover { color: var(--v-ink-100); background: var(--hover); }
 
 /* Collapsed sidebar */
+.is-collapsed .sidebar-brand-text,
 .is-collapsed .sidebar-brand-name,
 .is-collapsed .sidebar-section-label,
 .is-collapsed .sidebar-item-label,
