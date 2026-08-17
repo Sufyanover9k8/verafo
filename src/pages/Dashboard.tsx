@@ -5,6 +5,7 @@ import { Badge } from '../components/primitives/Badge'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { DistributionBar } from '../components/charts/DistributionBar'
+import { GeoMap } from '../components/charts/GeoMap'
 import { LineChart } from '../components/charts/LineChart'
 import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { NeedsSetup } from '../components/States'
@@ -14,7 +15,6 @@ import { useCountUp } from '../lib/countup'
 import { getProfile } from '../lib/profile'
 import { hasEnoughData, toneFromScore } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
-import { cityPoint } from '../lib/cities'
 import { computeCityStats, computeDailySales, computeTopProducts } from '../lib/storeStats'
 import { useToast } from '../lib/toast'
 import type { DailySalesRow, NetworkKpis, OrderRow } from '../lib/types'
@@ -155,15 +155,6 @@ export function Dashboard() {
   const cityStats = useMemo(() => computeCityStats(filteredOrders), [filteredOrders])
   const topProducts = useMemo(() => computeTopProducts(filteredOrders), [filteredOrders])
 
-  const cityPins = useMemo(() => {
-    const pins: { city: string; x: number; y: number; share: number; orders: number; revenue: number }[] = []
-    for (const c of cityStats) {
-      const p = cityPoint(c.city)
-      if (p) pins.push({ city: c.city, x: p.x, y: p.y, share: c.share, orders: c.orders, revenue: c.revenue })
-    }
-    return pins
-  }, [cityStats])
-
   const todayOrders = useCountUp(kpis?.today_orders ?? stats.todayOrders)
   const todayRevenue = useCountUp(kpis?.today_revenue ?? stats.todayRevenue)
   const pending = useCountUp(kpis?.pending_orders ?? stats.pending)
@@ -293,40 +284,7 @@ export function Dashboard() {
               <span className="muted">No city data yet — add a city when logging orders.</span>
             ) : (
               <>
-                {cityPins.length > 0 && (
-                  <div className="loc-map">
-                    <span className="loc-compass">
-                      <Icon name="compass" size={13} /> N
-                    </span>
-                    <span className="loc-legend">
-                      <span className="loc-legend-dot" /> top market
-                    </span>
-                    {cityPins.map((c, i) => {
-                      const top = i === 0
-                      const d = Math.max(9, Math.min(26, 8 + (c.share / 100) * 34))
-                      return (
-                        <span
-                          key={c.city}
-                          className={`loc-pin${top ? ' top' : ''}`}
-                          style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: d, height: d }}
-                          title={`${c.city} · ${money(c.revenue)} · ${c.share}% of sales`}
-                        >
-                          <span className="loc-pin-core" />
-                          {top && <span className="loc-pulse" style={{ left: '50%', top: '50%' }} />}
-                        </span>
-                      )
-                    })}
-                    {cityPins.slice(0, 2).map((c) => (
-                      <span
-                        key={`${c.city}-lbl`}
-                        className="loc-pin-label"
-                        style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
-                      >
-                        {c.city}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <GeoMap cities={cityStats} />
                 <div className="loc-list">
                   {cityStats.slice(0, 5).map((c, i) => (
                     <div className={`loc-row${i === 0 ? ' top' : ''}`} key={c.city}>

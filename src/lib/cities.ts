@@ -47,9 +47,15 @@ function lonLatToPoint(lon: number, lat: number): MapPoint {
   return { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 }
 }
 
-/** Map a (possibly unnormalised) city name to a normalised plot point, or null if unknown. */
-export function cityPoint(city: string | null | undefined): MapPoint | null {
+/** Look up a (possibly unnormalised) city name's lon/lat, or null if unknown. */
+export function cityLonLat(city: string | null | undefined): [number, number] | null {
   const key = (city ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
   const ll = CITY_COORDS[key]
+  return ll ? [ll[0], ll[1]] : null
+}
+
+/** Map a (possibly unnormalised) city name to a normalised plot point, or null if unknown. */
+export function cityPoint(city: string | null | undefined): MapPoint | null {
+  const ll = cityLonLat(city)
   return ll ? lonLatToPoint(ll[0], ll[1]) : null
 }

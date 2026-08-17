@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
@@ -7,13 +7,14 @@ import { Badge } from '../components/primitives/Badge'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
+import { GeoMap } from '../components/charts/GeoMap'
 import { LineChart } from '../components/charts/LineChart'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { dateTime, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
-import { computeDailySales, computeStoreOverview } from '../lib/storeStats'
+import { computeCityStats, computeDailySales, computeStoreOverview } from '../lib/storeStats'
 import { useToast } from '../lib/toast'
 import type { DailySalesRow, OrderRow, StoreOverview } from '../lib/types'
 
@@ -88,6 +89,8 @@ export function StoreDashboard() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const cityStats = useMemo(() => computeCityStats(orders), [orders])
 
   if (!isConfigured) return <NeedsSetup />
 
@@ -244,6 +247,45 @@ export function StoreDashboard() {
                 <Skeleton height={220} />
               ) : (
                 <LineChart data={salesData} series={[{ key: 'a', name: 'Sales' }]} height={220} begin={140} />
+              )}
+            </Card>
+          </section>
+
+          <section className="chart-section">
+            <div className="verdict-panel-head">
+              <h3 className="card-title">Sales by city</h3>
+              <span className="verdict-conf">orders for this store · last {range} days</span>
+            </div>
+            <Card>
+              {loading ? (
+                <Skeleton height={240} />
+              ) : cityStats.length === 0 ? (
+                <span className="muted">No city data for this store yet.</span>
+              ) : (
+                <>
+                  <GeoMap cities={cityStats} />
+                  <div className="loc-list">
+                    {cityStats.slice(0, 5).map((c, i) => (
+                      <div className={`loc-row${i === 0 ? ' top' : ''}`} key={c.city}>
+                        <div className="loc-row-head">
+                          <span className="loc-name">
+                            {c.city}
+                            <span className="loc-orders">
+                              {c.orders} order{c.orders === 1 ? '' : 's'}
+                            </span>
+                          </span>
+                          <strong className="loc-value">{c.revenue.toLocaleString('en-PK')}</strong>
+                        </div>
+                        <div className="loc-track">
+                          <span
+                            className={`loc-fill${i === 0 ? ' top' : ''}`}
+                            style={{ width: `${Math.max(3, c.share)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </Card>
           </section>
