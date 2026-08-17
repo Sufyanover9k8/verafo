@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { Badge } from '../components/primitives/Badge'
+import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
+import { Avatar } from '../components/Avatar'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
@@ -91,9 +93,12 @@ export function Outcomes() {
       label: 'Buyer',
       id: true,
       render: (o) => (
-        <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-          {phone(o.buyer_phone)}
-        </Link>
+        <span className="cell-avatar">
+          <Avatar phone={o.buyer_phone} size={26} />
+          <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
+            {phone(o.buyer_phone)}
+          </Link>
+        </span>
       ),
     },
     {
@@ -109,7 +114,12 @@ export function Outcomes() {
     {
       key: 'store',
       label: 'Store',
-      render: (o) => <span className="muted">{o.stores?.name ?? 'Unknown store'}</span>,
+      render: (o) => (
+        <span className="cell-avatar">
+          <Avatar name={o.stores?.name} size={26} />
+          <span className="muted">{o.stores?.name ?? 'Unknown store'}</span>
+        </span>
+      ),
     },
     {
       key: 'price',
@@ -180,8 +190,16 @@ export function Outcomes() {
       </div>
 
       {loading ? (
-        <div className="preview-loading card">
-          <Icon name="refresh" size={20} className="spin" /> Loading orders…
+        <div className="card">
+          <div className="stack" style={{ padding: 'var(--s-2)' }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div className="skeleton-row" key={i}>
+                <Skeleton width="20%" height={14} />
+                <Skeleton width="30%" height={14} />
+                <Skeleton width="14%" height={14} />
+              </div>
+            ))}
+          </div>
         </div>
       ) : visible.length === 0 ? (
         <div className="card">

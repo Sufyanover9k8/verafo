@@ -6,6 +6,7 @@ import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { CountUpNumber } from '../components/CountUpNumber'
+import { Avatar } from '../components/Avatar'
 import { useIsAdmin } from '../lib/admin'
 import { phone, dateOnly } from '../lib/format'
 import { computeStoreOverview, type StoreLite } from '../lib/storeStats'
@@ -168,9 +169,7 @@ export function Stores() {
                     key={s.id}
                     style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
                   >
-                    <span className="store-row-avatar">
-                      {s.name ? s.name.charAt(0).toUpperCase() : '?'}
-                    </span>
+                    <Avatar name={s.name} size={38} className="store-row-avatar" />
                     <div className="store-row-main">
                       <div className="store-row-name">
                         {s.name}

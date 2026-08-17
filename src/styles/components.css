@@ -328,7 +328,11 @@
   padding-right: var(--s-4);
   padding-bottom: 0;
 }
-.main > * { animation: rise-in 360ms var(--ease-out) backwards; }
+.main > * { animation: page-in 460ms var(--ease-out) both; }
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
 
 /* ────────────────────────────────────────────────────────────
    Page header
@@ -366,11 +370,19 @@
   border: 1px solid var(--v-ink-600);
   border-radius: var(--r-12);
   padding: 22px 24px 24px;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
 }
 .card--raised { background: var(--v-ink-850); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
 .card--flush { padding: 0; }
 .card-title { margin: 0; font-size: var(--t-h3); font-weight: 600; color: var(--v-ink-100); }
 .card-sub { margin: var(--s-2) 0 var(--s-4); color: var(--v-ink-300); font-size: var(--t-body-sm); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .card:not(.no-lift):not(.chat-window):not(.card--flush):not(.kpi-grid > .card):hover {
+    transform: translateY(-3px);
+    border-color: var(--v-ink-500);
+    box-shadow: 0 16px 36px -16px rgba(0, 0, 0, 0.6);
+  }
+}
 
 /* ────────────────────────────────────────────────────────────
    Buttons
@@ -975,11 +987,22 @@ code {
   border-radius: 50%;
   display: grid;
   place-items: center;
+  font-weight: 700;
+  font-family: var(--v-font-sans);
+  line-height: 1;
+  text-align: center;
   color: var(--v-purple-300);
   background: var(--accent-soft);
-  border: 1px solid var(--v-ink-600);
+  border: 1px solid color-mix(in srgb, var(--v-ink-500) 45%, transparent);
   flex: none;
+  user-select: none;
 }
+.cell-avatar { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.cell-avatar > * { min-width: 0; }
+.sparkline { width: 100%; display: block; overflow: visible; }
+.kpi-spark { margin-top: var(--s-3); opacity: 0.9; }
+.skeleton-row { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-3) var(--s-1); border-bottom: 1px dashed var(--v-ink-600); }
+.skeleton-row:last-child { border-bottom: 0; }
 
 /* Score bar (legacy) */
 .scorebar { margin: var(--s-4) 0; }
@@ -1771,7 +1794,7 @@ code {
 .title-input { padding: var(--s-1) var(--s-2); font-size: 14px; font-weight: 600; }
 
 .chat-msgs { flex: 1; overflow-y: auto; padding: var(--s-5); display: flex; flex-direction: column; gap: var(--s-4); min-height: 0; }
-.chat-loading { display: flex; align-items: center; gap: var(--s-2); color: var(--v-ink-300); font-size: 13px; justify-content: center; padding: var(--s-6); }
+.chat-loading { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-2) 0; }
 .chat-start-hint { margin: auto; }
 
 .chat-bubble { max-width: 78%; animation: msg-in var(--dur-slow) var(--ease-out) both; }
@@ -2629,3 +2652,53 @@ code {
 }
 .city-map .leaflet-control-attribution a { color: var(--v-ink-300); }
 .city-map .leaflet-control-attribution a:hover { color: var(--cyan-bright); }
+
+/* ────────────────────────────────────────────────────────────
+   Staggered list entrances
+   ──────────────────────────────────────────────────────────── */
+
+.activity-feed .timeline-item,
+.recent-list .recent-row,
+.similar-list .similar-row,
+.chat-item {
+  animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+}
+.activity-feed .timeline-item:nth-child(2),
+.recent-list .recent-row:nth-child(2),
+.similar-list .similar-row:nth-child(2),
+.chat-item:nth-child(2) { animation-delay: 40ms; }
+.activity-feed .timeline-item:nth-child(3),
+.recent-list .recent-row:nth-child(3),
+.similar-list .similar-row:nth-child(3),
+.chat-item:nth-child(3) { animation-delay: 80ms; }
+.activity-feed .timeline-item:nth-child(4),
+.recent-list .recent-row:nth-child(4),
+.similar-list .similar-row:nth-child(4),
+.chat-item:nth-child(4) { animation-delay: 120ms; }
+.activity-feed .timeline-item:nth-child(5),
+.recent-list .recent-row:nth-child(5),
+.similar-list .similar-row:nth-child(5),
+.chat-item:nth-child(5) { animation-delay: 160ms; }
+.activity-feed .timeline-item:nth-child(6),
+.recent-list .recent-row:nth-child(6),
+.similar-list .similar-row:nth-child(6),
+.chat-item:nth-child(6) { animation-delay: 200ms; }
+.activity-feed .timeline-item:nth-child(7),
+.chat-item:nth-child(7) { animation-delay: 240ms; }
+.activity-feed .timeline-item:nth-child(8),
+.chat-item:nth-child(8) { animation-delay: 280ms; }
+.activity-feed .timeline-item:nth-child(9) { animation-delay: 320ms; }
+.activity-feed .timeline-item:nth-child(10) { animation-delay: 360ms; }
+
+.table tbody tr { animation: rise-in 280ms var(--ease-out) backwards; }
+.table tbody tr:nth-child(2) { animation-delay: 30ms; }
+.table tbody tr:nth-child(3) { animation-delay: 60ms; }
+.table tbody tr:nth-child(4) { animation-delay: 90ms; }
+.table tbody tr:nth-child(5) { animation-delay: 120ms; }
+.table tbody tr:nth-child(6) { animation-delay: 150ms; }
+.table tbody tr:nth-child(7) { animation-delay: 180ms; }
+.table tbody tr:nth-child(8) { animation-delay: 210ms; }
+.table tbody tr:nth-child(9) { animation-delay: 240ms; }
+.table tbody tr:nth-child(10) { animation-delay: 270ms; }
+.table tbody tr:nth-child(11) { animation-delay: 300ms; }
+.table tbody tr:nth-child(12) { animation-delay: 330ms; }

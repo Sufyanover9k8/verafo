@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Icon } from './components/Icon'
 import { Sidebar } from './components/layout/Sidebar'
 import { Topbar } from './components/layout/Topbar'
+import { Skeleton } from './components/primitives/Skeleton'
 import { Dashboard } from './pages/Dashboard'
 import { LayoutTickContext } from './lib/motion'
 
@@ -20,9 +20,16 @@ const AddStore = lazy(() => import('./pages/AddStore').then((m) => ({ default: m
 
 function RouteFallback() {
   return (
-    <div className="preview-loading card">
-      <Icon name="refresh" size={20} className="spin" />
-      Loading…
+    <div className="stack">
+      <div className="kpi-grid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div className="card" key={i}>
+            <Skeleton width="50%" height={12} />
+            <Skeleton width="70%" height={22} />
+            <Skeleton width="100%" height={28} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

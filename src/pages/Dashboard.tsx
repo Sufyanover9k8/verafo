@@ -10,6 +10,7 @@ import { TopProductsList } from '../components/charts/TopProductsList'
 import { GeoMap } from '../components/charts/GeoMap'
 import { LineChart } from '../components/charts/LineChart'
 import { CountUpNumber } from '../components/CountUpNumber'
+import { Sparkline } from '../components/Sparkline'
 import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { NeedsSetup } from '../components/States'
 import { phone, timeAgo } from '../lib/format'
@@ -196,6 +197,7 @@ export function Dashboard() {
               <Card key={i}>
                 <Skeleton width="50%" height={12} />
                 <Skeleton width="70%" height={22} />
+                <Skeleton width="100%" height={28} />
               </Card>
             ))}
           </div>
@@ -210,6 +212,9 @@ export function Dashboard() {
             <span className={`kpi-delta${stats.todayOrders > stats.yOrders ? ' pos' : stats.todayOrders < stats.yOrders ? ' neg' : ''}`}>
               {stats.todayOrders > stats.yOrders ? 'up' : stats.todayOrders < stats.yOrders ? 'down' : 'flat'} vs yesterday ({stats.yOrders})
             </span>
+            <div className="kpi-spark">
+              <Sparkline data={stats.days.map((d) => d.a)} height={28} />
+            </div>
           </Card>
           <Card>
             <span className="kpi-label">Revenue today</span>
@@ -219,6 +224,9 @@ export function Dashboard() {
             <span className={`kpi-delta${stats.todayRevenue > stats.yRevenue ? ' pos' : stats.todayRevenue < stats.yRevenue ? ' neg' : ''}`}>
               {stats.todayRevenue > stats.yRevenue ? 'up' : stats.todayRevenue < stats.yRevenue ? 'down' : 'flat'} vs yesterday
             </span>
+            <div className="kpi-spark">
+              <Sparkline data={salesData.map((s) => s.a)} height={28} />
+            </div>
           </Card>
           <Card>
             <span className="kpi-label">Avg risk score</span>

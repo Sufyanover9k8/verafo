@@ -12,6 +12,8 @@ import { CityStatsList } from '../components/charts/CityStatsList'
 import { TopProductsList } from '../components/charts/TopProductsList'
 import { LineChart } from '../components/charts/LineChart'
 import { CountUpNumber } from '../components/CountUpNumber'
+import { Avatar } from '../components/Avatar'
+import { Sparkline } from '../components/Sparkline'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { dateTime, money, phone } from '../lib/format'
@@ -116,9 +118,12 @@ export function StoreDashboard() {
       label: 'Buyer',
       id: true,
       render: (o) => (
-        <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-          {phone(o.buyer_phone)}
-        </Link>
+        <span className="cell-avatar">
+          <Avatar phone={o.buyer_phone} size={26} />
+          <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
+            {phone(o.buyer_phone)}
+          </Link>
+        </span>
       ),
     },
     {
@@ -203,6 +208,7 @@ export function StoreDashboard() {
                 <Card key={i}>
                   <Skeleton width="50%" height={12} />
                   <Skeleton width="70%" height={22} />
+                  <Skeleton width="100%" height={28} />
                 </Card>
               ))}
             </div>
@@ -214,6 +220,9 @@ export function StoreDashboard() {
                   <CountUpNumber prefix="PKR " value={todayRevenue} />
                 </strong>
                 <span className="kpi-delta">gross order value</span>
+                <div className="kpi-spark">
+                  <Sparkline data={salesData.map((s) => s.a)} height={28} />
+                </div>
               </Card>
               <Card>
                 <span className="kpi-label">Orders today</span>
@@ -221,6 +230,9 @@ export function StoreDashboard() {
                   <CountUpNumber value={todayOrders} />
                 </strong>
                 <span className="kpi-delta">across this store</span>
+                <div className="kpi-spark">
+                  <Sparkline data={sales.map((s) => s.orders)} height={28} />
+                </div>
               </Card>
               <Card>
                 <span className="kpi-label">Accepted / Refused</span>

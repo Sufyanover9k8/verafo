@@ -5,6 +5,8 @@ import { PageHeader } from '../components/PageHeader'
 import { VerdictBlock } from '../components/verdict/VerdictBlock'
 import { VerdictChip } from '../components/verdict/VerdictChip'
 import { Card } from '../components/primitives/Card'
+import { Skeleton } from '../components/primitives/Skeleton'
+import { Avatar } from '../components/Avatar'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
 import { riskFactors } from '../lib/risk'
@@ -232,7 +234,7 @@ export function Lookup() {
             {recents.map((r) => {
               return (
                 <button key={r.id} className="recent-row" onClick={() => openRecent(r.buyer_phone)}>
-                  <Icon name="smartphone" size={15} className="recent-icon" />
+                  <Avatar phone={r.buyer_phone} size={26} />
                   <span className="recent-phone">{phone(r.buyer_phone)}</span>
                   <VerdictChip risk_score={r.buyers?.risk_score ?? 0.5} total_orders={r.buyers?.total_orders ?? 0} />
                   <span className="recent-when">{timeAgo(r.searched_at)}</span>
@@ -254,8 +256,13 @@ export function Lookup() {
       )}
 
       {state.kind === 'loading' && (
-        <div className="preview-loading card">
-          <Icon name="refresh" size={20} className="spin" /> Looking up {phone(searched)}…
+        <div className="card">
+          <div className="stack">
+            <Skeleton width="40%" height={18} />
+            <Skeleton width="65%" height={12} />
+            <Skeleton width="50%" height={12} />
+            <Skeleton width="30%" height={12} />
+          </div>
         </div>
       )}
 
@@ -311,7 +318,7 @@ export function Lookup() {
                     return (
                       <button key={s.phone} className="similar-row" onClick={() => void search(s.phone)}>
                         <span className="similar-phone">
-                          <Icon name="person" size={15} /> {phone(s.phone)}
+                          <Avatar phone={s.phone} size={26} /> {phone(s.phone)}
                         </span>
                         <span className="similar-meta">
                           {s.total_orders} orders · {s.total_refused} refused

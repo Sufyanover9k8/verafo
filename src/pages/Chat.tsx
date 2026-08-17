@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { ChartCard } from '../components/ChartCard'
 import { FileCard } from '../components/FileCard'
 import { Icon } from '../components/Icon'
+import { Avatar } from '../components/Avatar'
+import { Skeleton } from '../components/primitives/Skeleton'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { timeAgo } from '../lib/format'
 import { activeMention, mentionPhones, renderMentions, type ActiveMention } from '../lib/mentions'
@@ -1150,7 +1152,13 @@ export function Chat() {
             <div ref={listRef} className="chat-msgs">
               {loading && (
                 <div className="chat-loading">
-                  <Icon name="refresh-outline" size={18} className="spin" /> Loading messages…
+                  <div className="chat-bubble ai">
+                    <Skeleton width="55%" height={13} />
+                    <Skeleton width="38%" height={13} />
+                  </div>
+                  <div className="chat-bubble ai">
+                    <Skeleton width="30%" height={13} />
+                  </div>
                 </div>
               )}
               {!loading && messages.length === 0 && (
@@ -1325,7 +1333,7 @@ export function Chat() {
                                 pickMention(s.name)
                               }}
                             >
-                              <Icon name="business" size={15} className="recent-icon" />
+                              <Avatar name={s.name} size={26} />
                               <span className="mention-phone">{s.name}</span>
                               <Icon name="at-outline" size={13} className="mention-at" />
                             </button>
@@ -1343,7 +1351,7 @@ export function Chat() {
                               pickMention(b.phone)
                             }}
                           >
-                            <Icon name="person-outline" size={15} className="recent-icon" />
+                            <Avatar phone={b.phone} size={26} />
                             <span className="mention-phone">{b.phone}</span>
                             <Icon name="at-outline" size={13} className="mention-at" />
                           </button>
