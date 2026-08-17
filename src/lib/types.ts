@@ -93,6 +93,7 @@ export interface ChatRow {
   last_message_at: string | null
   created_at: string
   updated_at: string
+  pinned?: boolean | null
 }
 
 export interface ChatMessage {

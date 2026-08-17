@@ -1,16 +1,36 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ChartCard } from '../components/ChartCard'
 import { FileCard } from '../components/FileCard'
 import { Icon } from '../components/Icon'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { timeAgo } from '../lib/format'
-import { activeMention, mentionPhones, renderMentions } from '../lib/mentions'
+import { activeMention, mentionPhones, renderMentions, type ActiveMention } from '../lib/mentions'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import type { AnalyzeReport, ChatMessage, ChatRow, ChartSpec, FileSpec } from '../lib/types'
 
 const CHART_MARKER_RE = /\[\[CHART\]\]([\s\S]*?)\[\[\/CHART\]\]/g
 const FILE_MARKER_RE = /\[\[FILE\]\]([\s\S]*?)\[\[\/FILE\]\]/g
+const CITES_MARKER_RE = /\[\[CITES\]\]([\s\S]*?)\[\[\/CITES\]\]/g
+
+const TOOL_LABELS: Record<string, string> = {
+  search_orders: 'searched orders',
+  buyers_by_city: 'buyers by city',
+  top_buyers: 'top buyers',
+  buyer_profile: 'buyer profile',
+  city_overview: 'city overview',
+  category_overview: 'category overview',
+  store_overview: 'store overview',
+  top_products: 'top products',
+  network_overview: 'network overview',
+  refusal_reasons: 'refusal reasons',
+  buyer_orders: 'order history',
+  weekly_trend: 'weekly trend',
+  similar_buyers: 'similar buyers',
+  buyer_verdict: 'buyer verdict',
+  search_buyers: 'search buyers',
+  create_file: 'generated a file',
+}
 
 function parseCharts(content: string): { text: string; charts: ChartSpec[] } {
   const charts: ChartSpec[] = []
@@ -48,12 +68,45 @@ function parseFiles(content: string): { text: string; files: FileSpec[] } {
   return { text, files }
 }
 
+function parseCites(content: string): { text: string; cites: string[] } {
+  const cites: string[] = []
+  const text = content.replace(CITES_MARKER_RE, (_m, inner) => {
+    for (const t of String(inner ?? '').split('|')) if (t.trim()) cites.push(t.trim())
+    return ''
+  })
+  return { text: text.trim(), cites }
+}
+
+function plainText(content: string): string {
+  const { text: noCites } = parseCites(content)
+  const { text: noCharts } = parseCharts(noCites)
+  const { text } = parseFiles(noCharts)
+  return text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*/g, '').trim()
+}
+
 const FALLBACK_SUGGESTIONS = [
   'Should I ship an order to a buyer in my network?',
   'Show me the top 10 people who buy footwear',
   'Pie chart of my orders by store',
   'Which buyers are the biggest refusal risk?',
 ]
+
+const QUICK_ACTIONS = [
+  { key: 'analyze', label: 'Analyze buyer', icon: 'stats-chart' },
+  { key: 'trends', label: 'Trends', icon: 'trending-up' },
+  { key: 'suggest', label: 'Suggestions', icon: 'sparkles' },
+  { key: 'topbuyers', label: 'Top buyers', icon: 'person' },
+  { key: 'topproducts', label: 'Top products', icon: 'bag-handle' },
+  { key: 'paste', label: 'Paste orders', icon: 'clipboard' },
+] as const
+
+const FILTERS = [
+  { label: 'Last 7 days', token: 'last 7 days' },
+  { label: 'Last 30 days', token: 'last 30 days' },
+  { label: 'Karachi', token: 'Karachi' },
+  { label: 'Footwear', token: 'footwear' },
+  { label: 'Pending only', token: 'pending orders only' },
+] as const
 
 const REPORT_RE = /^\[(Analyze|Trends|Suggestions)\]/
 
@@ -137,10 +190,25 @@ function formatTrends(t: TrendsReport): string {
 }
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(plainText(msg.content))
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
   if (msg.role === 'user') {
     return (
       <div className="chat-bubble user">
         <span className="chat-name">You</span>
+        <button className="msg-copy" title="Copy message" onClick={() => void copy()}>
+          <Icon name={copied ? 'check' : 'copy'} size={13} />
+        </button>
         <p>{renderMentions(msg.content)}</p>
       </div>
     )
@@ -163,7 +231,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           : 'Verafo'
   const icon =
     kind === 'analyze' ? 'stats-chart-outline' : kind === 'trends' ? 'trending-up-outline' : 'sparkles-outline'
-  const { text: chartText, charts } = parseCharts(msg.content)
+  const { text: citesText, cites } = parseCites(msg.content)
+  const { text: chartText, charts } = parseCharts(citesText)
   const { text, files } = parseFiles(chartText)
   const lines = text.split('\n').filter((l) => l && !REPORT_RE.test(l))
 
@@ -172,6 +241,9 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <span className="chat-name">
         <Icon name={icon} size={13} /> {label}
       </span>
+      <button className="msg-copy" title="Copy answer" onClick={() => void copy()}>
+        <Icon name={copied ? 'check' : 'copy'} size={13} />
+      </button>
       <div className="msg-body">
         {lines.map((line, i) => {
           if (line.startsWith('- ')) {
@@ -198,6 +270,16 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         {files.map((f, i) => (
           <FileCard key={i} spec={f} />
         ))}
+        {cites.length > 0 && (
+          <div className="msg-cites">
+            <Icon name="server" size={12} /> Based on{' '}
+            {cites.map((c, i) => (
+              <span key={`${c}-${i}`} className="msg-cite">
+                {TOOL_LABELS[c] ?? c}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -215,21 +297,41 @@ export function Chat() {
   const [working, setWorking] = useState<WorkingState | null>(null)
   const [streamText, setStreamText] = useState('')
   const [liveFiles, setLiveFiles] = useState<FileSpec[]>([])
-  const [mention, setMention] = useState<{ at: number; query: string } | null>(null)
+  const [mention, setMention] = useState<ActiveMention | null>(null)
   const [mentionResults, setMentionResults] = useState<{ phone: string }[]>([])
+  const [storeMentionResults, setStoreMentionResults] = useState<{ id: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [analyzeOpen, setAnalyzeOpen] = useState(false)
   const [analyzePhone, setAnalyzePhone] = useState('')
-  const [toolsOpen, setToolsOpen] = useState(false)
   const [railOpen, setRailOpen] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [manageMode, setManageMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const mentionId = useRef(0)
   const toolStepId = useRef(0)
+  const toolsUsedRef = useRef<string[]>([])
+  const doneMsgIdRef = useRef<string | null>(null)
 
   const activeChat = chats.find((c) => c.id === activeId) ?? null
+
+  const sortedChats = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const list = chats.filter(
+      (c) => !q || c.title.toLowerCase().includes(q) || (c.last_message ?? '').toLowerCase().includes(q),
+    )
+    return [...list].sort((a, b) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1
+      return (
+        new Date(b.last_message_at ?? b.created_at).getTime() - new Date(a.last_message_at ?? a.created_at).getTime()
+      )
+    })
+  }, [chats, searchQuery])
 
   const loadChats = useCallback(async () => {
     if (!supabase) return
@@ -259,6 +361,22 @@ export function Chat() {
     },
     [],
   )
+
+  const loadSuggestions = useCallback(async () => {
+    const base = functionsBaseUrl()
+    if (!base) return
+    try {
+      const res = await fetch(`${base}/verafo-ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'suggest' }),
+      })
+      const j = (await res.json()) as { suggestions?: string[] }
+      if (Array.isArray(j.suggestions) && j.suggestions.length > 0) setSuggestions(j.suggestions)
+    } catch {
+      setSuggestions(FALLBACK_SUGGESTIONS)
+    }
+  }, [])
 
   useEffect(() => {
     void loadChats()
@@ -294,28 +412,15 @@ export function Chat() {
   }, [activeId, loadMessages, toast])
 
   useEffect(() => {
-    if (!activeId || messages.length > 0) return
+    if (!activeId) return
     let cancelled = false
-    const base = functionsBaseUrl()
-    if (!base) return
-    fetch(`${base}/verafo-ai`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'suggest' }),
+    loadSuggestions().catch(() => {
+      if (!cancelled) setSuggestions(FALLBACK_SUGGESTIONS)
     })
-      .then((r) => r.json())
-      .then((j: { suggestions?: string[] }) => {
-        if (!cancelled && Array.isArray(j.suggestions) && j.suggestions.length > 0) {
-          setSuggestions(j.suggestions)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSuggestions(FALLBACK_SUGGESTIONS)
-      })
     return () => {
       cancelled = true
     }
-  }, [activeId, messages.length])
+  }, [activeId, loadSuggestions])
 
   useEffect(() => {
     const el = listRef.current
@@ -334,10 +439,27 @@ export function Chat() {
     setMentionResults((data ?? []) as { phone: string }[])
   }, [])
 
+  const fetchStoreMentions = useCallback(async (query: string) => {
+    if (!supabase) return
+    const id = ++mentionId.current
+    const { data, error } = await supabase
+      .from('stores')
+      .select('id,name')
+      .ilike('name', `%${query}%`)
+      .limit(8)
+    if (error || id !== mentionId.current) return
+    setStoreMentionResults((data ?? []) as { id: string; name: string }[])
+  }, [])
+
   useEffect(() => {
-    if (mention) void fetchMentions(mention.query)
-    else setMentionResults([])
-  }, [mention, fetchMentions])
+    if (!mention) {
+      setMentionResults([])
+      setStoreMentionResults([])
+      return
+    }
+    if (mention.kind === 'store') void fetchStoreMentions(mention.query)
+    else void fetchMentions(mention.query)
+  }, [mention, fetchMentions, fetchStoreMentions])
 
   async function newChat() {
     if (!supabase) return
@@ -352,6 +474,7 @@ export function Chat() {
     setSuggestions(FALLBACK_SUGGESTIONS)
     setRenaming(false)
     setAnalyzeOpen(false)
+    setSelected(new Set())
     setActiveId(data.id)
     await loadChats()
   }
@@ -367,6 +490,57 @@ export function Chat() {
       setActiveId(null)
       setMessages([])
     }
+    await loadChats()
+  }
+
+  async function togglePin(c: ChatRow) {
+    if (!supabase) return
+    const next = !c.pinned
+    const { error } = await supabase.from('chats').update({ pinned: next }).eq('id', c.id)
+    if (error) {
+      toast.push({ kind: 'error', title: 'Could not update pin', detail: error.message })
+      return
+    }
+    await loadChats()
+  }
+
+  async function deleteSelected() {
+    if (!supabase || selected.size === 0) return
+    const ids = [...selected]
+    const { error } = await supabase.from('chats').delete().in('id', ids)
+    if (error) {
+      toast.push({ kind: 'error', title: 'Could not delete chats', detail: error.message })
+      return
+    }
+    if (activeId && selected.has(activeId)) {
+      setActiveId(null)
+      setMessages([])
+    }
+    setSelected(new Set())
+    setManageMode(false)
+    await loadChats()
+  }
+
+  async function deleteEmptyChats() {
+    if (!supabase) return
+    const { data, error } = await supabase.from('chats').select('id,title,last_message')
+    if (error) return
+    const empty = (data ?? []).filter((c) => !c.last_message).map((c) => c.id)
+    if (empty.length === 0) {
+      toast.push({ kind: 'success', title: 'No empty chats' })
+      return
+    }
+    const { error: delErr } = await supabase.from('chats').delete().in('id', empty)
+    if (delErr) {
+      toast.push({ kind: 'error', title: 'Could not clean up', detail: delErr.message })
+      return
+    }
+    if (activeId && empty.includes(activeId)) {
+      setActiveId(null)
+      setMessages([])
+    }
+    setSelected(new Set())
+    toast.push({ kind: 'success', title: `Deleted ${empty.length} empty chat${empty.length === 1 ? '' : 's'}` })
     await loadChats()
   }
 
@@ -394,10 +568,10 @@ export function Chat() {
     setMention(activeMention(value, e.target.selectionStart ?? value.length))
   }
 
-  function pickMention(phone: string) {
+  function pickMention(value: string) {
     if (!mention) return
-    const next =
-      composing.slice(0, mention.at) + `@${phone} ` + composing.slice(mention.at + 1 + mention.query.length)
+    const token = mention.kind === 'store' ? `#${value} ` : `@${value} `
+    const next = composing.slice(0, mention.at) + token + composing.slice(mention.at + 1 + mention.query.length)
     setComposing(next)
     setMention(null)
     window.setTimeout(() => textareaRef.current?.focus(), 0)
@@ -438,6 +612,8 @@ export function Chat() {
       }
       case 'tool_call': {
         const id = ++toolStepId.current
+        const name = String(data.name ?? 'tool')
+        toolsUsedRef.current.push(name)
         setWorking((w) => ({
           phase: w?.phase ?? 'researching',
           label: w?.label ?? 'Researching your data…',
@@ -445,7 +621,7 @@ export function Chat() {
             ...(w?.tools ?? []),
             {
               id,
-              name: String(data.name ?? 'tool'),
+              name,
               label: String(data.label ?? 'Running tool'),
               args: String(data.args ?? ''),
               status: 'running',
@@ -489,96 +665,119 @@ export function Chat() {
         }
         break
       }
+      case 'done': {
+        doneMsgIdRef.current = data.message_id ? String(data.message_id) : null
+        break
+      }
       case 'error': {
         throw new Error(String(data.message ?? 'Verafo hit an error'))
       }
     }
   }
 
-  const send = useCallback(async () => {
-    const raw = composing.trim()
-    if (!supabase || !activeId || !raw || busy) return
-    const phones = mentionPhones(raw)
-    const phone = phones[0] ?? activeChat?.phone ?? null
-    setBusy(true)
-    setComposing('')
-    setMention(null)
-    setStreamText('')
-    setLiveFiles([])
-    setWorking({ phase: 'thinking', label: 'Thinking…', tools: [] })
-    setMessages((m) => [
-      ...m,
-      {
-        id: `tmp-${Date.now()}`,
-        chat_id: activeId,
-        role: 'user',
-        content: raw,
-        phone,
-        created_at: new Date().toISOString(),
-      },
-    ])
-    try {
-      const { error: insErr } = await supabase
-        .from('chat_messages')
-        .insert({ chat_id: activeId, role: 'user', content: raw, phone })
-      if (insErr) throw insErr
-      if (phone && !activeChat?.phone) {
-        await supabase.from('chats').update({ phone }).eq('id', activeId)
-      }
-      const base = functionsBaseUrl()
-      if (!base) throw new Error('Edge functions are not configured')
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'chat', chat_id: activeId, prompt: raw, phone: phone ?? undefined }),
-      })
-      if (!res.ok || !res.body) {
-        let detail = 'Request failed'
-        try {
-          const j = (await res.json()) as { error?: string }
-          if (j.error) detail = j.error
-        } catch {
-          /* not json */
-        }
-        throw new Error(detail)
-      }
+  const persistCitations = useCallback(async () => {
+    const mid = doneMsgIdRef.current
+    const tools = toolsUsedRef.current
+    if (!supabase || !mid || tools.length === 0) return
+    const { data } = await supabase.from('chat_messages').select('content').eq('id', mid).single()
+    if (!data || data.content.includes('[[CITES]]')) return
+    const cites = `\n\n[[CITES]]${tools.join('|')}[[/CITES]]`
+    await supabase.from('chat_messages').update({ content: data.content + cites }).eq('id', mid)
+  }, [])
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      let done = false
-      while (!done) {
-        const { value, done: streamDone } = await reader.read()
-        done = streamDone
-        buf += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-        let sep: number
-        while ((sep = buf.indexOf('\n\n')) >= 0) {
-          const raw = buf.slice(0, sep)
-          buf = buf.slice(sep + 2)
-          if (raw.trim()) handleSseEvent(raw)
-        }
-      }
-      if (buf.trim()) handleSseEvent(buf)
-      await Promise.all([loadMessages(activeId), loadChats()])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.push({
-        kind: 'error',
-        title: 'Verafo chat failed',
-        detail: `${message} - is the verafo-ai edge function deployed with an OpenAI key?`,
-      })
-      try {
-        await loadMessages(activeId)
-      } catch {
-        /* keep the optimistic bubble */
-      }
-    } finally {
-      setBusy(false)
-      setWorking(null)
+  const send = useCallback(
+    async (override?: string) => {
+      const raw = (override ?? composing).trim()
+      if (!supabase || !activeId || !raw || busy) return
+      const phones = mentionPhones(raw)
+      const phone = phones[0] ?? activeChat?.phone ?? null
+      setBusy(true)
+      setComposing('')
+      setMention(null)
       setStreamText('')
       setLiveFiles([])
-    }
-  }, [composing, busy, activeId, activeChat, toast, loadMessages, loadChats])
+      setWorking({ phase: 'thinking', label: 'Thinking…', tools: [] })
+      toolsUsedRef.current = []
+      doneMsgIdRef.current = null
+      setMessages((m) => [
+        ...m,
+        {
+          id: `tmp-${Date.now()}`,
+          chat_id: activeId,
+          role: 'user',
+          content: raw,
+          phone,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      try {
+        const { error: insErr } = await supabase
+          .from('chat_messages')
+          .insert({ chat_id: activeId, role: 'user', content: raw, phone })
+        if (insErr) throw insErr
+        if (phone && !activeChat?.phone) {
+          await supabase.from('chats').update({ phone }).eq('id', activeId)
+        }
+        const base = functionsBaseUrl()
+        if (!base) throw new Error('Edge functions are not configured')
+        const res = await fetch(`${base}/verafo-ai`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'chat', chat_id: activeId, prompt: raw, phone: phone ?? undefined }),
+        })
+        if (!res.ok || !res.body) {
+          let detail = 'Request failed'
+          try {
+            const j = (await res.json()) as { error?: string }
+            if (j.error) detail = j.error
+          } catch {
+            /* not json */
+          }
+          throw new Error(detail)
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+        let done = false
+        while (!done) {
+          const { value, done: streamDone } = await reader.read()
+          done = streamDone
+          buf += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+          let sep: number
+          while ((sep = buf.indexOf('\n\n')) >= 0) {
+            const raw = buf.slice(0, sep)
+            buf = buf.slice(sep + 2)
+            if (raw.trim()) handleSseEvent(raw)
+          }
+        }
+        if (buf.trim()) handleSseEvent(buf)
+        await persistCitations()
+        await Promise.all([loadMessages(activeId), loadChats()])
+        void loadSuggestions()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.push({
+          kind: 'error',
+          title: 'Verafo chat failed',
+          detail: `${message} - is the verafo-ai edge function deployed with an OpenAI key?`,
+        })
+        try {
+          await loadMessages(activeId)
+        } catch {
+          /* keep the optimistic bubble */
+        }
+      } finally {
+        setBusy(false)
+        setWorking(null)
+        setStreamText('')
+        setLiveFiles([])
+        doneMsgIdRef.current = null
+        toolsUsedRef.current = []
+      }
+    },
+    [composing, busy, activeId, activeChat, toast, loadMessages, loadChats, loadSuggestions, persistCitations],
+  )
 
   async function appendAssistant(content: string) {
     if (!supabase || !activeId) return
@@ -659,6 +858,73 @@ export function Chat() {
     }
   }
 
+  function handleQuickAction(key: (typeof QUICK_ACTIONS)[number]['key']) {
+    if (busy || featureBusy) return
+    if (key === 'analyze') {
+      setAnalyzeOpen((v) => !v)
+    } else if (key === 'trends') {
+      void runTrends()
+    } else if (key === 'suggest') {
+      void runSuggest()
+    } else if (key === 'topbuyers') {
+      void send('Show me the top 10 buyers by spend.')
+    } else if (key === 'topproducts') {
+      void send('Show me the top products by revenue.')
+    } else if (key === 'paste') {
+      setPasteOpen(true)
+    }
+  }
+
+  function submitPaste(e: FormEvent) {
+    e.preventDefault()
+    const t = pasteText.trim()
+    if (!t) return
+    setPasteOpen(false)
+    setPasteText('')
+    void send(`Log these orders and check the buyers:\n${t}`)
+  }
+
+  function applyFilter(token: string) {
+    const next = composing.trim() ? `${composing} ${token}` : token
+    setComposing(next)
+    window.setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
+  function exportChat() {
+    if (messages.length === 0) return
+    const lines = messages.map((m) => {
+      const txt = plainText(m.content)
+      const label = m.role === 'user' ? 'You' : 'Verafo'
+      const phone = m.phone ? ` (${m.phone})` : ''
+      const stamp = new Date(m.created_at).toLocaleString('en-GB')
+      return `[${label}${phone}] ${stamp}\n${txt}\n`
+    })
+    const blob = new Blob(
+      [`Ask Verafo — ${activeChat?.title ?? 'Chat'}\n${'='.repeat(40)}\n\n${lines.join('\n')}`],
+      { type: 'text/plain;charset=utf-8' },
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'verafo-chat.txt'
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000)
+    toast.push({ kind: 'success', title: 'Chat exported' })
+  }
+
+  async function copyChat() {
+    if (messages.length === 0) return
+    const text = messages
+      .map((m) => `[${m.role === 'user' ? 'You' : 'Verafo'}${m.phone ? ` (${m.phone})` : ''}]\n${plainText(m.content)}`)
+      .join('\n\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.push({ kind: 'success', title: 'Chat copied' })
+    } catch {
+      toast.push({ kind: 'error', title: 'Could not copy chat' })
+    }
+  }
+
   if (!isConfigured) return <NeedsSetup />
 
   return (
@@ -676,40 +942,123 @@ export function Chat() {
           </button>
         </div>
 
+        <div className="chat-rail-tools">
+          <div className="chat-search">
+            <Icon name="search" size={14} />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search chats…"
+              aria-label="Search chats"
+            />
+          </div>
+          {manageMode && (
+            <div className="chat-manage">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() =>
+                  setSelected(selected.size === sortedChats.length ? new Set() : new Set(sortedChats.map((c) => c.id)))
+                }
+              >
+                {selected.size === sortedChats.length ? 'None' : 'All'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => void deleteEmptyChats()}>
+                Empty
+              </button>
+              <button
+                className="btn btn-danger btn-sm"
+                disabled={selected.size === 0}
+                onClick={() => void deleteSelected()}
+              >
+                Delete ({selected.size})
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setManageMode(false); setSelected(new Set()) }}>
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="chat-items">
-          {chats.length === 0 && (
+          {sortedChats.length === 0 && (
             <div className="chat-items-empty">
               <EmptyState
                 icon="chatbubble-outline"
-                title="No chats yet"
-                detail="Start a conversation to get going."
+                title={searchQuery ? 'No matches' : 'No chats yet'}
+                detail={searchQuery ? 'Try a different search.' : 'Start a conversation to get going.'}
               />
             </div>
           )}
-          {chats.map((c) => (
-            <button
+          {sortedChats.map((c) => (
+            <div
               key={c.id}
+              role="button"
+              tabIndex={0}
               className={`chat-item${activeId === c.id ? ' active' : ''}`}
               onClick={() => {
                 setRenaming(false)
                 setAnalyzeOpen(false)
                 setActiveId(c.id)
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setActiveId(c.id)
+                }
+              }}
             >
               <div className="chat-item-line">
+                {manageMode && (
+                  <span
+                    className={`chat-item-check${selected.has(c.id) ? ' on' : ''}`}
+                    role="checkbox"
+                    aria-checked={selected.has(c.id)}
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelected((s) => {
+                        const next = new Set(s)
+                        if (next.has(c.id)) next.delete(c.id)
+                        else next.add(c.id)
+                        return next
+                      })
+                    }}
+                  >
+                    <Icon name="check" size={11} />
+                  </span>
+                )}
                 <span className="chat-item-title">{c.title}</span>
                 <span className="chat-item-time">{timeAgo(c.last_message_at ?? c.created_at)}</span>
               </div>
               <span className="chat-item-snippet">
                 {c.last_message ?? <span className="muted">No messages yet</span>}
               </span>
-              {c.phone && (
-                <span className="chat-item-phone">
-                  <Icon name="at-outline" size={11} /> {c.phone}
-                </span>
-              )}
-            </button>
+              <span className="chat-item-phone">
+                {c.phone && (
+                  <span className="chat-item-pin">
+                    <Icon name="at-outline" size={11} /> {c.phone}
+                  </span>
+                )}
+                <button
+                  className={`pin-btn${c.pinned ? ' on' : ''}`}
+                  title={c.pinned ? 'Unpin' : 'Pin conversation'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void togglePin(c)
+                  }}
+                >
+                  <Icon name="star" size={13} />
+                </button>
+              </span>
+            </div>
           ))}
+        </div>
+
+        <div className="chat-rail-foot">
+          <button className="btn btn-ghost btn-sm" onClick={() => setManageMode((v) => !v)}>
+            <Icon name={manageMode ? 'close' : 'checkmark-done'} size={13} />{' '}
+            {manageMode ? 'Exit manage' : 'Manage chats'}
+          </button>
         </div>
       </aside>
 
@@ -765,6 +1114,12 @@ export function Chat() {
                 >
                   <Icon name="chatbubbles-outline" size={15} />
                 </button>
+                <button className="icon-btn" title="Copy chat" onClick={() => void copyChat()}>
+                  <Icon name="copy" size={15} />
+                </button>
+                <button className="icon-btn" title="Export chat (.txt)" onClick={exportChat}>
+                  <Icon name="download" size={15} />
+                </button>
                 <button className="icon-btn" title="Rename" onClick={startRename}>
                   <Icon name="pencil-outline" size={15} />
                 </button>
@@ -785,7 +1140,7 @@ export function Chat() {
                   <EmptyState
                     icon="sparkles-outline"
                     title="Say hello to Verafo"
-                    detail="Ask about a buyer with @, or use the tools below for instant reports."
+                    detail="Ask about a buyer with @, a store with #, or use the shortcuts below for instant reports."
                   />
                 </div>
               )}
@@ -838,9 +1193,64 @@ export function Chat() {
                   </div>
                 </div>
               )}
+              {messages.length > 0 && !busy && !working && messages[messages.length - 1].role === 'assistant' && (
+                <div className="followup-row">
+                  <span className="suggest-label">
+                    <Icon name="sparkles-outline" size={13} /> Follow up
+                  </span>
+                  {suggestions.slice(0, 3).map((s) => (
+                    <button
+                      key={s}
+                      className="chip"
+                      onClick={() => {
+                        setComposing(s)
+                        window.setTimeout(() => textareaRef.current?.focus(), 0)
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <footer className="chat-composer">
+              <div className="chat-actions">
+                {QUICK_ACTIONS.map((a) => (
+                  <button
+                    key={a.key}
+                    className="chat-action"
+                    disabled={busy || featureBusy}
+                    onClick={() => handleQuickAction(a.key)}
+                  >
+                    <Icon name={a.icon} size={13} /> {a.label}
+                  </button>
+                ))}
+                {analyzeOpen && (
+                  <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      value={analyzePhone}
+                      onChange={(e) => setAnalyzePhone(e.target.value)}
+                      placeholder="+92 3xx xxxxxxx"
+                      autoFocus
+                    />
+                    <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
+                      Analyze
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              <div className="chat-filters">
+                {FILTERS.map((f) => (
+                  <button key={f.label} className="chat-filter" onClick={() => applyFilter(f.token)}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
               {messages.length === 0 && (
                 <div className="suggest-row">
                   <span className="suggest-label">
@@ -863,28 +1273,37 @@ export function Chat() {
               )}
 
               <div className="composer-row">
-                <button
-                  className={`tools-btn${toolsOpen ? ' active' : ''}`}
-                  title="Tools"
-                  onClick={() => {
-                    setToolsOpen((v) => !v)
-                    setMention(null)
-                  }}
-                >
-                  <Icon name="add" size={18} />
-                </button>
                 <div className="composer-input-wrap">
                   <textarea
                     ref={textareaRef}
                     value={composing}
                     onChange={handleComposeChange}
                     onKeyDown={handleComposeKey}
-                    placeholder="Ask Verafo - type @ to mention a buyer"
+                    placeholder="Ask Verafo - type @ for a buyer, # for a store"
                     rows={2}
                   />
                   {mention && (
                     <div className="mention-pop">
-                      {mentionResults.length === 0 ? (
+                      {mention.kind === 'store' ? (
+                        storeMentionResults.length === 0 ? (
+                          <div className="mention-empty">No stores match "{mention.query}"</div>
+                        ) : (
+                          storeMentionResults.map((s) => (
+                            <button
+                              key={s.id}
+                              className="mention-row"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                pickMention(s.name)
+                              }}
+                            >
+                              <Icon name="business" size={15} className="recent-icon" />
+                              <span className="mention-phone">{s.name}</span>
+                              <Icon name="at-outline" size={13} className="mention-at" />
+                            </button>
+                          ))
+                        )
+                      ) : mentionResults.length === 0 ? (
                         <div className="mention-empty">No buyers match "{mention.query}"</div>
                       ) : (
                         mentionResults.map((b) => (
@@ -917,58 +1336,43 @@ export function Chat() {
                     <Icon name="send" size={17} />
                   )}
                 </button>
-                {toolsOpen && (
-                  <div className="tools-pop">
-                    <button
-                      className="tools-pop-item"
-                      onClick={() => {
-                        setAnalyzeOpen((v) => !v)
-                      }}
-                    >
-                      <Icon name="stats-chart-outline" size={15} /> Analyze buyer
-                    </button>
-                    <button
-                      className="tools-pop-item"
-                      disabled={featureBusy}
-                      onClick={() => {
-                        setToolsOpen(false)
-                        void runTrends()
-                      }}
-                    >
-                      <Icon name="trending-up-outline" size={15} /> Network trends
-                    </button>
-                    <button
-                      className="tools-pop-item"
-                      disabled={featureBusy}
-                      onClick={() => {
-                        setToolsOpen(false)
-                        void runSuggest()
-                      }}
-                    >
-                      <Icon name="sparkles-outline" size={15} /> Suggestions
-                    </button>
-                    {analyzeOpen && (
-                      <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
-                        <input
-                          type="tel"
-                          inputMode="tel"
-                          value={analyzePhone}
-                          onChange={(e) => setAnalyzePhone(e.target.value)}
-                          placeholder="+92 3xx xxxxxxx"
-                          autoFocus
-                        />
-                        <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
-                          Analyze
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                )}
               </div>
             </footer>
           </>
         )}
       </section>
+
+      {pasteOpen && (
+        <div className="modal-backdrop" onClick={() => setPasteOpen(false)}>
+          <div className="modal paste-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="verdict-panel-head">
+              <h3 className="card-title">Paste orders</h3>
+              <span className="verdict-conf">bulk log-in</span>
+            </div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Paste order lines below — Verafo will read them and check the buyers before logging.
+            </p>
+            <form onSubmit={(e) => void submitPaste(e)}>
+              <textarea
+                className="paste-textarea"
+                rows={6}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="e.g. 0301 234 5678 | Footwear | PKR 4,500 | Lahore&#10;0303 999 8888 | Winter jacket | PKR 6,200 | Karachi"
+                autoFocus
+              />
+              <div className="paste-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setPasteOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={!pasteText.trim() || busy}>
+                  Ask Verafo to log these
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {!railOpen && (
         <button className="rail-tab" onClick={() => setRailOpen(true)} title="Show chat history">
