@@ -1216,7 +1216,7 @@ code {
 .dist-row-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); font-size: var(--t-caption); color: var(--v-ink-300); }
 .dist-row-head strong { font-family: var(--v-font-mono); font-variant-numeric: tabular-nums; }
 .dist-track { height: 8px; border-radius: var(--r-full); background: var(--v-ink-700); overflow: hidden; }
-.dist-fill { height: 100%; border-radius: var(--r-full); transition: width var(--dur-slow) var(--ease-out); will-change: width; }
+.dist-fill { height: 100%; border-radius: var(--r-full); will-change: width; }
 .dist-fill.safe { background: var(--v-safe); }
 .dist-fill.watch { background: var(--v-watch); }
 .dist-fill.high { background: var(--v-risk); }
@@ -1371,7 +1371,7 @@ code {
 .loc-orders { color: var(--v-ink-400); font-weight: 500; margin-left: var(--s-2); font-size: var(--t-caption); }
 .loc-value { flex: none; font-family: var(--v-font-mono); font-size: 12.5px; font-weight: 600; color: var(--v-ink-050); font-variant-numeric: tabular-nums; }
 .loc-track { height: 6px; border-radius: var(--r-full); background: var(--v-ink-700); overflow: hidden; }
-.loc-fill { display: block; height: 100%; border-radius: var(--r-full); background: var(--v-grad-accent); box-shadow: var(--v-glow-soft); transition: width var(--dur-slow) var(--ease-out); will-change: width; }
+.loc-fill { display: block; height: 100%; border-radius: var(--r-full); background: var(--v-grad-accent); box-shadow: var(--v-glow-soft); will-change: width; }
 .loc-fill.top { background: var(--v-grad-safe); box-shadow: 0 0 14px -2px color-mix(in srgb, var(--v-safe) 70%, transparent); }
 .loc-row.top .loc-value { color: var(--v-safe); }
 

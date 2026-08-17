@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
 import { CountUpNumber } from '../CountUpNumber'
+import { AnimatedBar } from './AnimatedBar'
 
 export interface Distribution {
   safe: number
@@ -24,13 +24,6 @@ const ROWS = [
 
 /** Risk-distribution breakdown. Semantic colour is permitted here because the subject IS risk. */
 export function DistributionBar({ distribution, showUnknown = true, begin = 0 }: DistributionBarProps) {
-  const [on, setOn] = useState(false)
-
-  useEffect(() => {
-    const id = setTimeout(() => setOn(true), begin + 40)
-    return () => clearTimeout(id)
-  }, [begin])
-
   const total = ROWS.reduce((sum, r) => sum + distribution[r.key], 0) || 1
   const rows = ROWS.filter((r) => showUnknown || r.key !== 'unknown')
   return (
@@ -48,10 +41,7 @@ export function DistributionBar({ distribution, showUnknown = true, begin = 0 }:
               </strong>
             </div>
             <div className="dist-track">
-              <div
-                className={`dist-fill ${r.cls}`}
-                style={{ width: on ? `${pct}%` : '0%', transitionDelay: `${i * 70}ms` }}
-              />
+              <AnimatedBar pct={pct} delay={begin + 40 + i * 70} className={`dist-fill ${r.cls}`} />
             </div>
           </div>
         )
