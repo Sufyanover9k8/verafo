@@ -305,6 +305,7 @@ export function Chat() {
   const [renameValue, setRenameValue] = useState('')
   const [analyzeOpen, setAnalyzeOpen] = useState(false)
   const [analyzePhone, setAnalyzePhone] = useState('')
+  const [quickOpen, setQuickOpen] = useState(false)
   const [railOpen, setRailOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [manageMode, setManageMode] = useState(false)
@@ -313,10 +314,22 @@ export function Chat() {
   const [pasteText, setPasteText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLDivElement | null>(null)
   const mentionId = useRef(0)
   const toolStepId = useRef(0)
   const toolsUsedRef = useRef<string[]>([])
   const doneMsgIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!quickOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (composerRef.current && !composerRef.current.contains(e.target as Node)) {
+        setQuickOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [quickOpen])
 
   const activeChat = chats.find((c) => c.id === activeId) ?? null
 
@@ -863,14 +876,19 @@ export function Chat() {
     if (key === 'analyze') {
       setAnalyzeOpen((v) => !v)
     } else if (key === 'trends') {
+      setQuickOpen(false)
       void runTrends()
     } else if (key === 'suggest') {
+      setQuickOpen(false)
       void runSuggest()
     } else if (key === 'topbuyers') {
+      setQuickOpen(false)
       void send('Show me the top 10 buyers by spend.')
     } else if (key === 'topproducts') {
+      setQuickOpen(false)
       void send('Show me the top products by revenue.')
     } else if (key === 'paste') {
+      setQuickOpen(false)
       setPasteOpen(true)
     }
   }
@@ -1215,42 +1233,6 @@ export function Chat() {
             </div>
 
             <footer className="chat-composer">
-              <div className="chat-actions">
-                {QUICK_ACTIONS.map((a) => (
-                  <button
-                    key={a.key}
-                    className="chat-action"
-                    disabled={busy || featureBusy}
-                    onClick={() => handleQuickAction(a.key)}
-                  >
-                    <Icon name={a.icon} size={13} /> {a.label}
-                  </button>
-                ))}
-                {analyzeOpen && (
-                  <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      value={analyzePhone}
-                      onChange={(e) => setAnalyzePhone(e.target.value)}
-                      placeholder="+92 3xx xxxxxxx"
-                      autoFocus
-                    />
-                    <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
-                      Analyze
-                    </button>
-                  </form>
-                )}
-              </div>
-
-              <div className="chat-filters">
-                {FILTERS.map((f) => (
-                  <button key={f.label} className="chat-filter" onClick={() => applyFilter(f.token)}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-
               {messages.length === 0 && (
                 <div className="suggest-row">
                   <span className="suggest-label">
@@ -1272,7 +1254,53 @@ export function Chat() {
                 </div>
               )}
 
-              <div className="composer-row">
+              <div ref={composerRef} className="composer-row">
+                <button
+                  className={`tools-btn${quickOpen ? ' active' : ''}`}
+                  title="Quick options"
+                  aria-label="Quick options"
+                  onClick={() => setQuickOpen((v) => !v)}
+                >
+                  <Icon name="add" size={18} />
+                </button>
+                {quickOpen && (
+                  <div className="tools-pop">
+                    <div className="chat-actions">
+                      {QUICK_ACTIONS.map((a) => (
+                        <button
+                          key={a.key}
+                          className="tools-pop-item"
+                          disabled={busy || featureBusy}
+                          onClick={() => handleQuickAction(a.key)}
+                        >
+                          <Icon name={a.icon} size={14} /> {a.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="chat-filters">
+                      {FILTERS.map((f) => (
+                        <button key={f.label} className="chat-filter" onClick={() => applyFilter(f.token)}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {analyzeOpen && (
+                      <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          value={analyzePhone}
+                          onChange={(e) => setAnalyzePhone(e.target.value)}
+                          placeholder="+92 3xx xxxxxxx"
+                          autoFocus
+                        />
+                        <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
+                          Analyze
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
                 <div className="composer-input-wrap">
                   <textarea
                     ref={textareaRef}
