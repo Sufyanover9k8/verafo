@@ -8,13 +8,16 @@ import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
 import { GeoMap } from '../components/charts/GeoMap'
+import { CityStatsList } from '../components/charts/CityStatsList'
+import { TopProductsList } from '../components/charts/TopProductsList'
 import { LineChart } from '../components/charts/LineChart'
+import { CountUpNumber } from '../components/CountUpNumber'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { dateTime, money, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
-import { computeCityStats, computeDailySales, computeStoreOverview } from '../lib/storeStats'
+import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts } from '../lib/storeStats'
 import { useToast } from '../lib/toast'
 import type { DailySalesRow, OrderRow, StoreOverview } from '../lib/types'
 
@@ -91,6 +94,7 @@ export function StoreDashboard() {
   }, [load])
 
   const cityStats = useMemo(() => computeCityStats(orders), [orders])
+  const topProducts = useMemo(() => computeTopProducts(orders), [orders])
 
   if (!isConfigured) return <NeedsSetup />
 
@@ -206,28 +210,34 @@ export function StoreDashboard() {
             <div className="kpi-grid">
               <Card>
                 <span className="kpi-label">Sales today</span>
-                <strong className="kpi-value">PKR {todayRevenue.toLocaleString('en-PK')}</strong>
+                <strong className="kpi-value">
+                  <CountUpNumber prefix="PKR " value={todayRevenue} />
+                </strong>
                 <span className="kpi-delta">gross order value</span>
               </Card>
               <Card>
                 <span className="kpi-label">Orders today</span>
-                <strong className="kpi-value">{todayOrders}</strong>
+                <strong className="kpi-value">
+                  <CountUpNumber value={todayOrders} />
+                </strong>
                 <span className="kpi-delta">across this store</span>
               </Card>
               <Card>
                 <span className="kpi-label">Accepted / Refused</span>
                 <strong className="kpi-value">
-                  {m?.accepted ?? 0} / {m?.refused ?? 0}
+                  <CountUpNumber value={m?.accepted ?? 0} /> / <CountUpNumber value={m?.refused ?? 0} />
                 </strong>
                 <span className="kpi-delta">{m ? `${((m.refused / Math.max(1, m.refused + m.accepted)) * 100).toFixed(0)}% refused` : ''}</span>
               </Card>
               <Card>
                 <span className="kpi-label">Avg order value</span>
-                <strong className="kpi-value">PKR {(m?.avg_order_value ?? 0).toLocaleString('en-PK')}</strong>
+                <strong className="kpi-value">
+                  <CountUpNumber prefix="PKR " value={m?.avg_order_value ?? 0} />
+                </strong>
                 <span className="kpi-delta">
                   {pendingCount > 0 ? (
                     <>
-                      {pendingCount} pending — <Link className="link" to="/orders/pending">resolve</Link>
+                      <CountUpNumber value={pendingCount} /> pending — <Link className="link" to="/orders/pending">resolve</Link>
                     </>
                   ) : (
                     'no pending orders'
@@ -251,44 +261,39 @@ export function StoreDashboard() {
             </Card>
           </section>
 
-          <section className="chart-section">
-            <div className="verdict-panel-head">
-              <h3 className="card-title">Sales by city</h3>
-              <span className="verdict-conf">orders for this store · last {range} days</span>
-            </div>
-            <Card>
-              {loading ? (
-                <Skeleton height={240} />
-              ) : cityStats.length === 0 ? (
-                <span className="muted">No city data for this store yet.</span>
-              ) : (
-                <>
-                  <GeoMap cities={cityStats} />
-                  <div className="loc-list">
-                    {cityStats.slice(0, 5).map((c, i) => (
-                      <div className={`loc-row${i === 0 ? ' top' : ''}`} key={c.city}>
-                        <div className="loc-row-head">
-                          <span className="loc-name">
-                            {c.city}
-                            <span className="loc-orders">
-                              {c.orders} order{c.orders === 1 ? '' : 's'}
-                            </span>
-                          </span>
-                          <strong className="loc-value">{money(c.revenue)}</strong>
-                        </div>
-                        <div className="loc-track">
-                          <span
-                            className={`loc-fill${i === 0 ? ' top' : ''}`}
-                            style={{ width: `${Math.max(3, c.share)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Card>
-          </section>
+          <div className="grid-12 chart-section">
+            <section className="col-6">
+              <div className="verdict-panel-head">
+                <h3 className="card-title">Sales by city</h3>
+                <span className="verdict-conf">orders for this store · last {range} days</span>
+              </div>
+              <Card>
+                {loading ? (
+                  <Skeleton height={240} />
+                ) : cityStats.length === 0 ? (
+                  <span className="muted">No city data for this store yet.</span>
+                ) : (
+                  <>
+                    <GeoMap cities={cityStats} />
+                    <CityStatsList cities={cityStats} />
+                  </>
+                )}
+              </Card>
+            </section>
+            <section className="col-6">
+              <div className="verdict-panel-head">
+                <h3 className="card-title">Top products</h3>
+                <span className="verdict-conf">by revenue</span>
+              </div>
+              <Card>
+                {loading ? (
+                  <Skeleton height={240} />
+                ) : (
+                  <TopProductsList products={topProducts} />
+                )}
+              </Card>
+            </section>
+          </div>
 
           <section className="chart-section">
             <div className="verdict-panel-head">

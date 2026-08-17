@@ -5,8 +5,9 @@ import { PageHeader } from '../components/PageHeader'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { EmptyState, NeedsSetup } from '../components/States'
+import { CountUpNumber } from '../components/CountUpNumber'
 import { useIsAdmin } from '../lib/admin'
-import { money, phone, dateOnly } from '../lib/format'
+import { phone, dateOnly } from '../lib/format'
 import { computeStoreOverview, type StoreLite } from '../lib/storeStats'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
@@ -194,13 +195,13 @@ export function Stores() {
                     </div>
                     <div className="store-row-stats">
                       <span>
-                        <strong>{s.orders}</strong> orders
+                        <CountUpNumber value={s.orders} /> orders
                       </span>
                       <span>
-                        <strong>{money(s.revenue)}</strong> sales
+                        <CountUpNumber prefix="PKR " value={s.revenue} /> sales
                       </span>
                       <span>
-                        <strong>{s.buyers}</strong> buyers
+                        <CountUpNumber value={s.buyers} /> buyers
                       </span>
                     </div>
                     <div className="store-row-actions">

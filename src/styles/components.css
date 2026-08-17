@@ -1196,6 +1196,16 @@ code {
 .kpi-grid > .card:nth-child(4) { animation-delay: 210ms; }
 .kpi-grid > .card:hover { transform: translateY(-3px); border-color: var(--v-purple-400); box-shadow: var(--v-glow-soft); }
 
+.grid-12.chart-section > .col-6,
+.grid-12.chart-section > .col-8,
+.grid-12.chart-section > .col-4 {
+  display: flex;
+  flex-direction: column;
+}
+.grid-12.chart-section > .col-6 > .card,
+.grid-12.chart-section > .col-8 > .card,
+.grid-12.chart-section > .col-4 > .card { flex: 1; }
+.grid-12.chart-section .col-6 > .card { animation: rise-in var(--dur-slow) var(--ease-out) 300ms backwards; }
 .grid-12.chart-section .col-8 > .card { animation: rise-in var(--dur-slow) var(--ease-out) 280ms backwards; }
 .grid-12.chart-section .col-4 > .card { animation: rise-in var(--dur-slow) var(--ease-out) 340ms backwards; }
 .chart-section .verdict-panel-head { animation: rise-in var(--dur-slow) var(--ease-out) 320ms backwards; }
@@ -1502,6 +1512,15 @@ code {
   white-space: nowrap;
 }
 .prod-meta { font-size: var(--t-caption); color: var(--v-ink-400); margin-top: 1px; }
+.prod-list .prod-row { animation: rise-in var(--dur-slow) var(--ease-out) both; }
+.prod-list .prod-row:nth-child(2) { animation-delay: 60ms; }
+.prod-list .prod-row:nth-child(3) { animation-delay: 120ms; }
+.prod-list .prod-row:nth-child(4) { animation-delay: 180ms; }
+.prod-list .prod-row:nth-child(5) { animation-delay: 240ms; }
+.prod-list .prod-row:nth-child(6) { animation-delay: 300ms; }
+.prod-list .prod-row:nth-child(7) { animation-delay: 360ms; }
+.prod-list .prod-row:nth-child(8) { animation-delay: 420ms; }
+.prod-list .prod-row:nth-child(9) { animation-delay: 480ms; }
 
 /* ────────────────────────────────────────────────────────────
    Auth

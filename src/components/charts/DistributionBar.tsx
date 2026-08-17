@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CountUpNumber } from '../CountUpNumber'
 
 export interface Distribution {
   safe: number
@@ -42,7 +43,7 @@ export function DistributionBar({ distribution, showUnknown = true, begin = 0 }:
             <div className="dist-row-head">
               <span>{r.label}</span>
               <strong>
-                {value}
+                <CountUpNumber value={value} />
                 <span className="muted"> · {pct}%</span>
               </strong>
             </div>

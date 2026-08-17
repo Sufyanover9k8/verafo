@@ -5,13 +5,15 @@ import { Badge } from '../components/primitives/Badge'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { DistributionBar } from '../components/charts/DistributionBar'
+import { CityStatsList } from '../components/charts/CityStatsList'
+import { TopProductsList } from '../components/charts/TopProductsList'
 import { GeoMap } from '../components/charts/GeoMap'
 import { LineChart } from '../components/charts/LineChart'
+import { CountUpNumber } from '../components/CountUpNumber'
 import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { NeedsSetup } from '../components/States'
-import { money, phone, timeAgo } from '../lib/format'
+import { phone, timeAgo } from '../lib/format'
 import { greetingForName } from '../lib/greeting'
-import { useCountUp } from '../lib/countup'
 import { getProfile } from '../lib/profile'
 import { hasEnoughData, toneFromScore } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
@@ -155,9 +157,9 @@ export function Dashboard() {
   const cityStats = useMemo(() => computeCityStats(filteredOrders), [filteredOrders])
   const topProducts = useMemo(() => computeTopProducts(filteredOrders), [filteredOrders])
 
-  const todayOrders = useCountUp(kpis?.today_orders ?? stats.todayOrders)
-  const todayRevenue = useCountUp(kpis?.today_revenue ?? stats.todayRevenue)
-  const pending = useCountUp(kpis?.pending_orders ?? stats.pending)
+  const todayOrders = kpis?.today_orders ?? stats.todayOrders
+  const todayRevenue = kpis?.today_revenue ?? stats.todayRevenue
+  const pending = kpis?.pending_orders ?? stats.pending
 
   const salesData = sales.map((s) => ({
     label: new Date(s.day).toLocaleDateString('en-GB', range === 30 ? { day: 'numeric', month: 'short' } : { weekday: 'short' }),
@@ -175,9 +177,12 @@ export function Dashboard() {
             <p className="dash-hero-sub">
               {loading
                 ? 'Loading your network…'
-                : `${(kpis?.buyers ?? buyers.length).toLocaleString('en-PK')} buyers across the network, ${
-                    (kpis?.pending_orders ?? stats.pending).toLocaleString('en-PK')
-                  } orders awaiting a verdict.`}
+                : (
+                    <span>
+                      <CountUpNumber value={kpis?.buyers ?? buyers.length} /> buyers across the network,{' '}
+                      <CountUpNumber value={pending} /> orders awaiting a verdict.
+                    </span>
+                  )}
             </p>
           </div>
           <RangeFilter range={range} onChange={setRange} />
@@ -199,26 +204,34 @@ export function Dashboard() {
         <div className="kpi-grid">
           <Card>
             <span className="kpi-label">Orders today</span>
-            <strong className="kpi-value">{todayOrders}</strong>
+            <strong className="kpi-value">
+              <CountUpNumber value={todayOrders} />
+            </strong>
             <span className={`kpi-delta${stats.todayOrders > stats.yOrders ? ' pos' : stats.todayOrders < stats.yOrders ? ' neg' : ''}`}>
               {stats.todayOrders > stats.yOrders ? 'up' : stats.todayOrders < stats.yOrders ? 'down' : 'flat'} vs yesterday ({stats.yOrders})
             </span>
           </Card>
           <Card>
             <span className="kpi-label">Revenue today</span>
-            <strong className="kpi-value">PKR {todayRevenue.toLocaleString('en-PK')}</strong>
+            <strong className="kpi-value">
+              <CountUpNumber prefix="PKR " value={todayRevenue} />
+            </strong>
             <span className={`kpi-delta${stats.todayRevenue > stats.yRevenue ? ' pos' : stats.todayRevenue < stats.yRevenue ? ' neg' : ''}`}>
               {stats.todayRevenue > stats.yRevenue ? 'up' : stats.todayRevenue < stats.yRevenue ? 'down' : 'flat'} vs yesterday
             </span>
           </Card>
           <Card>
             <span className="kpi-label">Avg risk score</span>
-            <strong className="kpi-value">{stats.avg.toFixed(2)}</strong>
-            <span className="kpi-delta">network-wide across {buyers.length.toLocaleString('en-PK')} buyers</span>
+            <strong className="kpi-value">
+              <CountUpNumber value={stats.avg} decimals={2} />
+            </strong>
+            <span className="kpi-delta">network-wide across <CountUpNumber value={buyers.length} /> buyers</span>
           </Card>
           <Card>
             <span className="kpi-label">Pending outcomes</span>
-            <strong className="kpi-value">{pending}</strong>
+            <strong className="kpi-value">
+              <CountUpNumber value={pending} />
+            </strong>
             <span className="kpi-delta">
               <Link className="link" to="/orders/pending">
                 mark them now
@@ -285,24 +298,7 @@ export function Dashboard() {
             ) : (
               <>
                 <GeoMap cities={cityStats} />
-                <div className="loc-list">
-                  {cityStats.slice(0, 5).map((c, i) => (
-                    <div className={`loc-row${i === 0 ? ' top' : ''}`} key={c.city}>
-                      <div className="loc-row-head">
-                        <span className="loc-name">
-                          {c.city}
-                          <span className="loc-orders">
-                            {c.orders} order{c.orders === 1 ? '' : 's'}
-                          </span>
-                        </span>
-                        <strong className="loc-value">{money(c.revenue)}</strong>
-                      </div>
-                      <div className="loc-track">
-                        <span className={`loc-fill${i === 0 ? ' top' : ''}`} style={{ width: `${Math.max(3, c.share)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <CityStatsList cities={cityStats} />
               </>
             )}
           </Card>
@@ -315,26 +311,8 @@ export function Dashboard() {
             </div>
             {loading ? (
               <Skeleton height={240} />
-            ) : topProducts.length === 0 ? (
-              <span className="muted">No products logged yet.</span>
             ) : (
-              <div className="prod-list">
-                {topProducts.map((p, i) => (
-                  <div className="prod-row" key={p.name}>
-                    <span className="prod-rank">#{i + 1}</span>
-                    <div className="prod-main">
-                      <div className="prod-head">
-                        <span className="prod-name">{p.name}</span>
-                        {p.category && <span className="chip">{p.category}</span>}
-                      </div>
-                      <div className="prod-meta">
-                        {p.orders} order{p.orders === 1 ? '' : 's'} · {p.share}% of sales
-                      </div>
-                    </div>
-                    <strong className="loc-value">{money(p.revenue)}</strong>
-                  </div>
-                ))}
-              </div>
+              <TopProductsList products={topProducts} />
             )}
           </Card>
         </section>
@@ -394,7 +372,7 @@ export function Dashboard() {
                       </div>
                     </div>
                     <strong className="activity-amount">
-                      {money(o.price)}
+                      <CountUpNumber prefix="PKR " value={o.price ?? 0} />
                       {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
                     </strong>
                   </div>
