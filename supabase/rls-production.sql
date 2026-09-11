@@ -275,9 +275,22 @@ create policy "buyers insert stub" on buyers for insert to authenticated
 -- table's RLS at all. This closes off any direct REST call a signed-in user
 -- could otherwise make to hand-edit a buyer's score.
 
--- 8. LOOKUPS — recent-lookups history. Permissive for now (no owner column).
+-- 8. LOOKUPS — recent-lookups history. This is a personal "recently
+--    searched" convenience list on the Buyer Lookup page, not shared data —
+--    without an owner column every merchant's recents were mixed together
+--    with everyone else's on the network, which both looks broken (a
+--    merchant sees searches they never made) and leaks which phone numbers
+--    other merchants have been checking. Add an owner column and scope it.
+alter table lookups add column if not exists owner_email text;
+create index if not exists lookups_owner_email_idx on lookups (owner_email);
+
 drop policy if exists "lookups all" on lookups;
-create policy "lookups all" on lookups for all to authenticated using (true) with check (true);
+create policy "lookups all" on lookups for all to authenticated
+  using (lower(coalesce(owner_email, '')) = verafo_current_email())
+  with check (lower(coalesce(owner_email, '')) = verafo_current_email());
+-- Rows inserted before this migration have owner_email = null, so they no
+-- longer match anyone and just age out of the "last 8" list — nothing to
+-- backfill, there's no reliable way to know who searched them.
 
 -- 9. CHATS / CHAT_MESSAGES — no owner column yet. Permissive for now.
 --    Follow-up: add chats.owner_email and scope per user.

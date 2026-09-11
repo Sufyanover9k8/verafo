@@ -243,6 +243,25 @@ export function Settings() {
           </div>
         </section>
 
+        <section className="card settings-section">
+          <span className="eyebrow">Activity</span>
+          <div className="settings-rows">
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">Clear your lookup history</div>
+                <div className="setting-desc">
+                  Remove your recent searches from the Buyer Lookup page. This only clears
+                  your own history — it doesn't affect other people on your team.
+                </div>
+              </div>
+              <button className="btn btn-refuse btn-sm" disabled={clearing} onClick={() => void clearLookups()}>
+                {clearing ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="trash-outline" size={14} />}
+                Clear history
+              </button>
+            </div>
+          </div>
+        </section>
+
         {admin && (
           <section className="card settings-section">
             <span className="eyebrow">Data</span>
@@ -270,19 +289,6 @@ export function Settings() {
                 <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportOrders()}>
                   {exporting === 'orders' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
                   Export CSV
-                </button>
-              </div>
-
-              <div className="setting-row">
-                <div className="setting-info">
-                  <div className="setting-title">Clear lookup history</div>
-                  <div className="setting-desc">
-                    Remove all recent lookups from the Buyer Lookup page.
-                  </div>
-                </div>
-                <button className="btn btn-refuse btn-sm" disabled={clearing} onClick={() => void clearLookups()}>
-                  {clearing ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="trash-outline" size={14} />}
-                  Clear history
                 </button>
               </div>
             </div>

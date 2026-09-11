@@ -59,6 +59,7 @@ create index outcomes_status_idx on outcomes (status);
 create table lookups (
   id uuid primary key default gen_random_uuid(),
   buyer_phone text references buyers(phone),
+  owner_email text,                       -- who searched (scoped per-user once RLS is on; see rls-production.sql)
   searched_at timestamptz default now()
 );
 
