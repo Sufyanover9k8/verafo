@@ -13,6 +13,10 @@ interface SessionValue {
   session: Session | null
   user: User | null
   email: string | null
+  /** Preferred display name — user_metadata.name/full_name, else the email's
+   *  local part, else empty. Kept on the Supabase user (Settings updates it via
+   *  supabase.auth.updateUser), so it follows the account across devices. */
+  displayName: string
   loading: boolean
 }
 
@@ -47,15 +51,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo<SessionValue>(
-    () => ({
-      session,
-      user: session?.user ?? null,
-      email: session?.user?.email ?? null,
-      loading,
-    }),
-    [session, loading],
-  )
+  const value = useMemo<SessionValue>(() => {
+    const user = session?.user ?? null
+    const email = user?.email ?? null
+    const meta = (user?.user_metadata ?? {}) as { name?: string; full_name?: string }
+    const displayName = (meta.name || meta.full_name || email?.split('@')[0] || '').trim()
+    return { session, user, email, displayName, loading }
+  }, [session, loading])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

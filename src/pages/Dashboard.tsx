@@ -38,7 +38,7 @@ function keyOf(d: Date): string {
 
 export function Dashboard() {
   const toast = useToast()
-  const { email } = useSession()
+  const { displayName } = useSession()
   const { role, store, scopeStoreIds } = useStoreScope()
   const isAdmin = role === 'admin'
   const [orders, setOrders] = useState<OrderRow[]>([])
@@ -218,7 +218,7 @@ export function Dashboard() {
       <Reveal className="dash-hero">
         <div className="dash-hero-row">
           <div>
-            <h1 className="dash-hero-title">{greetingForName(email?.split('@')[0] ?? '')}</h1>
+            <h1 className="dash-hero-title">{greetingForName(displayName)}</h1>
             <p className="dash-hero-sub">
               {loading ? (
                 'Loading…'
