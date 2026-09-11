@@ -3,11 +3,14 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Sidebar } from './components/layout/Sidebar'
 import { Topbar } from './components/layout/Topbar'
 import { Skeleton } from './components/primitives/Skeleton'
-import { Dashboard } from './pages/Dashboard'
 import { LayoutTickContext } from './lib/motion'
 import { useSession } from './lib/session'
 import { useStoreScope } from './lib/store'
 
+// Dashboard pulls in recharts (charts) — lazy-load it like every other route so
+// the initial bundle every user downloads (including on the login screen)
+// doesn't carry chart-library weight before we even know they're signed in.
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })))
 const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })))

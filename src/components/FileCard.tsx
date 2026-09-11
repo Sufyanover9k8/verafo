@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { ChartCard } from './ChartCard'
 import { Icon } from './Icon'
-import { generateFile } from '../lib/exports'
 import type { FileColumn, FileSpec } from '../lib/types'
 
 function cellText(col: FileColumn, value: string | number | undefined): string {
@@ -29,7 +28,9 @@ export function FileCard({ spec }: { spec: FileSpec }) {
     if (downloading) return
     setDownloading(format)
     try {
-      await new Promise((r) => window.setTimeout(r, 30))
+      // jsPDF and SheetJS are only pulled into the bundle once a download is
+      // actually requested, instead of riding along with the rest of Chat.
+      const { generateFile } = await import('../lib/exports')
       generateFile(format, spec)
     } finally {
       setDownloading(null)
