@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { Avatar } from '../components/Avatar'
 import { Badge } from '../components/primitives/Badge'
 import { Card } from '../components/primitives/Card'
 import { Skeleton } from '../components/primitives/Skeleton'
+import { VerdictChip } from '../components/verdict/VerdictChip'
 import { DistributionBar } from '../components/charts/DistributionBar'
 import { CityStatsList } from '../components/charts/CityStatsList'
 import { TopProductsList } from '../components/charts/TopProductsList'
@@ -25,6 +27,7 @@ import { useToast } from '../lib/toast'
 import type { DailySalesRow, NetworkKpis, OrderRow } from '../lib/types'
 
 interface BuyerLight {
+  phone: string
   risk_score: number
   total_orders: number
 }
@@ -68,7 +71,7 @@ export function Dashboard() {
     // Buyers for the risk distribution. Admin → whole network. Merchant → only
     // buyers who have ordered from their store(s).
     if (isAdmin) {
-      const { data, error } = await supabase.from('buyers').select('risk_score, total_orders').limit(5000)
+      const { data, error } = await supabase.from('buyers').select('phone, risk_score, total_orders').limit(5000)
       if (error) toast.push({ kind: 'error', title: 'Could not load buyers', detail: error.message })
       else setBuyers((data ?? []) as BuyerLight[])
     } else {
@@ -78,7 +81,7 @@ export function Dashboard() {
       } else {
         const { data, error } = await supabase
           .from('buyers')
-          .select('risk_score, total_orders')
+          .select('phone, risk_score, total_orders')
           .in('phone', phones.slice(0, 1000))
         if (error) toast.push({ kind: 'error', title: 'Could not load buyers', detail: error.message })
         else setBuyers((data ?? []) as BuyerLight[])
@@ -176,6 +179,26 @@ export function Dashboard() {
 
   const recent = filteredOrders.slice(0, 8)
 
+  const riskByPhone = useMemo(() => {
+    const m = new Map<string, BuyerLight>()
+    for (const b of buyers) m.set(b.phone, b)
+    return m
+  }, [buyers])
+
+  /** Pending orders from a buyer with enough history to already look risky —
+   *  the verdict-first "deal with these first" list. */
+  const attention = useMemo(() => {
+    return orders
+      .filter((o) => !o.outcomes || o.outcomes.status === 'pending')
+      .map((o) => ({ order: o, buyer: riskByPhone.get(o.buyer_phone) }))
+      .filter(
+        ({ buyer }) =>
+          buyer && hasEnoughData(buyer.total_orders) && toneFromScore(buyer.risk_score) !== 'safe',
+      )
+      .sort((a, b) => (b.buyer?.risk_score ?? 0) - (a.buyer?.risk_score ?? 0))
+      .slice(0, 5)
+  }, [orders, riskByPhone])
+
   const cityStats = useMemo(() => computeCityStats(filteredOrders), [filteredOrders])
   const topProducts = useMemo(() => computeTopProducts(filteredOrders), [filteredOrders])
 
@@ -225,6 +248,41 @@ export function Dashboard() {
           <RangeFilter range={range} onChange={setRange} />
         </div>
       </Reveal>
+
+      {!loading && attention.length > 0 && (
+        <Reveal>
+          <Card className="attention-card">
+            <div className="verdict-panel-head">
+              <h3 className="card-title">
+                <Icon name="alert-circle" size={15} /> Needs your attention
+              </h3>
+              <Link className="link" to="/orders">
+                View all orders
+              </Link>
+            </div>
+            <div className="attention-list">
+              {attention.map(({ order, buyer }) => (
+                <Link
+                  key={order.id}
+                  className="attention-row"
+                  to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
+                >
+                  <span className="cell-avatar">
+                    <Avatar phone={order.buyer_phone} size={24} />
+                    {phone(order.buyer_phone)}
+                  </span>
+                  <span className="muted">{order.product_name || order.product_category || 'Order'}</span>
+                  <VerdictChip
+                    risk_score={buyer?.risk_score}
+                    total_orders={buyer?.total_orders}
+                    showScore={false}
+                  />
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </Reveal>
+      )}
 
       {loading ? (
         <div className="stack">
