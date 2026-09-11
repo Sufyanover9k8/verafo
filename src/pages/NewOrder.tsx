@@ -112,7 +112,13 @@ export function NewOrder() {
 
     setSubmitting(true)
     try {
-      const { error: buyerErr } = await supabase.from('buyers').upsert({ phone: normalizedPhone }, { onConflict: 'phone' })
+      // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row to
+      // exist so orders.buyer_phone has something to point at. The real
+      // totals/score are written by the recompute trigger, which (unlike a
+      // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
+      const { error: buyerErr } = await supabase
+        .from('buyers')
+        .upsert({ phone: normalizedPhone }, { onConflict: 'phone', ignoreDuplicates: true })
       if (buyerErr) throw buyerErr
 
       const { error: orderErr } = await supabase.from('orders').insert({

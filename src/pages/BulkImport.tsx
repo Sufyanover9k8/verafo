@@ -291,9 +291,13 @@ export function BulkImport() {
         continue
       }
       try {
+        // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row
+        // to exist so orders.buyer_phone has something to point at. The real
+        // totals/score are written by the recompute trigger, which (unlike a
+        // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
         const { error: buyerErr } = await supabase
           .from('buyers')
-          .upsert({ phone: r.phone }, { onConflict: 'phone' })
+          .upsert({ phone: r.phone }, { onConflict: 'phone', ignoreDuplicates: true })
         if (buyerErr) throw buyerErr
 
         const { data: order, error: orderErr } = await supabase

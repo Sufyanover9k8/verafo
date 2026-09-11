@@ -60,6 +60,11 @@ bottom of the file.
   home; Buyer Lookup still returns a risk verdict for any phone.
 - Place a test order via the **Shopify app** → it still lands in the DB (service
   role) and the merchant sees it.
+- As a merchant, use **New Order** (or **Import**) in the web app itself → the
+  order saves *and* the buyer's risk score/verdict updates. This exercises the
+  buyers-table RLS + SECURITY DEFINER trigger path directly — if it were
+  wired wrong, orders would still save but scores would silently stop
+  updating for anything logged outside the Shopify app.
 
 ## 4. Local development
 
