@@ -442,7 +442,7 @@ export function Dashboard() {
             </div>
           ) : recent.length === 0 ? (
             <div className="empty-state">
-              <span className="muted">No orders in the network yet.</span>
+              <span className="muted">{isAdmin ? 'No orders in the network yet.' : 'No orders yet.'}</span>
             </div>
           ) : (
             <div className="activity-feed">
