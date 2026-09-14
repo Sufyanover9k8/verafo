@@ -38,9 +38,8 @@ alter table verafo_admins enable row level security;
 drop policy if exists "admins readable" on verafo_admins;
 create policy "admins readable" on verafo_admins for select to authenticated using (true);
 
--- >>> EDIT THIS: your Verafo team emails <<<
 insert into verafo_admins (email) values
-  ('you@verafo.example')
+  ('laveezafatima73@gmail.com')
 on conflict (email) do nothing;
 
 -- 2. Helpers --------------------------------------------------------------
