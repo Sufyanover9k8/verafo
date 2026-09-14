@@ -3,10 +3,17 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Sidebar } from './components/layout/Sidebar'
 import { Topbar } from './components/layout/Topbar'
 import { Skeleton } from './components/primitives/Skeleton'
-import { Dashboard } from './pages/Dashboard'
 import { LayoutTickContext } from './lib/motion'
+import { useSession } from './lib/session'
+import { useStoreScope } from './lib/store'
 
+// Dashboard pulls in recharts (charts) — lazy-load it like every other route so
+// the initial bundle every user downloads (including on the login screen)
+// doesn't carry chart-library weight before we even know they're signed in.
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })))
+const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
+const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })))
 const BulkImport = lazy(() => import('./pages/BulkImport').then((m) => ({ default: m.BulkImport })))
 const BuyerMap = lazy(() => import('./pages/BuyerMap').then((m) => ({ default: m.BuyerMap })))
 const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })))
@@ -50,6 +57,9 @@ function useMedia(query: string): boolean {
 
 export function App() {
   const location = useLocation()
+  const { session, loading: sessionLoading } = useSession()
+  const { role, loading: scopeLoading, needsStore } = useStoreScope()
+
   const belowLg = useMedia('(max-width: 1023px)')
   const belowMd = useMedia('(max-width: 767px)')
   const [userCollapsed, setUserCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === '1')
@@ -75,6 +85,8 @@ export function App() {
     setMobileOpen(false)
   }, [location.pathname])
 
+  const isAdmin = role === 'admin'
+
   const shell = (
     <LayoutTickContext.Provider value={layoutTick}>
       <div className={`app${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' sidebar-open' : ''}`}>
@@ -89,14 +101,15 @@ export function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/orders" element={<Orders />} />
             <Route path="/lookup" element={<Lookup />} />
             <Route path="/orders/new" element={<NewOrder />} />
             <Route path="/orders/pending" element={<Outcomes />} />
             <Route path="/outcomes" element={<Navigate to="/orders/pending" replace />} />
             <Route path="/map" element={<BuyerMap />} />
-            <Route path="/stores" element={<Stores />} />
-            <Route path="/stores/add" element={<AddStore />} />
-            <Route path="/stores/:id" element={<StoreDashboard />} />
+            {isAdmin && <Route path="/stores" element={<Stores />} />}
+            {isAdmin && <Route path="/stores/add" element={<AddStore />} />}
+            {isAdmin && <Route path="/stores/:id" element={<StoreDashboard />} />}
             <Route path="/chat" element={<Chat />} />
             <Route path="/import" element={<BulkImport />} />
             <Route path="/settings" element={<Settings />} />
@@ -108,10 +121,29 @@ export function App() {
     </LayoutTickContext.Provider>
   )
 
+  // 1. Still confirming whether anyone is signed in.
+  if (sessionLoading) return <RouteFallback />
+
+  // 2. Not signed in → the login screen.
+  if (!session && location.pathname !== '/login') {
+    return <Navigate to="/login" replace />
+  }
   if (location.pathname === '/login') {
     return (
       <Suspense fallback={<RouteFallback />}>
         <Auth />
+      </Suspense>
+    )
+  }
+
+  // 3. Signed in — resolving role + which stores this user owns.
+  if (scopeLoading) return <RouteFallback />
+
+  // 4. A merchant with no store yet → one-step onboarding.
+  if (needsStore) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <Onboarding />
       </Suspense>
     )
   }

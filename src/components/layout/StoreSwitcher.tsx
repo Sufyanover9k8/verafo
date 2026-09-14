@@ -1,46 +1,33 @@
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { isConfigured, supabase } from '../../lib/supabase'
+import { isConfigured } from '../../lib/supabase'
 import { useStoreScope } from '../../lib/store'
 
-interface StoreRow {
-  id: string
-  name: string
-}
-
-/** Store scoping control — "all stores" = network-wide, one store = brand view. */
+/**
+ * Store scoping control.
+ *   Admin   — "All stores (network)" + any store.
+ *   Merchant with >1 store — switch between their own stores (no network option).
+ *   Merchant with ≤1 store — hidden (nothing to switch).
+ */
 export function StoreSwitcher() {
   const navigate = useNavigate()
-  const { store, setStore } = useStoreScope()
-  const [stores, setStores] = useState<StoreRow[]>([])
-
-  useEffect(() => {
-    if (!supabase) return
-    let alive = true
-    supabase
-      .from('stores')
-      .select('id, name')
-      .order('name')
-      .then(({ data, error }) => {
-        if (!error && alive) setStores((data ?? []) as StoreRow[])
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
+  const { role, stores, store, setStore } = useStoreScope()
+  const isAdmin = role === 'admin'
 
   if (!isConfigured) return null
+  if (!isAdmin && stores.length <= 1) return null
 
   function onChange(e: ChangeEvent<HTMLSelectElement>) {
     const id = e.target.value
     if (!id) {
-      setStore(null)
+      // Only admins can clear to the network view.
+      if (isAdmin) setStore(null)
       return
     }
     const s = stores.find((x) => x.id === id)
     if (s) {
       setStore({ id: s.id, name: s.name })
-      navigate(`/stores/${s.id}`)
+      if (isAdmin) navigate(`/stores/${s.id}`)
     }
   }
 
@@ -48,7 +35,7 @@ export function StoreSwitcher() {
     <label className="store-switcher" title="Scope the app to one store">
       <span className="store-switcher-label">Store</span>
       <select value={store?.id ?? ''} onChange={onChange} aria-label="Active store">
-        <option value="">All stores (network)</option>
+        {isAdmin && <option value="">All stores (network)</option>}
         {stores.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}

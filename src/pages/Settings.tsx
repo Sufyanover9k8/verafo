@@ -3,8 +3,9 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { NeedsSetup } from '../components/States'
 import { dateOnly } from '../lib/format'
-import { getProfile, saveProfile } from '../lib/profile'
+import { useIsAdmin } from '../lib/admin'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
 import { useToast } from '../lib/toast'
 
@@ -30,13 +31,20 @@ function csv(rows: Record<string, unknown>[]): string {
 
 export function Settings() {
   const toast = useToast()
+  const { admin } = useIsAdmin()
+  const { displayName } = useSession()
   const { theme, reducedMotion, resolved, setTheme, setReducedMotion } = useTheme()
   const [exporting, setExporting] = useState<'buyers' | 'orders' | null>(null)
   const [clearing, setClearing] = useState(false)
   const [conn, setConn] = useState<'checking' | 'ok' | 'fail'>('checking')
   const [buyerCount, setBuyerCount] = useState<number | null>(null)
   const [orderCount, setOrderCount] = useState<number | null>(null)
-  const [name, setName] = useState<string>(() => getProfile().name)
+  const [name, setName] = useState<string>(displayName)
+  const [savingName, setSavingName] = useState(false)
+
+  useEffect(() => {
+    setName(displayName)
+  }, [displayName])
 
   useEffect(() => {
     if (!supabase) {
@@ -143,15 +151,22 @@ export function Settings() {
     }
   }, [toast])
 
-  const saveName = (e: FormEvent) => {
+  const saveName = async (e: FormEvent) => {
     e.preventDefault()
+    if (!supabase) return
     const trimmed = name.trim().slice(0, 40)
+    setSavingName(true)
+    const { error } = await supabase.auth.updateUser({ data: { name: trimmed } })
+    setSavingName(false)
+    if (error) {
+      toast.push({ kind: 'error', title: 'Could not save name', detail: error.message })
+      return
+    }
     setName(trimmed)
-    saveProfile({ name: trimmed })
     toast.push({
       kind: 'success',
       title: 'Saved',
-      detail: trimmed ? `Greeting will use “${trimmed.split(/\s+/)[0]}”.` : 'Greeting is back to impersonal.',
+      detail: trimmed ? `Greeting will use "${trimmed.split(/\s+/)[0]}".` : 'Greeting is back to impersonal.',
     })
   }
 
@@ -174,7 +189,7 @@ export function Settings() {
                 <div className="setting-title">Your name</div>
                 <div className="setting-desc">Used for the personalised greeting on the dashboard.</div>
               </div>
-              <form className="setting-control" onSubmit={saveName}>
+              <form className="setting-control" onSubmit={(e) => void saveName(e)}>
                 <input
                   type="text"
                   value={name}
@@ -183,8 +198,8 @@ export function Settings() {
                   maxLength={40}
                   aria-label="Your name"
                 />
-                <button className="btn btn-ghost btn-sm" type="submit">
-                  Save
+                <button className="btn btn-ghost btn-sm" type="submit" disabled={savingName}>
+                  {savingName ? <Icon name="refresh" size={14} className="spin" /> : 'Save'}
                 </button>
               </form>
             </div>
@@ -229,39 +244,14 @@ export function Settings() {
         </section>
 
         <section className="card settings-section">
-          <span className="eyebrow">Data</span>
+          <span className="eyebrow">Activity</span>
           <div className="settings-rows">
             <div className="setting-row">
               <div className="setting-info">
-                <div className="setting-title">Export buyers</div>
+                <div className="setting-title">Clear your lookup history</div>
                 <div className="setting-desc">
-                  Download all {buyerCount ?? '…'} buyer profiles as a CSV.
-                </div>
-              </div>
-              <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportBuyers()}>
-                {exporting === 'buyers' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
-                Export CSV
-              </button>
-            </div>
-
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Export orders</div>
-                <div className="setting-desc">
-                  Download up to 2000 orders (with store and outcome) as a CSV.
-                </div>
-              </div>
-              <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportOrders()}>
-                {exporting === 'orders' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
-                Export CSV
-              </button>
-            </div>
-
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Clear lookup history</div>
-                <div className="setting-desc">
-                  Remove all recent lookups from the Buyer Lookup page.
+                  Remove your recent searches from the Buyer Lookup page. This only clears
+                  your own history — it doesn't affect other people on your team.
                 </div>
               </div>
               <button className="btn btn-refuse btn-sm" disabled={clearing} onClick={() => void clearLookups()}>
@@ -271,6 +261,39 @@ export function Settings() {
             </div>
           </div>
         </section>
+
+        {admin && (
+          <section className="card settings-section">
+            <span className="eyebrow">Data</span>
+            <div className="settings-rows">
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Export buyers</div>
+                  <div className="setting-desc">
+                    Download all {buyerCount ?? '…'} buyer profiles as a CSV.
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportBuyers()}>
+                  {exporting === 'buyers' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
+                  Export CSV
+                </button>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Export orders</div>
+                  <div className="setting-desc">
+                    Download up to 2000 orders (with store and outcome) as a CSV.
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportOrders()}>
+                  {exporting === 'orders' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
+                  Export CSV
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="card settings-section">
           <span className="eyebrow">Connection</span>
@@ -309,6 +332,24 @@ export function Settings() {
               explanations.
             </div>
           )}
+        </section>
+
+        <section className="card settings-section">
+          <span className="eyebrow">Account</span>
+          <div className="settings-rows">
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">Sign out</div>
+                <div className="setting-desc">Log out of your Verafo account on this device.</div>
+              </div>
+              <button
+                className="btn btn-refuse btn-sm"
+                onClick={() => void supabase?.auth.signOut()}
+              >
+                <Icon name="log-out-outline" size={14} /> Sign out
+              </button>
+            </div>
+          </div>
         </section>
       </div>
     </div>

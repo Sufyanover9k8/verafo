@@ -12,6 +12,7 @@ import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
 import { riskFactors } from '../lib/risk'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Buyer, OrderRow, SimilarBuyer } from '../lib/types'
@@ -32,6 +33,7 @@ interface LookupRow {
 export function Lookup() {
   const toast = useToast()
   const { store } = useStoreScope()
+  const { email } = useSession()
   const [params, setParams] = useSearchParams()
   const [input, setInput] = useState(params.get('phone') ?? '')
   const [searched, setSearched] = useState('')
@@ -41,15 +43,18 @@ export function Lookup() {
   const [explanation, setExplanation] = useState<string | null>(null)
   const [embeddingBusy, setEmbeddingBusy] = useState(false)
 
+  // "Recent lookups" is a personal history, not shared with other merchants —
+  // scoped by owner_email both here and in RLS (see rls-production.sql).
   const loadRecents = useCallback(async () => {
-    if (!supabase) return
+    if (!supabase || !email) return
     const { data, error } = await supabase
       .from('lookups')
       .select('id, buyer_phone, searched_at, buyers(risk_score, total_orders)')
+      .eq('owner_email', email)
       .order('searched_at', { ascending: false })
       .limit(8)
     if (!error) setRecents((data ?? []) as unknown as LookupRow[])
-  }, [])
+  }, [email])
 
   useEffect(() => {
     void loadRecents()
@@ -92,7 +97,7 @@ export function Lookup() {
       }
       const { data: lookupRow, error: lookErr } = await supabase
         .from('lookups')
-        .insert({ buyer_phone: normalized })
+        .insert({ buyer_phone: normalized, owner_email: email })
         .select('id, buyer_phone, searched_at, buyers(risk_score, total_orders)')
         .single()
       if (!lookErr && lookupRow) {
@@ -104,7 +109,7 @@ export function Lookup() {
       }
       setState({ kind: 'found', buyer, orders: (ordersRes.data ?? []) as OrderRow[], similar })
     },
-    [toast, loadRecents, store],
+    [toast, loadRecents, store, email],
   )
 
   useEffect(() => {

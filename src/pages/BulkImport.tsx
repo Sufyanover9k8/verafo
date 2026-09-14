@@ -1,3 +1,4 @@
+import { useIsAdmin } from '../lib/admin'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
@@ -5,6 +6,7 @@ import { Reveal } from '../components/Reveal'
 import { NeedsSetup } from '../components/States'
 import { normalizePhone } from '../lib/format'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
 
@@ -158,6 +160,8 @@ function parseRows(text: string): { rows: ParsedRow[]; header: string[]; lineErr
 
 export function BulkImport() {
   const toast = useToast()
+  const { admin } = useIsAdmin()
+  const { role, stores: myStores } = useStoreScope()
   const [stores, setStores] = useState<Store[]>([])
   const [text, setText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -173,13 +177,18 @@ export function BulkImport() {
 
   useEffect(() => {
     if (!supabase) return
+    // Merchants can only import into their own store(s).
+    if (role !== 'admin') {
+      setStores(myStores.map((s) => ({ id: s.id, name: s.name })) as Store[])
+      return
+    }
     supabase
       .from('stores')
       .select('id, name')
       .then(({ data, error }) => {
         if (!error) setStores((data ?? []) as Store[])
       })
-  }, [])
+  }, [role, myStores])
 
   const parsed = useMemo(() => parseRows(text), [text])
 
@@ -282,9 +291,13 @@ export function BulkImport() {
         continue
       }
       try {
+        // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row
+        // to exist so orders.buyer_phone has something to point at. The real
+        // totals/score are written by the recompute trigger, which (unlike a
+        // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
         const { error: buyerErr } = await supabase
           .from('buyers')
-          .upsert({ phone: r.phone }, { onConflict: 'phone' })
+          .upsert({ phone: r.phone }, { onConflict: 'phone', ignoreDuplicates: true })
         if (buyerErr) throw buyerErr
 
         const { data: order, error: orderErr } = await supabase
@@ -356,6 +369,7 @@ export function BulkImport() {
         </p>
       </div>
 
+      {admin && (
       <div className="card import-card">
         <div className="import-head">
           <h3 className="card-title">
@@ -439,6 +453,7 @@ export function BulkImport() {
           </div>
         )}
       </div>
+      )}
 
       <div className="card import-card">
         <div className="import-head">

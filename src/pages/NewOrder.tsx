@@ -22,7 +22,7 @@ type PreviewState =
 
 export function NewOrder() {
   const toast = useToast()
-  const { store } = useStoreScope()
+  const { role, store, stores: myStores } = useStoreScope()
   const [stores, setStores] = useState<Store[]>([])
   const [phoneInput, setPhoneInput] = useState('')
   const [storeId, setStoreId] = useState('')
@@ -39,6 +39,13 @@ export function NewOrder() {
 
   useEffect(() => {
     if (!supabase) return
+    // Merchants can only log orders against their own store(s).
+    if (role !== 'admin') {
+      const list = myStores.map((s) => ({ id: s.id, name: s.name, owner_email: null })) as Store[]
+      setStores(list)
+      setStoreId((cur) => cur || store?.id || list[0]?.id || '')
+      return
+    }
     supabase
       .from('stores')
       .select('id, name, owner_email')
@@ -50,9 +57,9 @@ export function NewOrder() {
         }
         setStores(data ?? [])
         const preferred = store?.id ?? data?.[0]?.id ?? ''
-        if (preferred) setStoreId(preferred)
+        if (preferred) setStoreId((cur) => cur || preferred)
       })
-  }, [toast, storeId, store])
+  }, [toast, role, myStores, store])
 
   const normalizedPhone = useMemo(() => normalizePhone(phoneInput), [phoneInput])
 
@@ -105,7 +112,13 @@ export function NewOrder() {
 
     setSubmitting(true)
     try {
-      const { error: buyerErr } = await supabase.from('buyers').upsert({ phone: normalizedPhone }, { onConflict: 'phone' })
+      // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row to
+      // exist so orders.buyer_phone has something to point at. The real
+      // totals/score are written by the recompute trigger, which (unlike a
+      // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
+      const { error: buyerErr } = await supabase
+        .from('buyers')
+        .upsert({ phone: normalizedPhone }, { onConflict: 'phone', ignoreDuplicates: true })
       if (buyerErr) throw buyerErr
 
       const { error: orderErr } = await supabase.from('orders').insert({
