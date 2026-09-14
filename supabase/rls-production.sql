@@ -39,7 +39,8 @@ drop policy if exists "admins readable" on verafo_admins;
 create policy "admins readable" on verafo_admins for select to authenticated using (true);
 
 insert into verafo_admins (email) values
-  ('laveezafatima73@gmail.com')
+  ('laveezafatima73@gmail.com'),
+  ('sufyannorthacquisition@gmail.com')
 on conflict (email) do nothing;
 
 -- 2. Helpers --------------------------------------------------------------
