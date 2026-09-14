@@ -18,6 +18,14 @@ interface SessionValue {
    *  supabase.auth.updateUser), so it follows the account across devices. */
   displayName: string
   loading: boolean
+  /** True from the moment Supabase fires a PASSWORD_RECOVERY auth event
+   *  (i.e. the user landed here via a "reset your password" email link)
+   *  until they actually set a new password. App.tsx uses this to force the
+   *  reset-password screen instead of the normal dashboard/login routing —
+   *  a recovery link creates a real session, so without this check the app
+   *  would just silently drop them onto the dashboard. */
+  isPasswordRecovery: boolean
+  clearPasswordRecovery: () => void
 }
 
 const Ctx = createContext<SessionValue | null>(null)
@@ -30,6 +38,7 @@ const Ctx = createContext<SessionValue | null>(null)
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
   useEffect(() => {
     if (!supabase) {
@@ -42,8 +51,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSession(data.session)
       setLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, next) => {
-      if (alive) setSession(next)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, next) => {
+      if (!alive) return
+      setSession(next)
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true)
     })
     return () => {
       alive = false
@@ -56,8 +67,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const email = user?.email ?? null
     const meta = (user?.user_metadata ?? {}) as { name?: string; full_name?: string }
     const displayName = (meta.name || meta.full_name || email?.split('@')[0] || '').trim()
-    return { session, user, email, displayName, loading }
-  }, [session, loading])
+    return {
+      session,
+      user,
+      email,
+      displayName,
+      loading,
+      isPasswordRecovery,
+      clearPasswordRecovery: () => setIsPasswordRecovery(false),
+    }
+  }, [session, loading, isPasswordRecovery])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

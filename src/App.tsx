@@ -12,6 +12,9 @@ import { useStoreScope } from './lib/store'
 // doesn't carry chart-library weight before we even know they're signed in.
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
 const Auth = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Auth })))
+const ResetPassword = lazy(() =>
+  import('./pages/ResetPassword').then((m) => ({ default: m.ResetPassword })),
+)
 const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })))
 const BulkImport = lazy(() => import('./pages/BulkImport').then((m) => ({ default: m.BulkImport })))
@@ -57,7 +60,7 @@ function useMedia(query: string): boolean {
 
 export function App() {
   const location = useLocation()
-  const { session, loading: sessionLoading } = useSession()
+  const { session, loading: sessionLoading, isPasswordRecovery } = useSession()
   const { role, loading: scopeLoading, needsStore } = useStoreScope()
 
   const belowLg = useMedia('(max-width: 1023px)')
@@ -123,6 +126,17 @@ export function App() {
 
   // 1. Still confirming whether anyone is signed in.
   if (sessionLoading) return <RouteFallback />
+
+  // A "reset your password" email link creates a real session, so without
+  // this check step 2 below would just drop the user straight onto the
+  // dashboard instead of letting them set a new password.
+  if (isPasswordRecovery) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <ResetPassword />
+      </Suspense>
+    )
+  }
 
   // 2. Not signed in → the login screen.
   if (!session && location.pathname !== '/login') {

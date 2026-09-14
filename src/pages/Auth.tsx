@@ -13,6 +13,7 @@ export function Auth() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetSent, setResetSent] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -40,6 +41,28 @@ export function Auth() {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function sendReset() {
+    if (!supabase) return
+    if (!email.trim()) {
+      setError('Enter your email above first, then click "Forgot password?".')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim())
+    setBusy(false)
+    if (resetErr) {
+      setError(resetErr.message)
+      return
+    }
+    setResetSent(true)
+    toast.push({
+      kind: 'success',
+      title: 'Reset link sent',
+      detail: `Check ${email.trim()} for a password reset link.`,
+    })
   }
 
   return (
@@ -91,6 +114,17 @@ export function Auth() {
                 required
               />
             </label>
+
+            {mode === 'in' && (
+              <button
+                type="button"
+                className="link auth-forgot"
+                onClick={() => void sendReset()}
+                disabled={busy || resetSent}
+              >
+                {resetSent ? 'Reset link sent — check your email' : 'Forgot password?'}
+              </button>
+            )}
 
             {error && <span className="field-error">{error}</span>}
 
