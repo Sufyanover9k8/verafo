@@ -299,7 +299,12 @@ export function Dashboard() {
       ) : (
         <Reveal stagger className="kpi-grid">
           <Card>
-            <span className="kpi-label">Orders today</span>
+            <div className="kpi-head">
+              <span className="kpi-icon blue">
+                <Icon name="bag-handle" size={17} />
+              </span>
+              <span className="kpi-label">Orders today</span>
+            </div>
             <strong className="kpi-value">
               <CountUpNumber value={todayOrders} />
             </strong>
@@ -311,7 +316,12 @@ export function Dashboard() {
             </div>
           </Card>
           <Card>
-            <span className="kpi-label">Revenue today</span>
+            <div className="kpi-head">
+              <span className="kpi-icon orange">
+                <Icon name="card" size={17} />
+              </span>
+              <span className="kpi-label">Revenue today</span>
+            </div>
             <strong className="kpi-value">
               <CountUpNumber prefix="PKR " value={todayRevenue} />
             </strong>
@@ -323,7 +333,12 @@ export function Dashboard() {
             </div>
           </Card>
           <Card>
-            <span className="kpi-label">Avg risk score</span>
+            <div className="kpi-head">
+              <span className="kpi-icon safe">
+                <Icon name="shield-checkmark" size={17} />
+              </span>
+              <span className="kpi-label">Avg risk score</span>
+            </div>
             <strong className="kpi-value">
               <CountUpNumber value={stats.avg} decimals={2} />
             </strong>
@@ -333,7 +348,12 @@ export function Dashboard() {
             </span>
           </Card>
           <Card>
-            <span className="kpi-label">Pending outcomes</span>
+            <div className="kpi-head">
+              <span className="kpi-icon amber">
+                <Icon name="hourglass" size={17} />
+              </span>
+              <span className="kpi-label">Pending outcomes</span>
+            </div>
             <strong className="kpi-value">
               <CountUpNumber value={pending} />
             </strong>
@@ -349,7 +369,9 @@ export function Dashboard() {
       <section className="chart-section">
         <Reveal stagger>
         <div className="verdict-panel-head">
-          <h3 className="card-title">Sales — last {range} days</h3>
+          <h3 className="card-title">
+            <Icon name="stats-chart" size={15} /> Sales — last {range} days
+          </h3>
           <span className="verdict-conf">gross order value · PKR</span>
         </div>
         <Card>
@@ -366,7 +388,9 @@ export function Dashboard() {
         <section className="col-8">
           <Card>
             <div className="verdict-panel-head">
-              <h3 className="card-title">Orders — last {range} days</h3>
+              <h3 className="card-title">
+                <Icon name="trending-up" size={15} /> Orders — last {range} days
+              </h3>
               <span className="verdict-conf">per day</span>
             </div>
             {loading ? (
@@ -379,7 +403,9 @@ export function Dashboard() {
         <section className="col-4">
           <Card>
             <div className="verdict-panel-head">
-              <h3 className="card-title">Risk distribution</h3>
+              <h3 className="card-title">
+                <Icon name="shield-checkmark" size={15} /> Risk distribution
+              </h3>
               <span className="verdict-conf">{isAdmin ? 'all buyers' : 'your buyers'}</span>
             </div>
             {loading ? (
@@ -395,7 +421,9 @@ export function Dashboard() {
         <section className="col-6">
           <Card>
             <div className="verdict-panel-head">
-              <h3 className="card-title">Sales by city</h3>
+              <h3 className="card-title">
+                <Icon name="location" size={15} /> Sales by city
+              </h3>
               <span className="verdict-conf">geographic distribution</span>
             </div>
             {loading ? (
@@ -413,7 +441,9 @@ export function Dashboard() {
         <section className="col-6">
           <Card>
             <div className="verdict-panel-head">
-              <h3 className="card-title">Top products</h3>
+              <h3 className="card-title">
+                <Icon name="star" size={15} /> Top products
+              </h3>
               <span className="verdict-conf">by revenue</span>
             </div>
             {loading ? (
@@ -428,7 +458,9 @@ export function Dashboard() {
       <section className="chart-section">
         <Reveal stagger>
         <div className="verdict-panel-head">
-          <h3 className="card-title">Recent activity</h3>
+          <h3 className="card-title">
+            <Icon name="time" size={15} /> Recent activity
+          </h3>
           <Link className="link" to="/orders/pending">
             <Icon name="arrow-forward" size={14} /> View outcomes
           </Link>
