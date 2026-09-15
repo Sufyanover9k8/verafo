@@ -29,8 +29,26 @@
   opacity: 0.5;
 }
 
-/* Sidebar */
+/* Sidebar — persistently navy (GoKwik keeps its sidebar dark even on an
+   otherwise light dashboard). Re-declaring the ink ramp inside this scope
+   means every existing .sidebar-* rule below, which all read var(--v-ink-*),
+   picks up these values instead of the page theme's — no need to touch
+   them individually, and it stays correct if the global theme is toggled. */
 .sidebar {
+  --v-ink-950: #023047;   /* palette navy — sidebar background */
+  --v-ink-900: #063A54;
+  --v-ink-850: #0A4560;
+  --v-ink-800: #0E4F6C;
+  --v-ink-700: #145C7A;
+  --v-ink-600: #1E6E8D;   /* borders/dividers */
+  --v-ink-500: #2C87A6;
+  --v-ink-400: #6FAEC7;   /* placeholder */
+  --v-ink-300: #9FCADD;   /* secondary text */
+  --v-ink-200: #C3E0EC;   /* body text */
+  --v-ink-100: #E4F1F8;   /* primary text */
+  --v-ink-050: #FFFFFF;
+  --hover: rgba(255, 255, 255, 0.08);
+
   grid-column: 1;
   grid-row: 1 / span 2;
   position: sticky;
@@ -473,8 +491,15 @@
   font-weight: 600;
   color: var(--v-purple-300);
   transition: color var(--dur-fast) var(--ease-out);
+  /* Buttons styled as .link (not all of these are <a> tags) need their
+     native chrome reset explicitly — button {} in base.css only resets
+     font/cursor, not border/background/padding. */
+  border: 0;
+  background: none;
+  padding: 0;
 }
 .link:hover { color: var(--v-purple-200); }
+.link:disabled { cursor: default; }
 
 /* ────────────────────────────────────────────────────────────
    Inputs
@@ -495,7 +520,7 @@ select,
 textarea {
   width: 100%;
   height: 40px;
-  background: var(--v-ink-700);
+  background: var(--v-ink-850);
   border: 1px solid var(--v-ink-600);
   border-radius: var(--r-6);
   padding: 0 var(--s-3);
@@ -1204,8 +1229,8 @@ code {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(56% 60% at 16% 4%, rgba(45, 212, 191, 0.10), transparent 62%),
-    radial-gradient(46% 48% at 92% 0%, rgba(45, 212, 191, 0.06), transparent 60%);
+    radial-gradient(56% 60% at 16% 4%, rgba(33, 158, 188, 0.10), transparent 62%),
+    radial-gradient(46% 48% at 92% 0%, rgba(255, 183, 3, 0.06), transparent 60%);
   -webkit-mask-image: linear-gradient(180deg, #000 28%, transparent 100%);
   mask-image: linear-gradient(180deg, #000 28%, transparent 100%);
 }

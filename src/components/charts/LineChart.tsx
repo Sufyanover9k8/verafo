@@ -25,7 +25,7 @@ const tooltipStyle = {
 }
 const tickStyle = { fill: 'var(--v-ink-400)', fontSize: 11 }
 const STROKE = 'var(--cyan-primary)'
-const FILL = 'rgba(45, 212, 191, 0.08)'
+const FILL = 'rgba(33, 158, 188, 0.08)'
 
 /** Pre-themed line/area chart. Max two series. Grid is horizontal only. */
 export function LineChart({ data, series, height = 280, begin = 0 }: LineChartProps) {

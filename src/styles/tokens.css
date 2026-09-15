@@ -5,22 +5,29 @@
    ============================================================ */
 
 :root {
-  /* ── 1 · Colour — brand (cyan) ────────────────── */
-  --cyan-primary: #2DD4BF;   /* buttons, active nav, links, logo, chart primary line */
-  --cyan-bright:  #5EEAD4;   /* hover states, glow highlights */
-  --cyan-dim:     #0F766E;   /* secondary chart lines, emphasis card borders */
+  /* ── 1 · Colour — brand (GoKwik-inspired blue/navy) ──
+     Palette: https://coolors.co/palette/8ecae6-219ebc-023047-ffb703-fb8500
+     Ramp anchors the three given colours at 200 / 500 / 900 exactly;
+     the in-between steps are interpolated to keep a smooth progression. */
+  --cyan-primary: #219EBC;   /* buttons, active nav, links, logo, chart primary line */
+  --cyan-bright:  #8ECAE6;   /* hover states, glow highlights */
+  --cyan-dim:     #023047;   /* secondary chart lines, emphasis card borders */
 
-  /* legacy ramp aliases onto the cyan system */
-  --v-purple-50:  #E6FBF8;
-  --v-purple-100: #C9F4EE;
-  --v-purple-200: #A3EBE2;
-  --v-purple-300: #5EEAD4;
-  --v-purple-400: #3DD4C4;
-  --v-purple-500: #2DD4BF;   /* PRIMARY — brand anchor */
-  --v-purple-600: #0F766E;
-  --v-purple-700: #0C5C56;
-  --v-purple-800: #09423E;
-  --v-purple-900: #052B28;
+  /* legacy ramp name kept (widely referenced) — now the blue/navy ramp */
+  --v-purple-50:  #EAF6FC;
+  --v-purple-100: #D3ECF8;
+  --v-purple-200: #8ECAE6;   /* palette: sky */
+  --v-purple-300: #6CBBDD;
+  --v-purple-400: #3FA8CC;
+  --v-purple-500: #219EBC;   /* palette: blue — PRIMARY brand anchor */
+  --v-purple-600: #1A7D96;
+  --v-purple-700: #145E70;
+  --v-purple-800: #0E404B;
+  --v-purple-900: #023047;   /* palette: navy */
+
+  /* ── 1 · Colour — accent (warm, palette amber/orange) ── */
+  --v-amber:  #FFB703;   /* CTAs, highlights — distinct from --v-watch below */
+  --v-orange: #FB8500;   /* stronger emphasis, hero accents */
 
   /* ── 1 · Colour — neutrals (cool-shifted black) ── */
   --bg-deepest:  #06090A;   /* modals, deepest layer */
@@ -108,15 +115,15 @@
   --v-grad-brand: linear-gradient(135deg, var(--v-purple-200), var(--v-purple-400) 55%, var(--v-purple-600));
   --v-grad-accent: linear-gradient(120deg, var(--v-purple-300), var(--v-purple-500));
   --v-grad-chip: linear-gradient(140deg, color-mix(in srgb, var(--v-purple-500) 22%, var(--v-ink-800)), color-mix(in srgb, var(--v-purple-600) 7%, var(--v-ink-800)));
-  --v-glow-soft: 0 6px 22px -10px rgba(45, 212, 191, 0.45);
-  --v-glow-md: 0 10px 34px -12px rgba(45, 212, 191, 0.55);
+  --v-glow-soft: 0 6px 22px -10px rgba(33, 158, 188, 0.45);
+  --v-glow-md: 0 10px 34px -12px rgba(33, 158, 188, 0.55);
   --v-glow-ring: 0 0 0 4px color-mix(in srgb, var(--v-outline) 20%, transparent);
-  --v-glow-primary: 0 0 18px -2px rgba(45, 212, 191, 0.20);
-  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(45, 212, 191, 0.14), transparent 62%),
+  --v-glow-primary: 0 0 18px -2px rgba(33, 158, 188, 0.20);
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(33, 158, 188, 0.14), transparent 62%),
               radial-gradient(42% 42% at -8% 104%, rgba(63, 191, 135, 0.06), transparent 58%),
-              radial-gradient(30% 30% at 96% 88%, rgba(45, 212, 191, 0.06), transparent 58%);
-  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(45, 212, 191, 0.18), transparent 60%),
-                   radial-gradient(60% 50% at 100% 100%, rgba(63, 191, 135, 0.06), transparent 55%),
+              radial-gradient(30% 30% at 96% 88%, rgba(251, 133, 0, 0.06), transparent 58%);
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(33, 158, 188, 0.18), transparent 60%),
+                   radial-gradient(60% 50% at 100% 100%, rgba(255, 183, 3, 0.08), transparent 55%),
                    var(--v-ink-950);
   --v-hairline: linear-gradient(90deg, transparent 5%, var(--v-purple-400) 40%, var(--v-safe) 60%, transparent 95%);
   --v-grad-safe: linear-gradient(120deg,
@@ -151,8 +158,8 @@
 :root {
   --accent: var(--v-purple-500);
   --accent-2: var(--v-purple-600);
-  --accent-glow: rgba(45, 212, 191, 0.30);
-  --accent-soft: rgba(45, 212, 191, 0.14);
+  --accent-glow: rgba(33, 158, 188, 0.30);
+  --accent-soft: rgba(33, 158, 188, 0.14);
   --green: var(--v-safe);
   --green-soft: var(--v-safe-bg);
   --amber: var(--v-watch);
@@ -185,10 +192,10 @@
   --glass-strong: rgba(255, 255, 255, 0.86);
   --hover: rgba(16, 14, 22, 0.05);
   --v-grad-accent: linear-gradient(120deg, var(--v-purple-400), var(--v-purple-600));
-  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(45, 212, 191, 0.13), transparent 62%),
-              radial-gradient(42% 42% at -8% 104%, rgba(46, 158, 107, 0.08), transparent 58%);
-  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(45, 212, 191, 0.14), transparent 60%),
-                   radial-gradient(60% 50% at 100% 100%, rgba(46, 158, 107, 0.06), transparent 55%),
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(33, 158, 188, 0.13), transparent 62%),
+              radial-gradient(42% 42% at -8% 104%, rgba(255, 183, 3, 0.08), transparent 58%);
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(33, 158, 188, 0.14), transparent 60%),
+                   radial-gradient(60% 50% at 100% 100%, rgba(255, 183, 3, 0.06), transparent 55%),
                    var(--v-ink-950);
   --v-grad-chip: linear-gradient(140deg, color-mix(in srgb, var(--v-purple-500) 14%, var(--v-ink-100)), color-mix(in srgb, var(--v-purple-600) 5%, var(--v-ink-100)));
 }
