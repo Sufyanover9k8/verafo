@@ -507,7 +507,36 @@
    ──────────────────────────────────────────────────────────── */
 
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
+.field.grow { flex: 1; min-width: 200px; }
 .field-label { font-size: var(--t-caption); font-weight: 500; color: var(--v-ink-300); }
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+}
+.filter-bar .field { min-width: 150px; }
+.filter-bar .field input,
+.filter-bar .field select { min-width: 150px; }
+.filter-toggle {
+  height: 38px;
+  padding: 0 var(--s-4);
+  border: 1px dashed var(--v-ink-500);
+  border-radius: var(--r-10);
+  background: transparent;
+  color: var(--v-purple-500);
+  font-size: var(--t-body-sm);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.filter-toggle:hover { border-color: var(--v-purple-500); background: var(--accent-soft); }
+.filter-bar-actions { display: flex; align-items: center; gap: var(--s-2); margin-left: auto; }
 .field-label .field-icon { color: var(--v-ink-400); }
 .field-hint { font-size: var(--t-caption); color: var(--v-ink-400); }
 .field-error { font-size: var(--t-caption); color: var(--v-risk); }
