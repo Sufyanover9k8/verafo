@@ -5,7 +5,13 @@ import { money } from '../../lib/format'
 import { cityLonLat } from '../../lib/cities'
 import type { CityStat } from '../../lib/storeStats'
 
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+// CARTO's free anonymous basemap tiles now require signing up for an API key
+// (watermarked "API KEY REQUIRED" without one). Esri's dark-gray canvas tiles
+// are free with no key/signup needed and give the same dark aesthetic.
+const TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+const LABELS_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
 
 interface CityMapProps {
   cities: CityStat[]
@@ -28,10 +34,10 @@ export function CityMap({ cities, height = 280 }: CityMapProps) {
     mapRef.current = map
     L.control.zoom({ position: 'bottomright' }).addTo(map)
     L.tileLayer(TILE_URL, {
-      maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      maxZoom: 16,
+      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
     }).addTo(map)
+    L.tileLayer(LABELS_URL, { maxZoom: 16 }).addTo(map)
 
     const coords = cities
       .map((c) => cityLonLat(c.city))
