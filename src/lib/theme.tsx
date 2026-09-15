@@ -33,7 +33,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     const v = localStorage.getItem(THEME_KEY)
-    return v === 'light' || v === 'system' ? v : 'dark'
+    return v === 'dark' || v === 'system' ? v : 'light'
   })
   const [reducedMotion, setReducedMotionState] = useState(() => localStorage.getItem(MOTION_KEY) === '1')
   const [resolved, setResolved] = useState<'dark' | 'light'>(() => resolveTheme(theme))

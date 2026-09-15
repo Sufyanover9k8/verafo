@@ -18,7 +18,7 @@ import {
 import type { ChartSpec } from '../lib/types'
 import { useAnimatedWidth } from './charts/useAnimatedWidth'
 
-const PALETTE = ['#2DD4BF', '#0F766E', '#5EEAD4', '#3FBF87', '#E0A32E', '#E05252', '#4A5C5C']
+const PALETTE = ['#219EBC', '#023047', '#8ECAE6', '#3FBF87', '#FFB703', '#E05252', '#4A5C5C']
 
 const TOOLTIP_STYLE = {
   background: 'var(--bg-2)',
