@@ -30,6 +30,17 @@ interface SessionValue {
 
 const Ctx = createContext<SessionValue | null>(null)
 
+/** True if the current URL is a Supabase recovery-link landing (implicit-flow
+ *  hash `#...&type=recovery...`, or PKCE-style `?...&type=recovery`). Checked
+ *  synchronously so it's already correct on the very first render — waiting
+ *  for the async PASSWORD_RECOVERY auth event instead lets App.tsx's
+ *  session-based routing decide (and redirect) before the event arrives,
+ *  which is exactly the race that sent recovery links to the login screen. */
+function isRecoveryUrl(): boolean {
+  if (typeof window === 'undefined') return false
+  return /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search)
+}
+
 /**
  * Single source of truth for the signed-in Supabase user. Everything that
  * needs "who is this" (role, store scoping, greeting) reads from here instead
@@ -38,7 +49,7 @@ const Ctx = createContext<SessionValue | null>(null)
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(isRecoveryUrl)
 
   useEffect(() => {
     if (!supabase) {
