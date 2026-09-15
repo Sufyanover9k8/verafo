@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck } from 'lucide-react'
+import { MessageCircleMore, ShieldCheck, ShoppingBag } from 'lucide-react'
 import { Icon } from '../components/Icon'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
@@ -74,15 +74,58 @@ export function Auth() {
           </span>
           <span className="sidebar-brand-name">Verafo</span>
         </div>
-        <h1 className="auth-left-title">
-          Know who you're shipping to. <em>Before</em> you ship.
-        </h1>
-        <p className="auth-left-foot">
-          Verafo — cash-on-delivery risk intelligence across your connected stores.
-        </p>
+
+        <div>
+          <h1 className="auth-left-title">
+            Know who you're shipping to. <em>Before</em> you ship.
+          </h1>
+          <p className="auth-left-sub">
+            Every Cash-on-Delivery order gets a risk verdict before it leaves your
+            warehouse — so you stop guessing which orders will bounce back.
+          </p>
+        </div>
+
+        <div className="auth-features">
+          <div className="auth-feature-card">
+            <span className="auth-feature-icon blue">
+              <ShieldCheck size={18} strokeWidth={2} />
+            </span>
+            <div>
+              <div className="auth-feature-title">Buyer risk verdict</div>
+              <div className="auth-feature-sub">Scored the moment an order comes in</div>
+            </div>
+            <span className="auth-feature-pill safe">Low risk</span>
+          </div>
+
+          <div className="auth-feature-card">
+            <span className="auth-feature-icon amber">
+              <ShoppingBag size={18} strokeWidth={2} />
+            </span>
+            <div>
+              <div className="auth-feature-title">COD hidden automatically</div>
+              <div className="auth-feature-sub">For your highest-risk buyers only</div>
+            </div>
+            <span className="auth-feature-pill risk">Cash on Delivery</span>
+          </div>
+
+          <div className="auth-feature-card">
+            <span className="auth-feature-icon safe">
+              <MessageCircleMore size={18} strokeWidth={2} />
+            </span>
+            <div>
+              <div className="auth-feature-title">Post-checkout confirmation</div>
+              <div className="auth-feature-sub">Hold borderline orders until the buyer confirms</div>
+            </div>
+          </div>
+        </div>
+
+        <span className="auth-trust-badge">
+          <ShieldCheck size={14} strokeWidth={2} /> Built for Pakistan's Cash-on-Delivery sellers
+        </span>
       </aside>
 
       <main className="auth-right">
+        <div className="auth-form-card">
         <div className="auth-form-wrap">
           <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
           <p>
@@ -162,6 +205,7 @@ export function Auth() {
               )}
             </p>
           </form>
+        </div>
         </div>
       </main>
     </div>
