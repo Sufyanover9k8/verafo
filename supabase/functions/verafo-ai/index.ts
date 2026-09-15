@@ -2063,15 +2063,34 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "embed_map") {
+      // The map below does an O(n^3) eigendecomposition on the buyer Gram
+      // matrix (classical MDS). Left unbounded, that blows the edge
+      // function's CPU-time budget once the network grows past a few
+      // hundred buyers (WORKER_RESOURCE_LIMIT). Cap the set and prioritize
+      // the most-active buyers — they're also the most informative ones for
+      // spotting risk clusters. Embedding calls to OpenAI are capped
+      // separately per run so one invocation can't stall on hundreds of
+      // sequential API calls; "rebuild vectors" can be clicked again to
+      // pick up more.
+      const MAX_MAP_BUYERS = 150;
+      const MAX_EMBED_PER_RUN = 40;
+
+      const { count: totalBuyers } = await supabase
+        .from("buyers")
+        .select("phone", { count: "exact", head: true });
+
       const { data: buyers, error } = await supabase
         .from("buyers")
-        .select("phone, risk_score, total_orders, total_accepted, total_refused, embedding");
+        .select("phone, risk_score, total_orders, total_accepted, total_refused, embedding")
+        .order("total_orders", { ascending: false })
+        .limit(MAX_MAP_BUYERS);
       if (error) throw new Error(error.message);
       const rows = buyers ?? [];
 
       const missing = rows
         .filter((b) => !b.embedding || !Array.isArray(b.embedding))
-        .map((b) => String(b.phone));
+        .map((b) => String(b.phone))
+        .slice(0, MAX_EMBED_PER_RUN);
       const failed: string[] = [];
       if (missing.length > 0) {
         const vectors = await mapLimit(missing, 10, async (phone) => {
@@ -2170,12 +2189,15 @@ Deno.serve(async (req: Request) => {
         ok: true,
         points,
         embedded: vecs.length,
-        total: rows.length,
+        total: totalBuyers ?? rows.length,
+        shown: rows.length,
         failed,
         note:
-          failed.length > 0
-            ? `${failed.length} buyers could not be embedded and are not shown.`
-            : undefined,
+          (totalBuyers ?? rows.length) > rows.length
+            ? `Showing the ${rows.length} most-active buyers out of ${totalBuyers} network-wide.`
+            : failed.length > 0
+              ? `${failed.length} buyers could not be embedded and are not shown.`
+              : undefined,
       });
     }
 

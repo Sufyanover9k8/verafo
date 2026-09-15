@@ -182,7 +182,12 @@ export function Settings() {
 
       <div className="settings-layout">
         <section className="card settings-section">
-          <span className="eyebrow">Personal information</span>
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
+              <Icon name="person" size={16} />
+            </span>
+            <span className="eyebrow">Personal information</span>
+          </div>
           <div className="settings-rows">
             <div className="setting-row">
               <div className="setting-info">
@@ -207,7 +212,12 @@ export function Settings() {
         </section>
 
         <section className="card settings-section">
-          <span className="eyebrow">Appearance</span>
+          <div className="settings-section-head">
+            <span className="kpi-icon amber">
+              <Icon name="sunny" size={16} />
+            </span>
+            <span className="eyebrow">Appearance</span>
+          </div>
           <div className="settings-rows">
             <div className="setting-row">
               <div className="setting-info">
@@ -244,7 +254,12 @@ export function Settings() {
         </section>
 
         <section className="card settings-section">
-          <span className="eyebrow">Activity</span>
+          <div className="settings-section-head">
+            <span className="kpi-icon orange">
+              <Icon name="trash" size={16} />
+            </span>
+            <span className="eyebrow">Activity</span>
+          </div>
           <div className="settings-rows">
             <div className="setting-row">
               <div className="setting-info">
@@ -264,7 +279,12 @@ export function Settings() {
 
         {admin && (
           <section className="card settings-section">
-            <span className="eyebrow">Data</span>
+            <div className="settings-section-head">
+              <span className="kpi-icon safe">
+                <Icon name="cloud-upload" size={16} />
+              </span>
+              <span className="eyebrow">Data</span>
+            </div>
             <div className="settings-rows">
               <div className="setting-row">
                 <div className="setting-info">
@@ -296,34 +316,63 @@ export function Settings() {
         )}
 
         <section className="card settings-section">
-          <span className="eyebrow">Connection</span>
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
+              <Icon name="server" size={16} />
+            </span>
+            <span className="eyebrow">Connection</span>
+          </div>
           <div className="conn-card">
             <div className="conn-avatar">
               <Icon name="server-outline" size={20} />
             </div>
             <div className="conn-meta">
               <strong>Supabase {conn === 'ok' ? 'connected' : conn === 'checking' ? 'checking…' : 'unreachable'}</strong>
-              <span>
-                {isConfigured ? new URL(functionsBaseUrl() ?? '').host : 'not configured'} ·{' '}
-                {buyerCount != null ? `${buyerCount} buyers · ${orderCount} orders` : 'loading counts…'}
-              </span>
+              <span>{isConfigured ? new URL(functionsBaseUrl() ?? '').host : 'not configured'}</span>
             </div>
             <span className={`conn-pill${conn === 'ok' ? '' : ' warn'}`}>
               <span className="conn-dot" />
               {conn === 'ok' ? 'online' : conn === 'checking' ? 'checking' : 'offline'}
             </span>
           </div>
+          <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>
+            <div className="info-tile">
+              <div className="info-tile-label">Buyers</div>
+              <div className="info-tile-value mono">{buyerCount ?? '…'}</div>
+            </div>
+            <div className="info-tile">
+              <div className="info-tile-label">Orders</div>
+              <div className="info-tile-value mono">{orderCount ?? '…'}</div>
+            </div>
+            <div className="info-tile">
+              <div className="info-tile-label">Edge functions</div>
+              <div className="info-tile-value">{functionsBaseUrl() ? 'Deployed' : 'Not deployed'}</div>
+            </div>
+          </div>
         </section>
 
         <section className="card settings-section">
-          <span className="eyebrow">About</span>
           <div className="about-brand">
             <span className="brand-mark">
               <Icon name="shield-checkmark" size={20} />
             </span>
             <div>
               <h3>Verafo</h3>
-              <p>COD risk intelligence · v0.2 · Supabase + OpenAI edge functions</p>
+              <p>COD risk intelligence</p>
+            </div>
+          </div>
+          <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>
+            <div className="info-tile">
+              <div className="info-tile-label">Version</div>
+              <div className="info-tile-value mono">v0.2</div>
+            </div>
+            <div className="info-tile">
+              <div className="info-tile-label">Backend</div>
+              <div className="info-tile-value">Supabase</div>
+            </div>
+            <div className="info-tile">
+              <div className="info-tile-label">AI functions</div>
+              <div className="info-tile-value">OpenAI edge functions</div>
             </div>
           </div>
           {!functionsBaseUrl() && (
@@ -335,7 +384,12 @@ export function Settings() {
         </section>
 
         <section className="card settings-section">
-          <span className="eyebrow">Account</span>
+          <div className="settings-section-head">
+            <span className="kpi-icon amber">
+              <Icon name="log-out" size={16} />
+            </span>
+            <span className="eyebrow">Account</span>
+          </div>
           <div className="settings-rows">
             <div className="setting-row">
               <div className="setting-info">
