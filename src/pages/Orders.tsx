@@ -273,26 +273,30 @@ export function Orders() {
       />
 
       <div className="card filter-bar">
+        <div className="field">
+          <span className="field-label">
+            <Icon name="calendar" size={14} /> Order date
+          </span>
+          <div className="date-range">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="From date"
+            />
+            <Icon name="arrow-forward" size={13} className="date-range-sep" />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              aria-label="To date"
+            />
+          </div>
+        </div>
         <label className="field">
-          <span className="field-label">Order date</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            aria-label="From date"
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">&nbsp;</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            aria-label="To date"
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Phone</span>
+          <span className="field-label">
+            <Icon name="phone-portrait" size={14} /> Phone
+          </span>
           <input
             className="mono"
             type="search"
@@ -303,7 +307,9 @@ export function Orders() {
           />
         </label>
         <label className="field">
-          <span className="field-label">City</span>
+          <span className="field-label">
+            <Icon name="location" size={14} /> City
+          </span>
           <input
             type="text"
             value={city}
