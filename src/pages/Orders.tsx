@@ -39,13 +39,19 @@ function csv(rows: Record<string, unknown>[]): string {
 
 export function Orders() {
   const toast = useToast()
-  const { role, store, scopeStoreIds } = useStoreScope()
+  const { role, store, stores: adminStores, scopeStoreIds } = useStoreScope()
   const isAdmin = role === 'admin'
 
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState<StatusFilter>('all')
   const [term, setTerm] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [city, setCity] = useState('')
+  const [product, setProduct] = useState('')
+  const [filterStoreId, setFilterStoreId] = useState('')
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -58,6 +64,9 @@ export function Orders() {
       )
     if (store) query = query.eq('store_id', store.id)
     else if (scopeStoreIds) query = query.in('store_id', scopeStoreIds)
+    if (isAdmin && filterStoreId) query = query.eq('store_id', filterStoreId)
+    if (dateFrom) query = query.gte('ordered_at', new Date(dateFrom).toISOString())
+    if (dateTo) query = query.lte('ordered_at', new Date(`${dateTo}T23:59:59`).toISOString())
 
     const { data, error } = await query.order('ordered_at', { ascending: false }).limit(500)
     if (error) {
@@ -66,21 +75,35 @@ export function Orders() {
       setRows((data ?? []) as unknown as Row[])
     }
     setLoading(false)
-  }, [toast, store, scopeStoreIds])
+  }, [toast, store, scopeStoreIds, isAdmin, filterStoreId, dateFrom, dateTo])
 
   useEffect(() => {
     void load()
   }, [load])
 
+  function resetFilters() {
+    setStatus('all')
+    setTerm('')
+    setDateFrom('')
+    setDateTo('')
+    setCity('')
+    setProduct('')
+    setFilterStoreId('')
+  }
+
   const filtered = useMemo(() => {
     const q = normalizePhone(term)
+    const c = city.trim().toLowerCase()
+    const p = product.trim().toLowerCase()
     return rows.filter((o) => {
       const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
       if (status !== 'all' && s !== status) return false
       if (q && !normalizePhone(o.buyer_phone).includes(q)) return false
+      if (c && !(o.city ?? '').toLowerCase().includes(c)) return false
+      if (p && !`${o.product_name ?? ''} ${o.product_category ?? ''}`.toLowerCase().includes(p)) return false
       return true
     })
-  }, [rows, status, term])
+  }, [rows, status, term, city, product])
 
   const counts = useMemo(() => {
     const c = { all: rows.length, pending: 0, accepted: 0, refused: 0 }
@@ -249,6 +272,98 @@ export function Orders() {
         }
       />
 
+      <div className="card filter-bar">
+        <label className="field">
+          <span className="field-label">Order date</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="From date"
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">&nbsp;</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="To date"
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Phone</span>
+          <input
+            className="mono"
+            type="search"
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="03xx xxxxxxx"
+            aria-label="Filter by phone"
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">City</span>
+          <input
+            type="text"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            placeholder="e.g. Lahore"
+            aria-label="Filter by city"
+          />
+        </label>
+
+        {showMoreFilters && (
+          <>
+            <label className="field grow">
+              <span className="field-label">Product</span>
+              <input
+                type="text"
+                value={product}
+                onChange={(e) => setProduct(e.target.value)}
+                placeholder="Product name or category"
+                aria-label="Filter by product"
+              />
+            </label>
+            {isAdmin && (
+              <label className="field">
+                <span className="field-label">Store</span>
+                <select
+                  value={filterStoreId}
+                  onChange={(e) => setFilterStoreId(e.target.value)}
+                  aria-label="Filter by store"
+                >
+                  <option value="">All stores</option>
+                  {adminStores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </>
+        )}
+
+        <button
+          type="button"
+          className="filter-toggle"
+          onClick={() => setShowMoreFilters((v) => !v)}
+        >
+          <Icon name={showMoreFilters ? 'close' : 'add'} size={14} />
+          {showMoreFilters ? 'Fewer filters' : 'Add more filters'}
+        </button>
+
+        <div className="filter-bar-actions">
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => void load()}>
+            <Icon name="search" size={14} /> Search
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={resetFilters}>
+            <Icon name="refresh" size={14} /> Reset
+          </button>
+        </div>
+      </div>
+
       <div className="cluster">
         <div className="tabs">
           {(['all', 'pending', 'accepted', 'refused'] as StatusFilter[]).map((s) => (
@@ -257,15 +372,6 @@ export function Orders() {
             </button>
           ))}
         </div>
-        <input
-          className="mono"
-          type="search"
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-          placeholder="Filter by phone…"
-          aria-label="Filter by phone"
-          style={{ maxWidth: 220 }}
-        />
         <button className="tab-refresh" onClick={() => void load()} title="Refresh">
           <Icon name="refresh" size={16} className={loading ? 'spin' : ''} /> Refresh
         </button>
