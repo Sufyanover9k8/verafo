@@ -1608,38 +1608,127 @@ code {
 
 .auth-split {
   display: grid;
-  grid-template-columns: 45fr 55fr;
+  grid-template-columns: 48fr 52fr;
   min-height: 100vh;
 }
 @media (max-width: 1023px) { .auth-split { grid-template-columns: 1fr; } }
+
+/* Left panel is deliberately fixed-dark and the right panel fixed-light,
+   regardless of the visitor's own theme preference — an auth screen this
+   graphic-heavy needs one designed contrast pair, not two (dark-on-dark /
+   light-on-light) depending on a toggle nobody's set yet. */
 .auth-left {
-  background-image: var(--v-aurora-auth);
-  border-right: 1px dashed var(--v-ink-600);
+  --v-ink-050: #FFFFFF;
+  --v-ink-100: #EAF4FA;
+  --v-ink-300: #9FC6DE;
+  --v-ink-400: #7BAFCF;
+
+  background:
+    radial-gradient(60% 50% at 100% 0%, rgba(142, 202, 230, 0.22), transparent 60%),
+    radial-gradient(45% 40% at 0% 100%, rgba(255, 183, 3, 0.10), transparent 60%),
+    linear-gradient(160deg, #023047 0%, #034363 100%);
   padding: var(--s-12);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: var(--s-10);
+  color: var(--v-ink-100);
 }
 .auth-wordmark { display: flex; align-items: center; gap: var(--s-3); }
+.auth-wordmark .sidebar-brand-mark { background: var(--v-grad-brand); }
 .auth-left-title {
   font-family: var(--v-font-serif);
-  font-size: 40px;
+  font-size: 38px;
   font-weight: 400;
-  line-height: 1.12;
+  line-height: 1.14;
   color: var(--v-ink-050);
-  max-width: 16ch;
-  margin-top: var(--s-12);
+  max-width: 17ch;
 }
 .auth-left-title em { color: var(--v-purple-300); font-style: italic; }
+.auth-left-sub {
+  margin-top: var(--s-3);
+  color: var(--v-ink-300);
+  font-size: var(--t-body);
+  max-width: 40ch;
+}
+
+.auth-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.auth-feature-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-12);
+  padding: var(--s-3) var(--s-4);
+  backdrop-filter: blur(6px);
+}
+.auth-feature-icon {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--r-10);
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.auth-feature-icon.blue { background: linear-gradient(135deg, #219EBC, #023047); }
+.auth-feature-icon.amber { background: linear-gradient(135deg, #FFB703, #FB8500); }
+.auth-feature-icon.safe { background: linear-gradient(135deg, #5FD9A4, #1F8F63); }
+.auth-feature-title { font-size: 14px; font-weight: 600; color: var(--v-ink-050); }
+.auth-feature-sub { font-size: 12.5px; color: var(--v-ink-300); margin-top: 1px; }
+.auth-feature-pill {
+  margin-left: auto;
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--r-full);
+}
+.auth-feature-pill.safe { background: rgba(95, 217, 164, 0.18); color: #7EE8B8; }
+.auth-feature-pill.risk { background: rgba(224, 82, 82, 0.18); color: #F19A9A; text-decoration: line-through; }
+
+.auth-trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  align-self: flex-start;
+  font-size: 12.5px;
+  color: var(--v-ink-300);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-full);
+  padding: var(--s-2) var(--s-4);
+  margin-top: auto;
+}
 .auth-left-foot { color: var(--v-ink-400); font-size: var(--t-caption); }
+
 .auth-right {
+  --v-ink-050: #0B1B24;
+  --v-ink-100: #17242C;
+  --v-ink-300: #5B7280;
+  --v-ink-400: #7D919C;
+
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--s-8);
+  background: #F7FAFC;
 }
-.auth-form-wrap { width: 100%; max-width: 380px; }
-.auth-form-wrap h2 { font-size: var(--t-h2); color: var(--v-ink-050); font-weight: 600; }
+.auth-form-card {
+  width: 100%;
+  max-width: 400px;
+  background: #FFFFFF;
+  border: 1px solid #E4ECF0;
+  border-radius: var(--r-16);
+  box-shadow: 0 20px 44px -22px rgba(2, 48, 71, 0.22);
+  padding: var(--s-10);
+}
+.auth-form-wrap h2 { font-size: var(--t-h2); color: var(--v-ink-050); font-weight: 700; }
 .auth-form-wrap p { margin-top: var(--s-2); color: var(--v-ink-300); font-size: var(--t-body-sm); }
 .auth-form { margin-top: var(--s-8); display: flex; flex-direction: column; gap: var(--s-4); }
 .auth-forgot {
