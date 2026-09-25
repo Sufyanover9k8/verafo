@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 
 export type Theme = 'dark' | 'light' | 'system'
 
-const THEME_KEY = 'verafo.theme'
+const THEME_KEY = 'verafo.theme.v2'
 const MOTION_KEY = 'verafo.reducedMotion'
 
 function systemDark(): boolean {

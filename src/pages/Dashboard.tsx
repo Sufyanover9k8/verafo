@@ -1,30 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Icon } from '../components/Icon'
-import { Avatar } from '../components/Avatar'
-import { Badge } from '../components/primitives/Badge'
-import { Card } from '../components/primitives/Card'
-import { Skeleton } from '../components/primitives/Skeleton'
-import { VerdictChip } from '../components/verdict/VerdictChip'
-import { DistributionBar } from '../components/charts/DistributionBar'
-import { CityStatsList } from '../components/charts/CityStatsList'
-import { TopProductsList } from '../components/charts/TopProductsList'
-import { GeoMap } from '../components/charts/GeoMap'
-import { LineChart } from '../components/charts/LineChart'
-import { CountUpNumber } from '../components/CountUpNumber'
-import { Sparkline } from '../components/Sparkline'
-import { Reveal } from '../components/Reveal'
-import { RangeFilter, type RangeDays } from '../components/RangeFilter'
-import { NeedsSetup } from '../components/States'
-import { phone, timeAgo } from '../lib/format'
-import { greetingForName } from '../lib/greeting'
-import { hasEnoughData, toneFromScore } from '../lib/risk'
-import { isConfigured, supabase } from '../lib/supabase'
-import { computeCityStats, computeDailySales, computeTopProducts } from '../lib/storeStats'
-import { useSession } from '../lib/session'
-import { useStoreScope } from '../lib/store'
-import { useToast } from '../lib/toast'
-import type { DailySalesRow, NetworkKpis, OrderRow } from '../lib/types'
+import { ArrowRight, CheckCircle2 } from 'lucide-react'
+import { GeoMap } from '@/components/charts/GeoMap'
+import { CountUpNumber } from '@/components/CountUpNumber'
+import { NeedsSetup } from '@/components/States'
+import { PageHeader } from '@/components/app/page-header'
+import { Segmented } from '@/components/app/segmented'
+import { StatStrip, type Trend } from '@/components/app/stat-strip'
+import { StatusBadge } from '@/components/app/status-badge'
+import { TrendArea, TrendBars } from '@/components/app/charts'
+import { VerdictBadge } from '@/components/app/verdict-badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { money, phone, timeAgo } from '@/lib/format'
+import { greetingForName } from '@/lib/greeting'
+import { hasEnoughData, toneFromScore } from '@/lib/risk'
+import { isConfigured, supabase } from '@/lib/supabase'
+import { computeCityStats, computeDailySales, computeTopProducts } from '@/lib/storeStats'
+import { useSession } from '@/lib/session'
+import { useStoreScope } from '@/lib/store'
+import { useToast } from '@/lib/toast'
+import type { DailySalesRow, NetworkKpis, OrderRow } from '@/lib/types'
+import type { RangeDays } from '@/components/RangeFilter'
 
 interface BuyerLight {
   phone: string
@@ -213,316 +212,340 @@ export function Dashboard() {
 
   if (!isConfigured) return <NeedsSetup />
 
-  return (
-    <div className="stack">
-      <Reveal className="dash-hero">
-        <div className="dash-hero-row">
-          <div>
-            <h1 className="dash-hero-title">{greetingForName(displayName)}</h1>
-            <p className="dash-hero-sub">
-              {loading ? (
-                'Loading…'
-              ) : orders.length === 0 ? (
-                <span>
-                  Your risk model is warming up — Verafo scores every buyer from their first
-                  resolved order.{' '}
-                  <Link className="link" to="/orders/new">
-                    Log an order
-                  </Link>{' '}
-                  or{' '}
-                  <Link className="link" to="/import">
-                    import your history
-                  </Link>{' '}
-                  to begin.
-                </span>
-              ) : (
-                <span>
-                  <CountUpNumber value={kpis?.buyers ?? buyers.length} />{' '}
-                  {isAdmin ? 'buyers across the network' : 'of your buyers scored'},{' '}
-                  <CountUpNumber value={pending} /> order{pending === 1 ? '' : 's'} awaiting a
-                  verdict.
-                </span>
-              )}
-            </p>
-          </div>
-          <RangeFilter range={range} onChange={setRange} />
-        </div>
-      </Reveal>
+  const trendOf = (today: number, yesterday: number): Trend => (today > yesterday ? 'up' : today < yesterday ? 'down' : 'flat')
+  const dist = stats.distribution
+  const distTotal = dist.safe + dist.watch + dist.high + dist.unknown
+  const distRows = [
+    { key: 'safe', label: 'Low risk', n: dist.safe, bar: 'bg-success' },
+    { key: 'watch', label: 'Medium risk', n: dist.watch, bar: 'bg-warning' },
+    { key: 'high', label: 'High risk', n: dist.high, bar: 'bg-destructive' },
+    { key: 'unknown', label: 'Not enough data', n: dist.unknown, bar: 'bg-muted-foreground/40' },
+  ]
 
-      {!loading && attention.length > 0 && (
-        <Reveal>
-          <Card className="attention-card">
-            <div className="verdict-panel-head">
-              <h3 className="card-title">
-                <Icon name="alert-circle" size={15} /> Needs your attention
-              </h3>
-              <Link className="link" to="/orders">
-                View all orders
-              </Link>
-            </div>
-            <div className="attention-list">
-              {attention.map(({ order, buyer }) => (
-                <Link
-                  key={order.id}
-                  className="attention-row"
-                  to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
-                >
-                  <span className="cell-avatar">
-                    <Avatar phone={order.buyer_phone} size={24} />
-                    {phone(order.buyer_phone)}
-                  </span>
-                  <span className="muted">{order.product_name || order.product_category || 'Order'}</span>
-                  <VerdictChip
-                    risk_score={buyer?.risk_score}
-                    total_orders={buyer?.total_orders}
-                    showScore={false}
-                  />
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </Reveal>
-      )}
+  const subtitle = loading ? (
+    'Loading your numbers…'
+  ) : orders.length === 0 ? (
+    <span>
+      Your risk model is warming up. Verafo scores every buyer from their first resolved order.{' '}
+      <Link className="font-medium text-primary hover:underline" to="/orders/new">
+        Log an order
+      </Link>{' '}
+      or{' '}
+      <Link className="font-medium text-primary hover:underline" to="/import">
+        import your history
+      </Link>{' '}
+      to begin.
+    </span>
+  ) : (
+    <span>
+      <CountUpNumber value={kpis?.buyers ?? buyers.length} /> {isAdmin ? 'buyers across the network' : 'of your buyers scored'},{' '}
+      <CountUpNumber value={pending} /> order{pending === 1 ? '' : 's'} awaiting a verdict.
+    </span>
+  )
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={greetingForName(displayName)}
+        description={subtitle}
+        actions={
+          <Segmented
+            ariaLabel="Date range"
+            value={range}
+            onChange={setRange}
+            options={[
+              { value: 7, label: '7 days' },
+              { value: 30, label: '30 days' },
+            ]}
+          />
+        }
+      />
 
       {loading ? (
-        <div className="stack">
-          <div className="kpi-grid">
+        <Card className="p-0">
+          <div className="grid grid-cols-2 divide-x lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i}>
-                <Skeleton width="50%" height={12} />
-                <Skeleton width="70%" height={22} />
-                <Skeleton width="100%" height={28} />
-              </Card>
+              <div key={i} className="space-y-3 px-5 py-4">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-32" />
+                <Skeleton className="h-3 w-28" />
+              </div>
             ))}
           </div>
-        </div>
+        </Card>
       ) : (
-        <Reveal stagger className="kpi-grid">
-          <Card>
-            <div className="kpi-head">
-              <span className="kpi-icon blue">
-                <Icon name="bag-handle" size={17} />
-              </span>
-              <span className="kpi-label">Orders today</span>
-            </div>
-            <strong className="kpi-value">
-              <CountUpNumber value={todayOrders} />
-            </strong>
-            <span className={`kpi-delta${stats.todayOrders > stats.yOrders ? ' pos' : stats.todayOrders < stats.yOrders ? ' neg' : ''}`}>
-              {stats.todayOrders > stats.yOrders ? 'up' : stats.todayOrders < stats.yOrders ? 'down' : 'flat'} vs yesterday ({stats.yOrders})
-            </span>
-            <div className="kpi-spark">
-              <Sparkline data={stats.days.map((d) => d.a)} height={28} />
-            </div>
-          </Card>
-          <Card>
-            <div className="kpi-head">
-              <span className="kpi-icon orange">
-                <Icon name="card" size={17} />
-              </span>
-              <span className="kpi-label">Revenue today</span>
-            </div>
-            <strong className="kpi-value">
-              <CountUpNumber prefix="PKR " value={todayRevenue} />
-            </strong>
-            <span className={`kpi-delta${stats.todayRevenue > stats.yRevenue ? ' pos' : stats.todayRevenue < stats.yRevenue ? ' neg' : ''}`}>
-              {stats.todayRevenue > stats.yRevenue ? 'up' : stats.todayRevenue < stats.yRevenue ? 'down' : 'flat'} vs yesterday
-            </span>
-            <div className="kpi-spark">
-              <Sparkline data={salesData.map((s) => s.a)} height={28} />
-            </div>
-          </Card>
-          <Card>
-            <div className="kpi-head">
-              <span className="kpi-icon safe">
-                <Icon name="shield-checkmark" size={17} />
-              </span>
-              <span className="kpi-label">Avg risk score</span>
-            </div>
-            <strong className="kpi-value">
-              <CountUpNumber value={stats.avg} decimals={2} />
-            </strong>
-            <span className="kpi-delta">
-              {isAdmin ? 'network-wide across ' : 'across '}
-              <CountUpNumber value={buyers.length} /> buyer{buyers.length === 1 ? '' : 's'}
-            </span>
-          </Card>
-          <Card>
-            <div className="kpi-head">
-              <span className="kpi-icon amber">
-                <Icon name="hourglass" size={17} />
-              </span>
-              <span className="kpi-label">Pending outcomes</span>
-            </div>
-            <strong className="kpi-value">
-              <CountUpNumber value={pending} />
-            </strong>
-            <span className="kpi-delta">
-              <Link className="link" to="/orders/pending">
-                mark them now
-              </Link>
-            </span>
-          </Card>
-        </Reveal>
+        <StatStrip
+          items={[
+            {
+              label: 'Orders today',
+              value: <CountUpNumber value={todayOrders} />,
+              trend: trendOf(stats.todayOrders, stats.yOrders),
+              hint: `vs yesterday (${stats.yOrders})`,
+            },
+            {
+              label: 'Revenue today',
+              value: <CountUpNumber prefix="PKR " value={todayRevenue} />,
+              trend: trendOf(stats.todayRevenue, stats.yRevenue),
+              hint: `vs yesterday (${money(stats.yRevenue)})`,
+            },
+            {
+              label: 'Average risk score',
+              value: <CountUpNumber value={stats.avg} decimals={2} />,
+              hint: `${isAdmin ? 'Network-wide, ' : ''}${buyers.length} buyer${buyers.length === 1 ? '' : 's'}`,
+            },
+            {
+              label: 'Pending outcomes',
+              value: <CountUpNumber value={pending} />,
+              hint: (
+                <Link className="font-medium text-primary hover:underline" to="/orders/pending">
+                  Mark them now
+                </Link>
+              ),
+            },
+          ]}
+        />
       )}
 
-      <section className="chart-section">
-        <Reveal stagger>
-        <div className="verdict-panel-head">
-          <h3 className="card-title">
-            <Icon name="stats-chart" size={15} /> Sales — last {range} days
-          </h3>
-          <span className="verdict-conf">gross order value · PKR</span>
-        </div>
-        <Card>
-          {loading ? (
-            <Skeleton height={220} />
-          ) : (
-            <LineChart data={salesData} series={[{ key: 'a', name: 'Sales' }]} height={220} begin={140} />
-          )}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Sales</CardTitle>
+            <CardDescription>Gross order value per day, last {range} days.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-60 w-full" />
+            ) : (
+              <TrendArea
+                data={salesData.map((s) => ({ label: s.label, value: s.a }))}
+                format={(n) => money(n)}
+                emptyText="No sales in this period yet."
+              />
+            )}
+          </CardContent>
         </Card>
-        </Reveal>
-      </section>
 
-      <Reveal stagger className="grid-12 chart-section">
-        <section className="col-8">
-          <Card>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">
-                <Icon name="trending-up" size={15} /> Orders — last {range} days
-              </h3>
-              <span className="verdict-conf">per day</span>
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Needs your attention</CardTitle>
+            <CardDescription>Pending orders from buyers who already look risky.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
             {loading ? (
-              <Skeleton height={280} />
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : attention.length === 0 ? (
+              <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 text-center">
+                <CheckCircle2 className="size-8 text-success" strokeWidth={1.5} />
+                <p className="text-sm font-medium">All clear</p>
+                <p className="max-w-52 text-xs text-muted-foreground">No pending order comes from a risky buyer right now.</p>
+              </div>
             ) : (
-              <LineChart data={stats.days} series={[{ key: 'a', name: 'Orders' }]} begin={300} />
+              <ul className="-mx-2 m-0 list-none divide-y divide-border p-0">
+                {attention.map(({ order, buyer }) => (
+                  <li key={order.id}>
+                    <Link
+                      to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
+                      className="flex items-center justify-between gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-muted/60"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono text-[13px] font-medium">{phone(order.buyer_phone)}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {order.product_name || order.product_category || 'Order'}
+                        </div>
+                      </div>
+                      <VerdictBadge riskScore={buyer?.risk_score} totalOrders={buyer?.total_orders} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             )}
-          </Card>
-        </section>
-        <section className="col-4">
-          <Card>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">
-                <Icon name="shield-checkmark" size={15} /> Risk distribution
-              </h3>
-              <span className="verdict-conf">{isAdmin ? 'all buyers' : 'your buyers'}</span>
-            </div>
-            {loading ? (
-              <Skeleton height={280} />
-            ) : (
-              <DistributionBar distribution={stats.distribution} begin={360} />
-            )}
-          </Card>
-        </section>
-      </Reveal>
+          </CardContent>
+        </Card>
+      </div>
 
-      <Reveal stagger className="grid-12 chart-section">
-        <section className="col-6">
-          <Card>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">
-                <Icon name="location" size={15} /> Sales by city
-              </h3>
-              <span className="verdict-conf">geographic distribution</span>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Orders</CardTitle>
+            <CardDescription>Orders placed per day, last {range} days.</CardDescription>
+          </CardHeader>
+          <CardContent>
             {loading ? (
-              <Skeleton height={240} />
-            ) : cityStats.length === 0 ? (
-              <span className="muted">No city data yet — add a city when logging orders.</span>
+              <Skeleton className="h-60 w-full" />
+            ) : (
+              <TrendBars data={stats.days.map((d) => ({ label: d.label, value: d.a }))} emptyText="No orders in this period yet." />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Risk distribution</CardTitle>
+            <CardDescription>{isAdmin ? 'Every buyer on the network.' : 'Buyers who ordered from your store.'}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {loading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : distTotal === 0 ? (
+              <p className="text-sm text-muted-foreground">No buyers scored yet.</p>
             ) : (
               <>
-                <GeoMap cities={cityStats} />
-                <CityStatsList cities={cityStats} />
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Risk distribution">
+                  {distRows.map((r) => (
+                    <div key={r.key} className={r.bar} style={{ width: `${(r.n / distTotal) * 100}%` }} />
+                  ))}
+                </div>
+                <ul className="m-0 list-none space-y-2.5 p-0">
+                  {distRows.map((r) => (
+                    <li key={r.key} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <span className={`size-2 rounded-full ${r.bar}`} />
+                        {r.label}
+                      </span>
+                      <span className="tabular-nums">
+                        <span className="font-medium">{r.n}</span>
+                        <span className="ms-2 text-xs text-muted-foreground">{Math.round((r.n / distTotal) * 100)}%</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
-          </Card>
-        </section>
-        <section className="col-6">
-          <Card>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">
-                <Icon name="star" size={15} /> Top products
-              </h3>
-              <span className="verdict-conf">by revenue</span>
-            </div>
-            {loading ? (
-              <Skeleton height={240} />
-            ) : (
-              <TopProductsList products={topProducts} />
-            )}
-          </Card>
-        </section>
-      </Reveal>
+          </CardContent>
+        </Card>
+      </div>
 
-      <section className="chart-section">
-        <Reveal stagger>
-        <div className="verdict-panel-head">
-          <h3 className="card-title">
-            <Icon name="time" size={15} /> Recent activity
-          </h3>
-          <Link className="link" to="/orders/pending">
-            <Icon name="arrow-forward" size={14} /> View outcomes
-          </Link>
-        </div>
-        <Card className="card--flush">
-          {loading ? (
-            <div className="stack" style={{ padding: 'var(--s-5)' }}>
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-              <Skeleton height={16} />
-            </div>
-          ) : recent.length === 0 ? (
-            <div className="empty-state">
-              <span className="muted">{isAdmin ? 'No orders in the network yet.' : 'No orders yet.'}</span>
-            </div>
-          ) : (
-            <div className="activity-feed">
-              {recent.map((o) => {
-                const status = o.outcomes?.status ?? 'pending'
-                const dot = status === 'accepted' ? 'ok' : status === 'refused' ? 'bad' : 'pending'
-                const icon = status === 'accepted' ? 'check' : status === 'refused' ? 'close' : 'time'
-                return (
-                  <div className="timeline-item" key={o.id}>
-                    <span className={`timeline-dot ${dot}`}>
-                      <Icon name={icon} size={13} />
-                    </span>
-                    <div className="activity-body">
-                      <div className="timeline-top">
-                        <span className="timeline-product">
-                          {o.product_name || o.product_category || 'Untitled product'}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Sales by city</CardTitle>
+            <CardDescription>Where your revenue comes from.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {loading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : cityStats.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No city data yet. Add a city when logging orders.</p>
+            ) : (
+              <>
+                <div className="overflow-hidden rounded-lg border">
+                  <GeoMap cities={cityStats} height={240} />
+                </div>
+                <ul className="m-0 list-none space-y-3 p-0">
+                  {cityStats.slice(0, 5).map((c) => (
+                    <li key={c.city} className="space-y-1.5">
+                      <div className="flex items-baseline justify-between text-sm">
+                        <span className="font-medium">
+                          {c.city}{' '}
+                          <span className="ms-1 text-xs font-normal text-muted-foreground">
+                            {c.orders} order{c.orders === 1 ? '' : 's'}
+                          </span>
                         </span>
-                        <Badge status={status} />
+                        <span className="text-muted-foreground tabular-nums">{money(c.revenue)}</span>
                       </div>
-                      <div className="timeline-meta">
-                        <span>
-                          <Icon name="phone-portrait" size={13} />
-                          <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-                            {phone(o.buyer_phone)}
-                          </Link>
-                        </span>
-                        <span>
-                          <Icon name="storefront" size={13} />
-                          {o.stores?.name ?? 'Unknown store'}
-                        </span>
-                        <span>
-                          <Icon name="time" size={13} />
-                          {timeAgo(o.ordered_at)}
-                        </span>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(2, c.share)}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Top products</CardTitle>
+            <CardDescription>By revenue, last {range} days.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : topProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No products logged yet.</p>
+            ) : (
+              <ol className="m-0 list-none divide-y divide-border p-0">
+                {topProducts.slice(0, 7).map((p, i) => (
+                  <li key={p.name} className="flex items-center gap-3 py-3">
+                    <span className="w-5 text-xs font-medium text-muted-foreground tabular-nums">{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {p.orders} order{p.orders === 1 ? '' : 's'} · {p.share}% of sales
                       </div>
                     </div>
-                    <strong className="activity-amount">
-                      <CountUpNumber prefix="PKR " value={o.price ?? 0} />
-                      {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
-                    </strong>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                    <span className="text-sm font-medium tabular-nums">{money(p.revenue)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </CardContent>
         </Card>
-        </Reveal>
-      </section>
+      </div>
+
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b py-5">
+          <CardTitle>Recent activity</CardTitle>
+          <CardDescription>The latest orders and how they ended up.</CardDescription>
+          <div data-slot="card-action" className="col-start-2 row-span-2 row-start-1 self-start justify-self-end">
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link to="/orders/pending">
+                View outcomes <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
+        </CardHeader>
+        {loading ? (
+          <div className="space-y-3 p-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+            {isAdmin ? 'No orders in the network yet.' : 'No orders yet.'}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="ps-6">Buyer</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead className="hidden md:table-cell">Store</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-end">Amount</TableHead>
+                <TableHead className="pe-6 text-end">When</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recent.map((o) => (
+                <TableRow key={o.id}>
+                  <TableCell className="ps-6">
+                    <Link
+                      to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+                      className="font-mono text-[13px] text-primary hover:underline"
+                    >
+                      {phone(o.buyer_phone)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="max-w-56 truncate">{o.product_name || o.product_category || 'Untitled product'}</TableCell>
+                  <TableCell className="hidden text-muted-foreground md:table-cell">{o.stores?.name ?? 'Unknown store'}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={o.outcomes?.status ?? 'pending'} />
+                  </TableCell>
+                  <TableCell className="text-end tabular-nums">{money((o.price ?? 0) * (o.quantity ?? 1))}</TableCell>
+                  <TableCell className="pe-6 text-end text-muted-foreground">{timeAgo(o.ordered_at)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   )
 }
