@@ -8,10 +8,17 @@ import type { CityStat } from '../../lib/storeStats'
 // CARTO's free anonymous basemap tiles now require signing up for an API key
 // (watermarked "API KEY REQUIRED" without one). Esri's dark-gray canvas tiles
 // are free with no key/signup needed and give the same dark aesthetic.
-const TILE_URL =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
-const LABELS_URL =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas'
+const TILES = {
+  dark: {
+    base: `${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    labels: `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
+  },
+  light: {
+    base: `${ESRI}/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    labels: `${ESRI}/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
+  },
+}
 
 interface CityMapProps {
   cities: CityStat[]
@@ -33,11 +40,13 @@ export function CityMap({ cities, height = 280 }: CityMapProps) {
     })
     mapRef.current = map
     L.control.zoom({ position: 'bottomright' }).addTo(map)
-    L.tileLayer(TILE_URL, {
+    // The picture follows the app theme (chosen when the map is created).
+    const tiles = document.documentElement.dataset.theme === 'dark' ? TILES.dark : TILES.light
+    L.tileLayer(tiles.base, {
       maxZoom: 16,
       attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
     }).addTo(map)
-    L.tileLayer(LABELS_URL, { maxZoom: 16 }).addTo(map)
+    L.tileLayer(tiles.labels, { maxZoom: 16 }).addTo(map)
 
     const coords = cities
       .map((c) => cityLonLat(c.city))
