@@ -91,10 +91,19 @@ create index chat_messages_chat_id_idx on chat_messages (chat_id, created_at);
 
 -- ============================================================
 -- Rule-based risk score (v0)
+--
+-- PRIVACY: recompute_buyer() and both of its triggers are SECURITY DEFINER.
+-- They write `buyers` from a trigger on orders/outcomes, and after the
+-- buyer-privacy release `authenticated` has no update policy or grant on
+-- buyers — an INVOKER version would be silently blocked, so logging an order
+-- through the web app would stop updating risk scores. NEVER let a rewrite of
+-- this file drop the SECURITY DEFINER marker.
 -- ============================================================
 create or replace function recompute_buyer(p_phone text)
 returns buyers
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   b buyers%rowtype;
@@ -182,6 +191,8 @@ $$;
 create or replace function on_order_change()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 begin
   perform recompute_buyer(new.buyer_phone);
@@ -192,6 +203,8 @@ $$;
 create or replace function on_outcome_change()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_phone text;
@@ -258,5 +271,12 @@ create policy "demo anon lookups" on lookups for all to anon using (true) with c
 create policy "demo anon chats" on chats for all to anon using (true) with check (true);
 create policy "demo anon chat_messages" on chat_messages for all to anon using (true) with check (true);
 
-grant execute on function recompute_buyer(text) to anon;
-grant execute on function find_similar_buyers(vector, int) to anon;
+-- PRIVACY: recompute_buyer returns a whole `buyers` row (embedding included)
+-- and runs as the function owner, so it is NOT executable by anon or
+-- authenticated — only the trigger pipeline calls it. find_similar_buyers used
+-- to be granted to anon as well and is dead code: buyer-privacy-stage-c.sql
+-- revokes every overload of it. Re-running this file re-opens the demo anon
+-- policies above, so never re-run it after the privacy release (see
+-- RUNBOOK-PRIVACY.md).
+revoke all on function recompute_buyer(text) from public, anon, authenticated;
+revoke all on function find_similar_buyers(vector, int) from public, anon, authenticated;

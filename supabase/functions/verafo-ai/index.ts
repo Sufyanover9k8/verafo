@@ -1,4 +1,4 @@
-import { createClient } from "jsr:@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2.49.4";
 import OpenAI from "jsr:@openai/openai";
 
 const corsHeaders = {
@@ -166,9 +166,27 @@ function summarizeArgs(args: Record<string, unknown>): string {
     .join(", ");
 }
 
+/** Tool results are structurally dynamic, so this view names the handful of
+ *  fields summarizeTool reads. Everything is optional: a tool may return an
+ *  array, an error object, or a different shape entirely. */
+interface ToolResultView {
+  error?: unknown
+  count?: unknown
+  noData?: unknown
+  title?: unknown
+  rows?: unknown
+  summary?: string
+  city?: unknown
+  total_buyers?: unknown
+  buyers_with_order_above?: unknown
+  total_refused?: unknown
+  recommendation?: unknown
+  buyers?: unknown
+  totals?: { orders?: unknown; buyers?: unknown }
+}
 function summarizeTool(name: string, result: unknown): string {
-  const r = result as any;
-  if (r && typeof r === "object" && "error" in r) return "failed";
+  if (result && typeof result === "object" && "error" in result) return "failed";
+  const r = result as ToolResultView;
   switch (name) {
     case "search_orders":
       return `${r?.count ?? 0} orders found`;
@@ -205,7 +223,7 @@ function summarizeTool(name: string, result: unknown): string {
     case "buyer_verdict":
       return `recommendation: ${r?.recommendation ?? "?"}`;
     case "search_buyers":
-      return `${Array.isArray(r) ? r.length : 0} buyers`;
+      return `${Array.isArray(r?.buyers) ? r.buyers.length : 0} buyers`;
     case "create_file":
       if (r && r.noData) return "no matching data - file skipped";
       return `file ready: "${r?.title ?? "?"}" (${Array.isArray(r?.rows) ? r.rows.length : 0} rows)`;
@@ -294,26 +312,201 @@ function buildSummaryText(s: SummaryInput): string {
   return parts.join(" ");
 }
 
+/**
+ * Row shapes for the tables this function reads.
+ *
+ * The Supabase client is created without a generated schema, so a `.select()`
+ * returns `unknown` for every column and the embedded `outcomes` relation is
+ * not resolvable at all. Rather than sprinkle `any` casts (which would hide
+ * real mistakes), these interfaces describe the columns each query actually
+ * asks for, and `asRows` / `asOne` narrow the result through them.
+ *
+ * They are the contract for what the database returns. If a column is renamed
+ * the interface changes here and every use site is checked.
+ */
+interface BuyerRow {
+  phone: string
+  first_seen: string | null
+  total_orders: number | null
+  total_accepted: number | null
+  total_refused: number | null
+  risk_score: number | null
+}
+
+/** Minimal buyer shape for feature-vector work. `city` does not exist on the
+ *  buyers table (buyer location lives on orders), so it is intentionally absent. */
+interface BuyerIdentityRow {
+  phone: string
+  first_seen: string | null
+  total_accepted: number | null
+}
+
+/** `outcomes` is embedded in an order select. PostgREST returns a to-one
+ *  relation as an object, but the untyped client models it as an array, so
+ *  both shapes have to be handled. */
+type Embedded<T> = T | T[] | null
+
+interface OutcomeEmbed {
+  status: string | null
+  refusal_reason?: string | null
+  resolved_at?: string | null
+}
+
+interface OrderRow {
+  id?: string
+  buyer_phone?: string | null
+  store_id?: string | null
+  product_name?: string | null
+  product_category?: string | null
+  price?: number | null
+  quantity?: number | null
+  city?: string | null
+  address?: string | null
+  ordered_at?: string | null
+  outcomes?: Embedded<OutcomeEmbed>
+}
+
+/** Minimal store shape for id -> display-name lookups. */
+interface StoreRow {
+  id: string
+  name: string | null
+}
+
+/** `verafo_normalize_phone` / phone columns are text, but a lookup may match
+ *  several spellings of the same subscriber number. */
+interface BuyerIdRow {
+  id: string
+}
+
+/** One row of `verafo_aggregate_stats(p_dimension, p_days)`.
+ *  `buyers` is a COUNT - the function never returns a number. */
+interface AggregateStatsRow {
+  bucket: string | null
+  orders: number | null
+  buyers: number | null
+  value: number | null
+  accepted: number | null
+  refused: number | null
+  pending: number | null
+  refusal_rate: number | null
+}
+
+/** One row of `verafo_buyer_ranking(...)`. `buyer_label` is masked
+ *  (`'····' || right(phone, 4)`) - the full number never leaves Postgres. */
+interface BuyerRankingRow {
+  rank: number | null
+  buyer_label: string | null
+  orders: number | null
+  accepted: number | null
+  refused: number | null
+  value: number | null
+  risk_score: number | null
+  store_count: number | null
+}
+
+/** One row of `similar_buyers_by_phone(phone, limit)`. Returns no identity and
+ *  no vector - similarity and aggregate counts only. */
+interface SimilarBuyerRow {
+  similarity: number | null
+  risk_score: number | null
+  total_orders: number | null
+  total_refused: number | null
+}
+
+/** A `buyers` row limited to the columns the edge function actually selects. */
+interface BuyerSearchRow {
+  phone: string
+  risk_score: number | null
+  total_orders: number | null
+  total_accepted: number | null
+  total_refused: number | null
+}
+
+/** A `buyers` row carrying an embedding, for the buyer-map feature. */
+interface BuyerEmbeddingRow {
+  phone: string
+  risk_score: number | null
+  total_orders: number | null
+  total_accepted: number | null
+  total_refused: number | null
+  embedding: number[] | null
+}
+
+/** One plotted point in the buyer map (classical-MDS projection). */
+interface BuyerMapPoint {
+  phone: string
+  risk: number
+  orders: number
+  refused: number
+  spend: number
+  avgOrderValue: number
+  x: number
+  y: number
+  z: number
+  radius: number
+}
+
+/** Unwrap a to-one embed that the untyped client may return as an array. */
+function embedOne<T>(v: Embedded<T>): T | null {
+  if (v == null) return null
+  return Array.isArray(v) ? (v[0] ?? null) : v
+}
+
+/** Narrow an untyped Supabase result to a declared row shape. */
+function asRows<T>(data: unknown): T[] {
+  return Array.isArray(data) ? (data as T[]) : []
+}
+
+function asOne<T>(data: unknown): T | null {
+  return data && typeof data === "object" && !Array.isArray(data) ? (data as T) : null
+}
+
+/** The client type used throughout. The schema is not generated, so the
+ *  database generic is `unknown` and the schema name stays `"public"`. */
+type Db = SupabaseClient<any, "public", any>
+
+/** The tool shape OpenAI expects. Declared locally so the array literal
+ *  narrows `type` to the literal "function" instead of widening to string. */
+interface ChatCompletionTool {
+  type: "function"
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+/**
+ * Aggregate stats for one buyer phone.
+ *
+ * The buyer row itself is deliberately network-wide aggregate data (this is what
+ * makes "look up any phone you already know" work, including buyers who never
+ * ordered from your store). Order-level rows are private, so every order read is
+ * filtered to the caller's own stores.
+ */
 async function fetchStats(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   phone: string,
+  storeIds: string[] = [],
 ): Promise<SummaryInput> {
-  const { data: buyer, error: bErr } = await supabase
+  const { data: buyerData, error: bErr } = await supabase
     .from("buyers")
-    .select("*")
+    .select("phone, first_seen, total_orders, total_accepted, total_refused, risk_score")
     .eq("phone", phone)
     .maybeSingle();
   if (bErr) throw new Error(bErr.message);
+  const buyer = asOne<BuyerRow>(buyerData);
   if (!buyer) throw new Error("Buyer not found");
 
-  const { data: orders, error: oErr } = await supabase
+  const { data: orderData, error: oErr } = await supabase
     .from("orders")
     .select("store_id, product_category, price, quantity, city, ordered_at, outcomes(status)")
     .eq("buyer_phone", phone)
+    .in("store_id", storeIds)
     .order("ordered_at", { ascending: false });
   if (oErr) throw new Error(oErr.message);
 
-  const rows = orders ?? [];
+  const rows = asRows<OrderRow>(orderData);
   const categoryCount = new Map<string, number>();
   const cities = new Set<string>();
   let evening = 0;
@@ -347,9 +540,9 @@ async function fetchStats(
   return {
     phone,
     risk_score: Number(buyer.risk_score ?? 0.5),
-    total_orders: buyer.total_orders,
-    total_accepted: buyer.total_accepted,
-    total_refused: buyer.total_refused,
+    total_orders: Number(buyer.total_orders ?? 0),
+    total_accepted: Number(buyer.total_accepted ?? 0),
+    total_refused: Number(buyer.total_refused ?? 0),
     stores: new Set(rows.map((o) => o.store_id)).size,
     categories: [...categoryCount.entries()].sort((a, b) => b[1] - a[1]),
     avg_order_value: priceCount > 0 ? priceSum / priceCount : null,
@@ -403,17 +596,27 @@ function sinCos(value: number, period: number): [number, number] {
   return [Math.sin(rad), Math.cos(rad)];
 }
 
+/**
+ * Feature vector for one buyer phone.
+ *
+ * `embedding` and `feature_vector` are never read here (they would be large and
+ * pointless to pull over the wire), and order rows are filtered to the caller's
+ * own stores because order-level detail is private.
+ */
 async function buildFeatureVector(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   phone: string,
+  storeIds: string[] = [],
 ): Promise<FeatureVector> {
   const { data: buyer, error: bErr } = await supabase
     .from("buyers")
-    .select("*")
+    .select("phone, first_seen, total_accepted")
     .eq("phone", phone)
     .maybeSingle();
   if (bErr) throw new Error(bErr.message);
   if (!buyer) throw new Error("Buyer not found");
+  const buyerIdentity = asOne<BuyerIdentityRow>(buyer);
+  if (!buyerIdentity) throw new Error("Buyer not found");
 
   const { data: orders, error: oErr } = await supabase
     .from("orders")
@@ -421,12 +624,13 @@ async function buildFeatureVector(
       "store_id, product_category, product_name, price, quantity, address, city, ordered_at, outcomes(status)",
     )
     .eq("buyer_phone", phone)
+    .in("store_id", storeIds)
     .order("ordered_at", { ascending: true });
   if (oErr) throw new Error(oErr.message);
 
-  const rows = orders ?? [];
-  const resolved = rows.filter((o) => o.outcomes?.status === "accepted");
-  const refused = rows.filter((o) => o.outcomes?.status === "refused");
+  const rows = asRows<OrderRow>(orders);
+  const resolved = rows.filter((o) => embedOne(o.outcomes)?.status === "accepted");
+  const refused = rows.filter((o) => embedOne(o.outcomes)?.status === "refused");
   const last = rows[rows.length - 1];
 
   const categoryCount = new Map<string, number>();
@@ -450,11 +654,11 @@ async function buildFeatureVector(
 
   const total = rows.length;
   const dominant = [...categoryCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown";
-  const latestCity = last?.city ?? buyer.city ?? "";
+  const latestCity = last?.city ?? "";
   const avgQty = total > 0 ? qtySum / total : 1;
   const avgValue = priceCount > 0 ? priceSum / priceCount : 0;
-  const phoneAgeDays = buyer.first_seen
-    ? Math.max(0, (Date.now() - new Date(buyer.first_seen).getTime()) / 86400000)
+  const phoneAgeDays = buyerIdentity.first_seen
+    ? Math.max(0, (Date.now() - new Date(buyerIdentity.first_seen).getTime()) / 86400000)
     : 0;
   const distinctStores = new Set(rows.map((o) => o.store_id)).size;
 
@@ -495,7 +699,7 @@ async function buildFeatureVector(
 
   // GROUP E — outcomes
   push("refusal_rate", total > 0 ? refused.length / total : 0.5);
-  push("acceptance_count_norm", normalize(Number(buyer.total_accepted ?? 0), 0, 20));
+  push("acceptance_count_norm", normalize(Number(buyerIdentity.total_accepted ?? 0), 0, 20));
 
   // GROUP F — location
   for (const c of FEATURE_CITIES) {
@@ -512,7 +716,7 @@ async function buildFeatureVector(
 }
 
 async function listChatHistory(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   chatId: string,
 ): Promise<{ role: string; content: string }[]> {
   const { data, error } = await supabase
@@ -522,7 +726,12 @@ async function listChatHistory(
     .order("created_at", { ascending: true })
     .limit(30);
   if (error) throw new Error(error.message);
-  return (data ?? []).filter((m) => m.role !== "system");
+  // System rows are internal and are never replayed to the model as history.
+  return asRows<{ role: string | null; content: string | null }>(data)
+    .filter((m): m is { role: string; content: string | null } =>
+      typeof m.role === "string" && m.role !== "system"
+    )
+    .map((m) => ({ role: m.role, content: m.content ?? "" }));
 }
 
 interface ChartDatasetSpec {
@@ -662,7 +871,78 @@ function shortMoney(n: number): string {
   return n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n));
 }
 
+/**
+ * PRIVACY: verify who is calling, and find the stores they own.
+ *
+ * This function uses the SERVICE ROLE key, so it bypasses RLS entirely.
+ * Nothing here can rely on RLS to keep merchants apart — every private read
+ * must be scoped explicitly to the ids this function returns.
+ *
+ * The JWT is verified against Supabase Auth first; without that, anyone
+ * holding the anon key could send a made-up Authorization header and be
+ * treated as a real merchant.
+ *
+ * Returns [] when the caller is not authenticated or owns nothing. Callers
+ * MUST treat [] as "deny", never as "no filter".
+ */
+async function authorizeCaller(req: Request): Promise<{ email: string; storeIds: string[] }> {
+  const header = req.headers.get("authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return { email: "", storeIds: [] };
+
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  let email = "";
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anon || service, Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { email: "", storeIds: [] };
+    const user = await res.json();
+    email = String(user?.email ?? "").toLowerCase();
+  } catch {
+    return { email: "", storeIds: [] };
+  }
+  if (!email) return { email: "", storeIds: [] };
+
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/stores?select=id&owner_email=eq.${encodeURIComponent(email)}`,
+      { headers: { apikey: service, Authorization: `Bearer ${service}` } },
+    );
+    if (!res.ok) return { email, storeIds: [] };
+    const rows: unknown = await res.json();
+    return { email, storeIds: asRows<BuyerIdRow>(rows).map((r) => String(r.id)) };
+  } catch {
+    return { email, storeIds: [] };
+  }
+}
+
+/**
+ * PRIVACY BACKSTOP.
+ *
+ * This function runs on the service role, so RLS cannot keep merchants
+ * apart. `orders` is private data (R2/R5 in VERAFO-STATUS.md), so any query
+ * against it that is not scoped with a store_id filter is a bug. This throws
+ * instead of quietly returning the whole network.
+ *
+ * A hard failure rather than a silent empty result is deliberate: a leak
+ * that throws is found immediately, a leak that returns [] looks like "no
+ * data" and can survive for months.
+ *
+ * Tools that need network-wide AGGREGATE figures must not read `orders`
+ * raw - they should use an aggregate RPC.
+ */
+const PRIVATE_TABLES = new Set(["orders"]);
+
 async function fetchRows<T = any>(table: string, params: string): Promise<T[]> {
+  if (PRIVATE_TABLES.has(table) && !params.includes("store_id=")) {
+    throw new Error(
+      `refusing an unscoped ${table} query: private data must be filtered to the caller's stores`,
+    );
+  }
   const url = `${Deno.env.get("SUPABASE_URL")}/rest/v1/${table}?${params}`;
   const res = await fetch(url, {
     headers: {
@@ -687,7 +967,11 @@ async function buildChartData(
     days?: number;
   },
   phone?: string,
+  storeIds: string[] = [],
 ): Promise<ChartSpec | null> {
+  // PRIVACY: charts are built from the caller's own orders only. The
+  // fetchRows backstop would refuse anything wider.
+  const chartScope = storeIdFilter(storeIds);
   const rawType = String(spec.chart_type ?? "bar").toLowerCase();
   const dimension = DIMENSION_ALIASES[String(spec.dimension ?? "category").toLowerCase()] ?? "category";
   const rawMetrics = Array.isArray(spec.metrics) && spec.metrics.length > 0 ? spec.metrics : [spec.metric ?? "orders"];
@@ -709,10 +993,10 @@ async function buildChartData(
   };
 
   if (dimension === "risk_bucket") {
-    const buyers = await fetchRows("buyers", "select=risk_score");
+    const buyers = await fetchRows<BuyerRow>("buyers", "select=risk_score");
     const buckets = { safe: 0, caution: 0, high: 0 };
     for (const b of buyers) {
-      const r = Number((b as any).risk_score);
+      const r = Number(b.risk_score);
       if (r < 0.45) buckets.safe++;
       else if (r <= 0.65) buckets.caution++;
       else buckets.high++;
@@ -728,23 +1012,24 @@ async function buildChartData(
 
   if (rawType === "scatter") {
     const [buyers, orders] = await Promise.all([
-      fetchRows("buyers", "select=phone,risk_score,total_orders"),
-      fetchRows("orders", orderParams("buyer_phone,price,ordered_at")),
+      fetchRows<BuyerRow>("buyers", "select=phone,risk_score,total_orders"),
+      fetchRows<OrderRow>("orders", `${orderParams("buyer_phone,price,ordered_at")}${chartScope}`),
     ]);
     const spendMap = new Map<string, number>();
     for (const o of orders) {
-      if ((o as any).price != null) {
-        spendMap.set(String((o as any).buyer_phone), (spendMap.get(String((o as any).buyer_phone)) ?? 0) + Number((o as any).price));
+      if (o.price != null) {
+        const key = String(o.buyer_phone);
+        spendMap.set(key, (spendMap.get(key) ?? 0) + Number(o.price));
       }
     }
     const pts = buyers
-      .filter((b) => Number((b as any).total_orders) > 0)
-      .filter((b) => !phone || String((b as any).phone) === phone)
+      .filter((b) => Number(b.total_orders) > 0)
+      .filter((b) => !phone || String(b.phone) === phone)
       .map((b) => ({
-        name: String((b as any).phone),
-        risk: Number((b as any).risk_score),
-        orders: Number((b as any).total_orders),
-        spend: Math.round(spendMap.get(String((b as any).phone)) ?? 0),
+        name: String(b.phone),
+        risk: Number(b.risk_score),
+        orders: Number(b.total_orders),
+        spend: Math.round(spendMap.get(String(b.phone)) ?? 0),
       }))
       .sort((a, b) => b.orders - a.orders)
       .slice(0, 40);
@@ -762,9 +1047,9 @@ async function buildChartData(
   }
 
   if (rawType === "histogram") {
-    const orders = await fetchRows("orders", orderParams("price,ordered_at"));
+    const orders = await fetchRows<OrderRow>("orders", `${orderParams("price,ordered_at")}${chartScope}`);
     const prices = orders
-      .map((o) => Number((o as any).price))
+      .map((o) => Number(o.price))
       .filter((p) => p > 0 && !Number.isNaN(p));
     if (prices.length === 0) return null;
     const max = Math.max(...prices);
@@ -786,14 +1071,20 @@ async function buildChartData(
     };
   }
 
-  const rows = await fetchRows("orders", orderParams("product_category,price,store_id,ordered_at,buyer_phone,city,outcomes(status)"));
+  const rows = await fetchRows<OrderRow>(
+    "orders",
+    `${orderParams("product_category,price,store_id,ordered_at,buyer_phone,city,outcomes(status)")}${chartScope}`,
+  );
 
-  const keyFn = (o: any): string => {
+  const keyFn = (o: OrderRow): string | null => {
     if (dimension === "category") return String(o.product_category ?? "unknown");
     if (dimension === "store") return o.store_id ? String(o.store_id) : "unknown";
     if (dimension === "buyer") return String(o.buyer_phone);
     if (dimension === "city") return String(o.city ?? "unknown");
     if (dimension === "week") {
+      // A row with no order date cannot be placed in a week. Returning null
+      // makes the caller skip it instead of bucketing it as "Invalid Date".
+      if (!o.ordered_at) return null;
       const d = new Date(o.ordered_at);
       const day = d.getDay();
       const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (day === 0 ? 6 : day - 1));
@@ -805,6 +1096,7 @@ async function buildChartData(
   const groups = new Map<string, { total: number; accepted: number; refused: number; spend: number }>();
   for (const o of rows) {
     const k = keyFn(o);
+    if (k === null) continue; // undated row: skipped, never bucketed
     const g = groups.get(k) ?? { total: 0, accepted: 0, refused: 0, spend: 0 };
     g.total++;
     const oc = o.outcomes;
@@ -826,8 +1118,8 @@ async function buildChartData(
   let entries = [...groups.entries()].map(([label, g]) => ({ label, g }));
 
   if (dimension === "store") {
-    const stores = await fetchRows("stores", "select=id,name");
-    const names = new Map(stores.map((s) => [String((s as any).id), String((s as any).name)]));
+    const stores = await fetchRows<StoreRow>("stores", "select=id,name");
+    const names = new Map(stores.map((s) => [String(s.id), String(s.name)]));
     entries = entries.map((e) => ({ ...e, label: names.get(e.label) ?? e.label }));
   }
 
@@ -864,12 +1156,12 @@ async function buildChartData(
   };
 }
 
-function orderOutcome(o: any): string {
-  const oc = o.outcomes;
-  return Array.isArray(oc) ? oc[0]?.status ?? "pending" : oc?.status ?? "pending";
+function orderOutcome(o: OrderRow): string {
+  return embedOne(o.outcomes)?.status ?? "pending";
 }
 
-function buildOrderParams(f: {
+/** Filters accepted by `buildOrderParams`. */
+interface OrderQueryFilters {
   keyword?: string;
   category?: string;
   city?: string;
@@ -878,7 +1170,47 @@ function buildOrderParams(f: {
   phone?: string;
   limit?: number;
   days?: number;
-}): string {
+}
+
+/** Read one optional string off a tool-argument bag. */
+function argString(args: Record<string, unknown>, key: string): string {
+  const v = args[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/** Read one optional number off a tool-argument bag. Returns undefined rather
+ *  than NaN so callers can test with a single `!= null` check. */
+function argNumber(args: Record<string, unknown>, key: string): number | undefined {
+  const v = args[key];
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Narrow a raw tool-argument bag into order filters.
+ *
+ * Tool arguments arrive from the model as `unknown`, so every field is checked
+ * before use. Values are consumed with `??` at the call sites, so an explicit
+ * `undefined` is equivalent to an absent field.
+ */
+function orderFiltersFromArgs(args: Record<string, unknown>): OrderQueryFilters {
+  return {
+    keyword: argString(args, "keyword") || undefined,
+    category: argString(args, "category") || undefined,
+    city: argString(args, "city") || undefined,
+    min_price: argNumber(args, "min_price"),
+    max_price: argNumber(args, "max_price"),
+    phone: argString(args, "phone") || undefined,
+    limit: argNumber(args, "limit"),
+    days: argNumber(args, "days"),
+  };
+}
+
+function buildOrderParams(f: OrderQueryFilters): string {
   let p =
     "select=" +
     encodeURIComponent(
@@ -898,9 +1230,14 @@ function buildOrderParams(f: {
   return p;
 }
 
-async function toolSearchOrders(supabase: any, args: any) {
-  const rows = await fetchRows("orders", buildOrderParams(args));
-  const orders = rows.map((o: any) => ({
+async function toolSearchOrders(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+  const rows = await fetchRows<OrderRow>(
+    "orders",
+    `${buildOrderParams(orderFiltersFromArgs(args))}${storeIdFilter(storeIds)}`,
+  );
+  const orders = rows.map((o) => ({
     product: o.product_name ?? o.product_category ?? "?",
     category: o.product_category ?? "?",
     price: o.price ?? 0,
@@ -913,125 +1250,57 @@ async function toolSearchOrders(supabase: any, args: any) {
   return { count: orders.length, orders };
 }
 
-async function toolTopBuyers(supabase: any, args: any) {
+async function toolTopBuyers(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  // PRIVACY: this used to read the whole `buyers` table and return every
+  // buyer's PHONE NUMBER across the entire network. It now calls
+  // verafo_buyer_ranking, which ranks in the database and returns a MASKED
+  // label (last 4 digits) with aggregate counts. Ranking without identity is
+  // enough to answer "how many reliable buyers do I have, and what are they
+  // worth?", which is the question this tool exists for (R1, R4).
+  //
+  // SCOPE: the RPC now takes p_store_ids and ranks ONLY buyers of those
+  // stores - an empty list ranks nobody. So this tool requires an owned store
+  // like the other private tools, instead of silently returning an empty
+  // ranking for a caller who owns nothing.
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
   const limit = Math.max(1, Math.min(20, Number(args.limit) || 5));
   const metric = ["orders", "spend", "refusals", "risk"].includes(String(args.metric))
     ? String(args.metric)
     : "orders";
-  const city = String(args.city ?? "").trim();
-  const category = String(args.category ?? "").trim().toLowerCase();
-  const days = Number(args.days);
-  const minSpend = Number(args.min_price);
+  const days = Math.max(1, Math.min(365, Number(args.days) || 90));
 
-  const needsOrderAgg =
-    metric === "spend" || !!category || Number.isFinite(days) && days > 0 ||
-    Number.isFinite(minSpend) && minSpend > 0;
-
-  if (needsOrderAgg) {
-    let oParams =
-      "select=buyer_phone,price,product_category,ordered_at,outcomes(status)&limit=10000";
-    if (city) oParams += `&city=eq.${encodeURIComponent(city)}`;
-    if (category) oParams += `&product_category=eq.${encodeURIComponent(category)}`;
-    if (Number.isFinite(days) && days > 0) {
-      oParams += `&ordered_at=gte.${new Date(Date.now() - days * 86400000).toISOString()}`;
-    }
-    const rows = await fetchRows("orders", oParams);
-    const agg = new Map<string, { spend: number; orders: number; accepted: number; refused: number }>();
-    for (const o of rows) {
-      const phone = String((o as any).buyer_phone ?? "?");
-      const g = agg.get(phone) ?? { spend: 0, orders: 0, accepted: 0, refused: 0 };
-      g.spend += Number((o as any).price ?? 0);
-      g.orders++;
-      const st = orderOutcome(o);
-      if (st === "accepted") g.accepted++;
-      else if (st === "refused") g.refused++;
-      agg.set(phone, g);
-    }
-    const { data: buyers, error } = await supabase
-      .from("buyers")
-      .select("phone, risk_score, total_orders, total_accepted, total_refused");
-    if (error) throw new Error(error.message);
-    const risk = new Map((buyers ?? []).map((b) => [String(b.phone), b]));
-    let list = [...agg.entries()].map(([phone, g]) => {
-      const b = risk.get(phone) as any;
-      return {
-        phone,
-        risk_score: Number(b?.risk_score ?? 0.5),
-        orders: g.orders,
-        accepted: g.accepted,
-        refused: g.refused,
-        spend: Math.round(g.spend),
-      };
-    });
-    if (Number.isFinite(minSpend) && minSpend > 0) list = list.filter((b) => b.spend >= minSpend);
-    list.sort((a, b) =>
-      metric === "spend" ? b.spend - a.spend
-        : metric === "refusals" ? b.refused - a.refused
-          : metric === "risk" ? b.risk_score - a.risk_score
-            : b.orders - a.orders,
-    );
-    return list.slice(0, limit);
-  }
-
-  const { data, error } = await supabase
-    .from("buyers")
-    .select("phone, risk_score, total_orders, total_accepted, total_refused");
-  if (error) throw new Error(error.message);
-  let buyers = data ?? [];
-
-  if (city) {
-    const cityOrders = await fetchRows(
-      "orders",
-      `select=buyer_phone&city=eq.${encodeURIComponent(city)}&limit=5000`,
-    );
-    const inCity = new Set(cityOrders.map((o: any) => String(o.buyer_phone)));
-    buyers = buyers.filter((b) => inCity.has(String(b.phone)));
-  }
-
-  let spendMap = new Map<string, number>();
-  if (metric === "spend") {
-    let oParams = "select=buyer_phone,price&limit=10000";
-    if (city) oParams += `&city=eq.${encodeURIComponent(city)}`;
-    const rows = await fetchRows("orders", oParams);
-    spendMap = new Map<string, number>();
-    for (const o of rows) {
-      const phone = String((o as any).buyer_phone);
-      spendMap.set(phone, (spendMap.get(phone) ?? 0) + Number((o as any).price ?? 0));
-    }
-  }
-
-  const mapped = buyers.map((b: any) => {
-    const phone = String(b.phone);
-    const risk = Number(b.risk_score ?? 0);
-    return {
-      phone,
-      risk_score: risk,
-      orders: Number(b.total_orders ?? 0),
-      accepted: Number(b.total_accepted ?? 0),
-      refused: Number(b.total_refused ?? 0),
-      spend: Math.round(spendMap.get(phone) ?? 0),
-    };
+  const { data, error } = await supabase.rpc("verafo_buyer_ranking", {
+    p_store_ids: storeIds,
+    p_metric: metric,
+    p_limit: limit,
+    p_days: days,
   });
+  if (error) return { error: error.message };
 
-  const sorted = mapped
-    .filter((b: any) => (metric === "spend" ? b.spend > 0 : metric === "refusals" ? b.refused > 0 : true))
-    .sort((a: any, b: any) =>
-      metric === "spend" ? b.spend - a.spend
-        : metric === "refusals" ? b.refused - a.refused
-          : metric === "risk" ? b.risk_score - a.risk_score
-            : b.orders - a.orders,
-    )
-    .slice(0, limit);
-
-  return sorted;
+  return asRows<BuyerRankingRow>(data).map((r) => ({
+    rank: Number(r.rank),
+    buyer: String(r.buyer_label ?? "····"),
+    orders: Number(r.orders ?? 0),
+    accepted: Number(r.accepted ?? 0),
+    refused: Number(r.refused ?? 0),
+    value: Math.round(Number(r.value ?? 0)),
+    risk_score: r.risk_score == null ? null : Number(r.risk_score),
+    store_count: Number(r.store_count ?? 0),
+  }));
 }
 
-async function toolBuyersByCity(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  const minPrice = Number(args.min_price);
-  const category = String(args.category ?? "").trim().toLowerCase();
-  const days = Number(args.days);
-  const rows = await fetchRows("orders", buildOrderParams({ city, limit: 2000, days }));
+async function toolBuyersByCity(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+  const city = argString(args, "city");
+  const minPrice = argNumber(args, "min_price");
+  const category = argString(args, "category").toLowerCase();
+  const days = argNumber(args, "days");
+  const rows = await fetchRows<OrderRow>(
+    "orders",
+    `${buildOrderParams({ city, limit: 2000, days })}${storeIdFilter(storeIds)}`,
+  );
   const buyers = new Map<string, { count: number; max: number; spend: number }>();
   for (const o of rows) {
     if (category && String(o.product_category ?? "").toLowerCase() !== category) continue;
@@ -1049,10 +1318,10 @@ async function toolBuyersByCity(supabase: any, args: any) {
     max_order: g.max,
     total_spend: g.spend,
   }));
-  const above =
-    Number.isFinite(minPrice) && minPrice > 0
-      ? list.filter((b) => b.max_order >= minPrice)
-      : null;
+  // `min_price` is optional: a missing or non-positive value means "no floor".
+  const floor =
+    minPrice != null && Number.isFinite(minPrice) && minPrice > 0 ? minPrice : 0;
+  const above = floor > 0 ? list.filter((b) => b.max_order >= floor) : null;
   return {
     city,
     ...(category ? { category: args.category } : {}),
@@ -1064,12 +1333,17 @@ async function toolBuyersByCity(supabase: any, args: any) {
   };
 }
 
-async function toolBuyerProfile(supabase: any, args: any) {
-  const phone = String(args.phone ?? "").trim();
+async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+  const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone);
-  const rows = await fetchRows("orders", buildOrderParams({ phone, limit: 50 }));
-  const orders = rows.map((o: any) => ({
+  const stats = await fetchStats(supabase, phone, storeIds);
+  const rows = await fetchRows<OrderRow>(
+    "orders",
+    `${buildOrderParams({ phone, limit: 50 })}${storeIdFilter(storeIds)}`,
+  );
+  const orders = rows.map((o) => ({
     product: o.product_name ?? o.product_category ?? "?",
     category: o.product_category ?? "?",
     price: o.price ?? 0,
@@ -1080,74 +1354,64 @@ async function toolBuyerProfile(supabase: any, args: any) {
   return { summary: buildSummaryText(stats), orders };
 }
 
-async function toolCityOverview(_supabase: any, _args: any) {
-  const rows = await fetchRows("orders", "select=city,price,buyer_phone,outcomes(status)&limit=10000");
-  const map = new Map<string, { orders: number; buyers: Set<string>; spend: number; accepted: number; refused: number; pending: number }>();
-  for (const o of rows) {
-    const c = String(o.city ?? "unknown");
-    const g = map.get(c) ?? { orders: 0, buyers: new Set<string>(), spend: 0, accepted: 0, refused: 0, pending: 0 };
-    g.orders++;
-    g.buyers.add(String(o.buyer_phone ?? "?"));
-    g.spend += Number(o.price ?? 0);
-    const st = orderOutcome(o);
-    if (st === "accepted") g.accepted++;
-    else if (st === "refused") g.refused++;
-    else g.pending++;
-    map.set(c, g);
-  }
-  return [...map.entries()]
-    .map(([city, g]) => ({
-      city,
-      orders: g.orders,
-      buyers: g.buyers.size,
-      accepted: g.accepted,
-      refused: g.refused,
-      pending: g.pending,
-      refusal_rate: g.orders > 0 ? Math.round((g.refused / g.orders) * 100) : 0,
-      spend: Math.round(g.spend),
+async function toolCityOverview(supabase: Db, _args: unknown, _storeIds: string[] = []) {
+  // PRIVACY: network-wide city statistics now come from verafo_aggregate_stats,
+  // which returns counts only. This used to read 10,000 raw order rows (with
+  // buyer phones) just to produce a count. Cross-store aggregate intelligence
+  // is an allowed feature (R1); raw order rows are not.
+  const { data, error } = await supabase.rpc("verafo_aggregate_stats", {
+    p_dimension: "city",
+    p_days: 90,
+  });
+  if (error) return { error: error.message };
+  return asRows<AggregateStatsRow>(data)
+    .map((r) => ({
+      city: r.bucket,
+      orders: Number(r.orders),
+      buyers: Number(r.buyers),
+      accepted: Number(r.accepted),
+      refused: Number(r.refused),
+      pending: Number(r.pending),
+      refusal_rate: r.refusal_rate == null ? null : Math.round(Number(r.refusal_rate) * 100),
+      spend: Math.round(Number(r.value)),
     }))
     .sort((a, b) => b.refused - a.refused);
 }
 
-async function toolCategoryOverview(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  let params = "select=product_category,price,outcomes(status)&limit=10000";
-  if (city) params += `&city=eq.${encodeURIComponent(city)}`;
-  const rows = await fetchRows("orders", params);
-  const map = new Map<string, { orders: number; accepted: number; refused: number; pending: number; spend: number }>();
-  for (const o of rows) {
-    const c = String(o.product_category ?? "unknown");
-    const g = map.get(c) ?? { orders: 0, accepted: 0, refused: 0, pending: 0, spend: 0 };
-    g.orders++;
-    const st = orderOutcome(o);
-    if (st === "accepted") g.accepted++;
-    else if (st === "refused") g.refused++;
-    else g.pending++;
-    g.spend += Number(o.price ?? 0);
-    map.set(c, g);
-  }
-  return [...map.entries()]
-    .map(([category, g]) => ({
-      category,
-      orders: g.orders,
-      accepted: g.accepted,
-      refused: g.refused,
-      pending: g.pending,
-      refusal_rate: g.orders > 0 ? Math.round((g.refused / g.orders) * 100) : 0,
-      avg_price: g.orders > 0 ? Math.round(g.spend / g.orders) : 0,
+async function toolCategoryOverview(supabase: Db, _args: unknown, _storeIds: string[] = []) {
+  // PRIVACY: aggregate rows only, computed in the database. See toolCityOverview.
+  const { data, error } = await supabase.rpc("verafo_aggregate_stats", {
+    p_dimension: "category",
+    p_days: 90,
+  });
+  if (error) return { error: error.message };
+  return asRows<AggregateStatsRow>(data)
+    .map((r) => ({
+      category: r.bucket,
+      orders: Number(r.orders),
+      accepted: Number(r.accepted),
+      refused: Number(r.refused),
+      pending: Number(r.pending),
+      refusal_rate: r.refusal_rate == null ? null : Math.round(Number(r.refusal_rate) * 100),
+      avg_price: Number(r.orders) > 0 ? Math.round(Number(r.value) / Number(r.orders)) : 0,
     }))
     .sort((a, b) => b.refused - a.refused);
 }
 
-async function toolStoreOverview(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  let oParams = "select=store_id,price,buyer_phone,outcomes(status)&limit=10000";
+async function toolStoreOverview(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+  const city = argString(args, "city");
+  // Scoped to the caller's own stores: this is a per-store breakdown, so an
+  // unscoped read would expose every merchant's order rows. requireOwnStores
+  // above guarantees the filter below is never the no-store sentinel.
+  let oParams = `select=store_id,price,buyer_phone,outcomes(status)&limit=10000${storeIdFilter(storeIds)}`;
   if (city) oParams += `&city=eq.${encodeURIComponent(city)}`;
   const [rows, stores] = await Promise.all([
-    fetchRows("orders", oParams),
-    fetchRows("stores", "select=id,name"),
+    fetchRows<OrderRow>("orders", oParams),
+    fetchRows<StoreRow>("stores", "select=id,name"),
   ]);
-  const names = new Map(stores.map((s) => [String((s as any).id), String((s as any).name)]));
+  const names = new Map(stores.map((s) => [String(s.id), String(s.name)]));
   const map = new Map<string, { orders: number; buyers: Set<string>; accepted: number; refused: number; pending: number; spend: number }>();
   for (const o of rows) {
     const id = String(o.store_id ?? "unknown");
@@ -1175,120 +1439,173 @@ async function toolStoreOverview(supabase: any, args: any) {
     .sort((a, b) => b.orders - a.orders);
 }
 
-async function toolTopProducts(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  const category = String(args.category ?? "").trim().toLowerCase();
-  const limit = Math.max(1, Math.min(20, Number(args.limit) || 10));
-  let params = "select=product_name,product_category,price,city,outcomes(status)&limit=10000";
-  if (city) params += `&city=eq.${encodeURIComponent(city)}`;
-  if (category) params += `&product_category=eq.${encodeURIComponent(category)}`;
-  const rows = await fetchRows("orders", params);
-  const map = new Map<string, { category: string; orders: number; accepted: number; refused: number; spend: number }>();
-  for (const o of rows) {
-    const name = String(o.product_name ?? o.product_category ?? "unknown");
-    const g = map.get(name) ?? { category: String(o.product_category ?? "?"), orders: 0, accepted: 0, refused: 0, spend: 0 };
-    g.orders++;
-    g.spend += Number(o.price ?? 0);
-    const st = orderOutcome(o);
-    if (st === "accepted") g.accepted++;
-    else if (st === "refused") g.refused++;
-    map.set(name, g);
-  }
-  return [...map.entries()]
-    .map(([product, g]) => ({
-      product,
-      category: g.category,
-      orders: g.orders,
-      accepted: g.accepted,
-      refused: g.refused,
-      refusal_rate: g.orders > 0 ? Math.round((g.refused / g.orders) * 100) : 0,
-      spend: Math.round(g.spend),
-      avg_price: g.orders > 0 ? Math.round(g.spend / g.orders) : 0,
-    }))
-    .sort((a, b) => b.orders - a.orders)
-    .slice(0, limit);
+async function toolTopProducts(supabase: Db, args: Record<string, unknown>, _storeIds: string[] = []) {
+  // PRIVACY: aggregate rows only, computed in the database.
+  const limit = Math.max(1, Math.min(20, argNumber(args, "limit") ?? 10));
+  const { data, error } = await supabase.rpc("verafo_aggregate_stats", {
+    p_dimension: "product",
+    p_days: Math.max(1, Math.min(365, argNumber(args, "days") ?? 90)),
+  });
+  if (error) return { error: error.message };
+  return asRows<AggregateStatsRow>(data).slice(0, limit).map((r) => ({
+    product: r.bucket,
+    orders: Number(r.orders),
+    value: Math.round(Number(r.value)),
+    refused: Number(r.refused),
+    refusal_rate: r.refusal_rate == null ? null : Math.round(Number(r.refusal_rate) * 100),
+  }));
 }
 
-async function toolNetworkOverview(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  const [buyers, orders] = await Promise.all([
-    fetchRows("buyers", "select=risk_score,total_orders"),
-    fetchRows("orders", "select=price,product_category,outcomes(status)&limit=10000"),
+async function toolNetworkOverview(supabase: Db, _args: unknown, _storeIds: string[] = []) {
+  // PRIVACY: this used to read 10,000 raw order rows and the whole `buyers`
+  // table to produce totals. Both are aggregates, so they now come from the
+  // database. `storeIds` was also referenced here without being defined - a
+  // real bug that this rewrite removes.
+  const [catRes, cityRes] = await Promise.all([
+    supabase.rpc("verafo_aggregate_stats", { p_dimension: "category", p_days: 90 }),
+    supabase.rpc("verafo_aggregate_stats", { p_dimension: "city", p_days: 90 }),
   ]);
-  let accepted = 0, refused = 0, pending = 0, spend = 0;
-  const catCount = new Map<string, number>();
-  const catRefused = new Map<string, number>();
-  for (const o of orders) {
-    if (city && String(o.city ?? "") !== city) continue;
-    const st = orderOutcome(o);
-    if (st === "accepted") accepted++;
-    else if (st === "refused") refused++;
-    else pending++;
-    spend += Number(o.price ?? 0);
-    const c = String(o.product_category ?? "unknown");
-    catCount.set(c, (catCount.get(c) ?? 0) + 1);
-    if (st === "refused") catRefused.set(c, (catRefused.get(c) ?? 0) + 1);
-  }
+  if (catRes.error) return { error: catRes.error.message };
+  if (cityRes.error) return { error: cityRes.error.message };
+
+  type Agg = {
+    bucket: string;
+    orders: number;
+    buyers: number;
+    value: number;
+    accepted: number;
+    refused: number;
+    pending: number;
+    refusal_rate: number | null;
+  };
+  const toAgg = (r: AggregateStatsRow): Agg => ({
+    bucket: r.bucket ?? "unknown",
+    orders: Number(r.orders ?? 0),
+    buyers: Number(r.buyers ?? 0),
+    value: Number(r.value ?? 0),
+    accepted: Number(r.accepted ?? 0),
+    refused: Number(r.refused ?? 0),
+    pending: Number(r.pending ?? 0),
+    refusal_rate: r.refusal_rate == null ? null : Number(r.refusal_rate),
+  });
+  const cats = asRows<AggregateStatsRow>(catRes.data).map(toAgg);
+  const cities = asRows<AggregateStatsRow>(cityRes.data).map(toAgg);
+
+  const sum = (rows: Agg[], key: keyof Agg): number =>
+    rows.reduce((acc, r) => acc + Number(r[key] ?? 0), 0);
+
+  const accepted = sum(cats, "accepted");
+  const refused = sum(cats, "refused");
+  const pending = sum(cats, "pending");
+  const spend = Math.round(sum(cats, "value"));
   const total = accepted + refused + pending;
-  const safe = buyers.filter((b) => Number((b as any).risk_score) < 0.45).length;
-  const caution = buyers.filter((b) => Number((b as any).risk_score) >= 0.45 && Number((b as any).risk_score) <= 0.65).length;
-  const high = buyers.filter((b) => Number((b as any).risk_score) > 0.65).length;
-  const topCategories = [...catCount.entries()]
-    .map(([category, count]) => ({
-      category,
-      orders: count,
-      refusal_rate: count > 0 ? Math.round(((catRefused.get(category) ?? 0) / count) * 100) : 0,
-    }))
-    .sort((a, b) => b.orders - a.orders)
-    .slice(0, 6);
+  const resolved = accepted + refused;
+
+  // Risk bands come from buyers, but only as COUNTS. No phone, no identity.
+  const { count: buyerCount, error: bErr } = await supabase
+    .from("buyers")
+    .select("phone", { count: "exact", head: true });
+  if (bErr) return { error: bErr.message };
+
   return {
     totals: {
-      buyers: buyers.length,
+      buyers: buyerCount ?? 0,
       orders: total,
       accepted,
       refused,
       pending,
-      refusal_rate: total > 0 ? Math.round((refused / total) * 100) : 0,
-      spend: Math.round(spend),
+      refusal_rate: resolved > 0 ? Math.round((refused / resolved) * 100) : null,
+      spend,
       avg_order_value: total > 0 ? Math.round(spend / total) : 0,
     },
-    risk_buckets: { safe, caution, high },
-    top_categories: topCategories,
+    top_categories: cats.slice(0, 6).map((r) => ({
+      category: r.bucket,
+      orders: Number(r.orders),
+      refusal_rate: r.refusal_rate == null ? null : Math.round(Number(r.refusal_rate) * 100),
+    })),
+    top_cities: cities.slice(0, 6).map((r) => ({
+      city: r.bucket,
+      orders: Number(r.orders),
+      buyers: Number(r.buyers),
+      refusal_rate: r.refusal_rate == null ? null : Math.round(Number(r.refusal_rate) * 100),
+    })),
   };
 }
 
-async function toolRefusalReasons(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  let params = "select=product_category,city,outcomes(status,refusal_reason)&limit=10000";
-  if (city) params += `&city=eq.${encodeURIComponent(city)}`;
-  const rows = await fetchRows("orders", params);
-  const map = new Map<string, { count: number; category: string }>();
-  const total = { refused: 0 };
-  for (const o of rows) {
-    const oc = o.outcomes;
-    const st = Array.isArray(oc) ? oc[0]?.status : oc?.status;
-    const reason = (Array.isArray(oc) ? oc[0]?.refusal_reason : oc?.refusal_reason) || "not recorded";
-    if (st !== "refused") continue;
-    total.refused++;
-    const g = map.get(String(reason)) ?? { count: 0, category: String(o.product_category ?? "?") };
-    g.count++;
-    map.set(String(reason), g);
+async function toolRefusalReasons(supabase: Db, _args: unknown, _storeIds: string[] = []) {
+  // PRIVACY: aggregate rows only. The reason text is a category label the
+  // merchant already chose, never a free-text note from another store.
+  const { data, error } = await supabase.rpc("verafo_aggregate_stats", {
+    p_dimension: "reason",
+    p_days: 90,
+  });
+  if (error) return { error: error.message };
+  return asRows<AggregateStatsRow>(data).map((r) => ({
+    reason: r.bucket,
+    orders: Number(r.orders),
+    refused: Number(r.refused),
+  }));
+}
+
+/**
+ * PRIVACY: a private-data tool may only run for a caller who owns at least one
+ * store. Returns an error object to hand straight back to the model, or null
+ * when the call may proceed.
+ *
+ * This exists because the assistant runs on the service role, so RLS cannot
+ * separate merchants here. Every tool that returns order-level detail
+ * (addresses, cities, products, prices, individual buyers) must call this and
+ * then scope its query to `storeIds`.
+ *
+ * Aggregate/network tools are intentionally NOT gated: cross-store aggregate
+ * intelligence is an allowed product feature.
+ */
+function requireOwnStores(storeIds: string[]): { error: string } | null {
+  if (!storeIds || storeIds.length === 0) {
+    return {
+      error:
+        "Not allowed: this question needs order-level detail, and your account is not linked to any store. Ask about aggregate figures instead, or use a store you own.",
+    };
   }
-  return {
-    total_refused: total.refused,
-    reasons: [...map.entries()]
-      .map(([reason, g]) => ({ reason, count: g.count, category: g.category }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 12),
-  };
+  return null;
 }
 
-async function toolBuyerOrders(supabase: any, args: any) {
-  const phone = String(args.phone ?? "").trim();
-  const limit = Math.max(1, Math.min(50, Number(args.limit) || 20));
+/**
+ * Filter that can never match a real store id, used when the caller owns no
+ * stores: the query still carries a `store_id=` filter (so the fetchRows
+ * backstop sees it) but returns zero rows.
+ */
+const NO_STORE_SENTINEL = "__verafo_no_owned_store__";
+
+/**
+ * `&store_id=in.(a,b)` for raw PostgREST calls.
+ *
+ * A caller with no owned stores gets a filter that matches nothing. It must
+ * never degrade to the empty string, because an absent filter means "every
+ * merchant's rows" - exactly the cross-merchant exposure this guards against.
+ */
+function storeIdFilter(storeIds: string[]): string {
+  if (!storeIds || storeIds.length === 0) {
+    return `&store_id=eq.${NO_STORE_SENTINEL}`;
+  }
+  const list = storeIds.map((id) => `"${String(id).replace(/"/g, "")}"`).join(",");
+  return `&store_id=in.(${encodeURIComponent(list)})`;
+}
+
+async function toolBuyerOrders(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+
+  const phone = argString(args, "phone");
+  const limit = Math.max(1, Math.min(50, argNumber(args, "limit") ?? 20));
   if (!phone) return { error: "phone is required" };
-  const rows = await fetchRows("orders", buildOrderParams({ phone, limit }));
-  return rows.map((o: any) => ({
+  // Scoped to the caller's own stores. This used to return every store's
+  // orders for a phone number, which leaked other merchants' transactions.
+  const rows = await fetchRows<OrderRow>(
+    "orders",
+    `${buildOrderParams({ phone, limit })}${storeIdFilter(storeIds)}`,
+  );
+  return rows.map((o) => ({
     product: o.product_name ?? o.product_category ?? "?",
     category: o.product_category ?? "?",
     price: o.price ?? 0,
@@ -1299,82 +1616,78 @@ async function toolBuyerOrders(supabase: any, args: any) {
   }));
 }
 
-async function toolWeeklyTrend(supabase: any, args: any) {
-  const city = String(args.city ?? "").trim();
-  const weeks = Math.max(1, Math.min(16, Number(args.weeks) || 8));
-  let params = "select=ordered_at,price,outcomes(status)&limit=10000";
-  if (city) params += `&city=eq.${encodeURIComponent(city)}`;
-  const rows = await fetchRows("orders", params);
-  const buckets = new Map<string, { label: string; total: number; accepted: number; refused: number; spend: number }>();
-  for (const o of rows) {
-    if (!o.ordered_at) continue;
-    const d = new Date(o.ordered_at);
-    const day = d.getDay();
-    const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (day === 0 ? 6 : day - 1));
-    const key = monday.toISOString().slice(0, 10);
-    const g = buckets.get(key) ?? { label: key, total: 0, accepted: 0, refused: 0, spend: 0 };
-    g.total++;
-    g.spend += Number(o.price ?? 0);
-    const st = orderOutcome(o);
-    if (st === "accepted") g.accepted++;
-    else if (st === "refused") g.refused++;
-    buckets.set(key, g);
-  }
-  const sorted = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-weeks);
-  return sorted.map(([, g]) => ({
-    week: g.label,
-    orders: g.total,
-    accepted: g.accepted,
-    refused: g.refused,
-    spend: Math.round(g.spend),
-    refusal_rate: g.total > 0 ? Math.round((g.refused / g.total) * 100) : 0,
+async function toolWeeklyTrend(supabase: Db, _args: unknown, _storeIds: string[] = []) {
+  // PRIVACY: weekly figures are an aggregate, so they now come from
+  // verafo_aggregate_stats rather than from raw order rows. Cross-store
+  // aggregate intelligence is allowed (R1); individual orders are not.
+  const { data, error } = await supabase.rpc("verafo_aggregate_stats", {
+    p_dimension: "week",
+    p_days: 112,
+  });
+  if (error) return { error: error.message };
+  return asRows<AggregateStatsRow>(data)
+    .map((r) => ({
+      week: String(r.bucket),
+      orders: Number(r.orders),
+      accepted: Number(r.accepted),
+      refused: Number(r.refused),
+      spend: Math.round(Number(r.value)),
+      refusal_rate: r.refusal_rate == null ? null : Math.round(Number(r.refusal_rate) * 100),
+    }))
+    // Chronological, oldest first, because that is how a trend reads.
+    .sort((a, b) => (a.week < b.week ? -1 : 1));
+}
+
+async function toolSimilarBuyers(supabase: Db, args: Record<string, unknown>) {
+  const phone = argString(args, "phone");
+  const limit = Math.max(1, Math.min(10, argNumber(args, "limit") ?? 5));
+  if (!phone) return { error: "phone is required" };
+
+  // PRIVACY FIX. This used to read `buyers.embedding` with the service role
+  // (which bypasses RLS entirely) and then call find_similar_buyers(), which
+  // RETURNS `phone`. That gave the assistant a way to produce other
+  // merchants' customer phone numbers. It now calls similar_buyers_by_phone,
+  // which keeps the vector inside the database and returns no phone number.
+  //
+  // The result is deliberately aggregate-only: the assistant can describe how
+  // similar buyers behaved, but it cannot name or contact them.
+  const { data, error } = await supabase.rpc("similar_buyers_by_phone", {
+    p_phone: phone,
+    p_limit: limit,
+  });
+  if (error) return { error: error.message };
+
+  return asRows<SimilarBuyerRow>(data).slice(0, limit).map((r) => ({
+    risk_score: Number(r.risk_score),
+    total_orders: Number(r.total_orders),
+    total_refused: Number(r.total_refused),
+    similarity: Math.round((1 - Number(r.similarity)) * 1000) / 1000,
   }));
 }
 
-async function toolSimilarBuyers(supabase: any, args: any) {
-  const phone = String(args.phone ?? "").trim();
-  const limit = Math.max(1, Math.min(10, Number(args.limit) || 5));
+async function toolBuyerVerdict(
+  supabase: Db,
+  args: Record<string, unknown>,
+  openai: OpenAI,
+  storeIds: string[] = [],
+) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+  const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const { data: buyer } = await supabase
-    .from("buyers")
-    .select("embedding")
-    .eq("phone", phone)
-    .maybeSingle();
-  if (!buyer?.embedding) {
-    return { error: `no embedding yet for ${phone} - visit the buyer lookup first so an AI fingerprint can be generated` };
-  }
-  const { data, error } = await supabase.rpc("find_similar_buyers", {
-    p_embedding: buyer.embedding,
-    p_limit: limit + 1,
-  });
-  if (error) throw new Error(error.message);
-  return (data ?? [])
-    .filter((r: any) => String(r.phone) !== phone)
-    .slice(0, limit)
-    .map((r: any) => ({
-      phone: String(r.phone),
-      risk_score: Number(r.risk_score),
-      total_orders: Number(r.total_orders),
-      total_refused: Number(r.total_refused),
-      similarity: Math.round((1 - Number(r.similarity)) * 1000) / 1000,
-    }));
-}
-
-async function toolBuyerVerdict(supabase: any, args: any, openai: any) {
-  const phone = String(args.phone ?? "").trim();
-  if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone);
+  const stats = await fetchStats(supabase, phone, storeIds);
   const { data: recent, error: rErr } = await supabase
     .from("orders")
     .select("product_name, product_category, price, city, ordered_at, outcomes(status, refusal_reason)")
     .eq("buyer_phone", phone)
+    .in("store_id", storeIds)
     .order("ordered_at", { ascending: false })
     .limit(10);
   if (rErr) throw new Error(rErr.message);
-  const detail = (recent ?? [])
+  const detail = asRows<OrderRow>(recent)
     .map(
       (o) =>
-        `${o.product_name ?? o.product_category} - ${o.price ?? "?"} PKR - ${o.city ?? "?"} - ${o.outcomes?.status ?? "pending"}`,
+        `${o.product_name ?? o.product_category} - ${o.price ?? "?"} PKR - ${o.city ?? "?"} - ${embedOne(o.outcomes)?.status ?? "pending"}`,
     )
     .join("\n");
   const res = await openai.chat.completions.create({
@@ -1401,33 +1714,143 @@ async function toolBuyerVerdict(supabase: any, args: any, openai: any) {
   }
 }
 
-async function toolSearchBuyers(supabase: any, args: any) {
-  const query = String(args.query ?? "").trim();
-  const city = String(args.city ?? "").trim();
-  const minOrders = Number(args.min_orders);
-  const maxRisk = Number(args.max_risk);
-  const limit = Math.max(1, Math.min(20, Number(args.limit) || 10));
-  let params = "select=phone,risk_score,total_orders,total_accepted,total_refused";
-  if (query) params += `&phone=ilike.${encodeURIComponent(`%${query.replace(/[^\d+]/g, "")}%`)}`;
-  if (Number.isFinite(minOrders) && minOrders > 0) params += `&total_orders=gte.${minOrders}`;
-  if (Number.isFinite(maxRisk) && maxRisk > 0) params += `&risk_score=lte.${maxRisk}`;
-  params += `&limit=${limit}`;
-  let rows = await fetchRows("buyers", params);
-  if (city) {
-    const cityOrders = await fetchRows(
-      "orders",
-      `select=buyer_phone&city=eq.${encodeURIComponent(city)}&limit=5000`,
-    );
-    const inCity = new Set(cityOrders.map((o: any) => String(o.buyer_phone)));
-    rows = rows.filter((b) => inCity.has(String((b as any).phone)));
+/** Digits only, for comparing a typed phone number against stored numbers. */
+function digitsOnly(v: unknown): string {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+/** A complete Pakistani mobile number is 10 digits after the country code
+ *  (3XXXXXXXXX); with the leading zero or the 92 prefix it is 11 or 12. */
+const FULL_PHONE_DIGITS = 10;
+
+/**
+ * Phone spellings to try against `buyers.phone`.
+ *
+ * Stored numbers are not guaranteed to be normalized, so a merchant typing
+ * "03001234567" must still find "+923001234567". This widens the MATCH, never
+ * the result set: the caller still has to supply a complete number.
+ *
+ * Returns an empty array for anything shorter than a full number. Callers must
+ * treat that as "no match" and must never pass it to a filter, because an empty
+ * `in (...)` list matches every row.
+ */
+function phoneLookupCandidates(raw: string): string[] {
+  const digits = digitsOnly(raw);
+  if (digits.length < FULL_PHONE_DIGITS) return [];
+  const local10 = digits.slice(-FULL_PHONE_DIGITS);
+  return [...new Set<string>([digits, `0${local10}`, local10, `+92${local10}`])];
+}
+
+/**
+ * Buyer search for the chat agent.
+ *
+ * PRIVACY: this used to run `phone ilike '%<digits>%'` against the whole
+ * `buyers` table. Because `buyers.phone` is the primary key, a partial-digit
+ * query was a network-wide ENUMERATION endpoint: a merchant could walk
+ * prefixes and harvest every buyer's phone number (R3).
+ *
+ * Two safe modes remain:
+ *  - an exact phone number (the merchant already knows it) returns that one
+ *    buyer's aggregate row, even if they never ordered from this store;
+ *  - no number, or an ambiguous partial one, returns masked rankings from
+ *    verafo_buyer_ranking - aggregate counts and a last-4-digits label, never
+ *    an identity (R1, R4).
+ */
+async function toolSearchBuyers(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
+  const denied = requireOwnStores(storeIds);
+  if (denied) return denied;
+
+  const queryDigits = digitsOnly(args.query);
+  const city = argString(args, "city");
+  const limit = Math.max(1, Math.min(20, argNumber(args, "limit") ?? 10));
+
+  if (queryDigits.length === 0) {
+    if (city) {
+      // A city filter needs order rows, which are private: scope them to the
+      // caller's own stores and make clear that the result is their own book.
+      const cityOrders = await fetchRows<OrderRow>(
+        "orders",
+        `select=buyer_phone&city=eq.${encodeURIComponent(city)}&limit=5000${storeIdFilter(storeIds)}`,
+      );
+      const cityBuyers = new Set(cityOrders.map((o) => digitsOnly(o.buyer_phone)));
+      if (cityBuyers.size === 0) {
+        return { buyers: [], note: `No buyers in ${city} in your own stores.` };
+      }
+      const ranked = await supabase.rpc("verafo_buyer_ranking", {
+        p_store_ids: storeIds,
+        p_metric: "orders",
+        p_limit: Math.max(limit * 4, 40),
+        p_days: 365,
+      });
+      if (ranked.error) return { error: ranked.error.message };
+      const buyers = asRows<BuyerRankingRow>(ranked.data)
+        .filter((r) => cityBuyers.has(digitsOnly(r.buyer_label).slice(-4)))
+        .slice(0, limit)
+        .map((r) => ({
+          buyer: String(r.buyer_label ?? "····"),
+          orders: Number(r.orders ?? 0),
+          refused: Number(r.refused ?? 0),
+          risk_score: Number(r.risk_score ?? 0),
+        }));
+      return {
+        buyers,
+        note: `${buyers.length} masked buyers in ${city} from your stores. Identities are masked; look up a specific number to see a full profile.`,
+      };
+    }
+
+    const ranked = await supabase.rpc("verafo_buyer_ranking", {
+      p_store_ids: storeIds,
+      p_metric: "orders",
+      p_limit: limit,
+      p_days: 365,
+    });
+    if (ranked.error) return { error: ranked.error.message };
+    const buyers = asRows<BuyerRankingRow>(ranked.data).map((r) => ({
+      buyer: String(r.buyer_label ?? "····"),
+      orders: Number(r.orders ?? 0),
+      refused: Number(r.refused ?? 0),
+      risk_score: Number(r.risk_score ?? 0),
+    }));
+    return {
+      buyers,
+      note: "Identities are masked (last 4 digits only). Ask for a specific phone number to see one buyer's full profile.",
+    };
   }
-  return rows.map((b) => ({
-    phone: String((b as any).phone),
-    risk_score: Number((b as any).risk_score),
-    total_orders: Number((b as any).total_orders),
-    total_accepted: Number((b as any).total_accepted),
-    total_refused: Number((b as any).total_refused),
-  }));
+
+  if (queryDigits.length < FULL_PHONE_DIGITS) {
+    return {
+      buyers: [],
+      error:
+        "Enter the complete phone number, not a partial one: partial searches would let anyone enumerate buyers across the network.",
+    };
+  }
+
+  // Exact lookup. Compare across common spellings so "+92 300 1234567" and
+  // "03001234567" both resolve, but only ever return the single buyer asked for.
+  const candidates = phoneLookupCandidates(queryDigits);
+  if (candidates.length === 0) {
+    return { buyers: [], error: "Enter a complete phone number to look a buyer up." };
+  }
+  const { data, error } = await supabase
+    .from("buyers")
+    .select("phone, risk_score, total_orders, total_accepted, total_refused")
+    .in("phone", candidates)
+    .limit(5);
+  if (error) return { error: error.message };
+
+  const rows = asRows<BuyerSearchRow>(data);
+  if (rows.length === 0) {
+    return { buyers: [], note: "No buyer with that phone number exists in the network yet." };
+  }
+  return {
+    buyers: rows.map((b) => ({
+      phone: String(b.phone),
+      risk_score: Number(b.risk_score),
+      total_orders: Number(b.total_orders),
+      total_accepted: Number(b.total_accepted),
+      total_refused: Number(b.total_refused),
+    })),
+  };
 }
 
 interface FileColumnSpec {
@@ -1473,45 +1896,81 @@ function makeFileChart(
   };
 }
 
-async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileNoData> {
-  const rawKind = String(args.kind ?? "").toLowerCase();
-  const kind = ["pdf", "csv", "xlsx", "excel"].includes(rawKind) ? (rawKind as any) : "pdf";
-  const dimension = String(args.dimension ?? "orders").toLowerCase();
-  const title = String(args.title ?? "").trim().slice(0, 80) || "Verafo Report";
-  const description = String(args.description ?? "").trim();
-  const limit = Math.max(1, Math.min(100, Number(args.limit) || 25));
-  const city = String(args.city ?? "").trim();
-  const category = String(args.category ?? "").trim();
-  const keyword = String(args.keyword ?? "").trim();
-  const days = Number(args.days);
-  const minPrice = Number(args.min_price);
-  const maxPrice = Number(args.max_price);
-  const metric = ["orders", "spend", "refusals", "risk"].includes(String(args.metric))
-    ? String(args.metric)
-    : "orders";
+/** Coerce scalar fields of a tool result into a file row. Nested objects and
+ *  arrays are dropped rather than stringified, so a file can never smuggle a
+ *  structured payload (a vector, say) into a cell. */
+function toFileRows(rows: readonly unknown[]): Record<string, string | number>[] {
+  return rows.map((row) => {
+    const out: Record<string, string | number> = {};
+    if (!row || typeof row !== "object") return out;
+    for (const [k, v] of Object.entries(row)) {
+      if (typeof v === "string" || typeof v === "number") out[k] = v;
+      else if (typeof v === "boolean") out[k] = v ? "yes" : "no";
+    }
+    return out;
+  });
+}
+
+async function buildFileSpec(
+  supabase: Db,
+  args: Record<string, unknown>,
+  storeIds: string[] = [],
+): Promise<FileSpec | FileNoData> {
+  // PRIVACY: a generated file is the highest-risk output in the product - it
+  // leaves our control permanently. It may only be produced from the caller's
+  // own stores.
+  const denied = requireOwnStores(storeIds);
+  if (denied) {
+    return {
+      noData: true,
+      title: "Verafo Report",
+      message: denied.error,
+    };
+  }
+
+  const rawKind = argString(args, "kind").toLowerCase();
+  const kind = ["pdf", "csv", "xlsx", "excel"].includes(rawKind) ? (rawKind as FileSpec["kind"]) : "pdf";
+  const dimension = argString(args, "dimension").toLowerCase() || "orders";
+  const title = argString(args, "title").slice(0, 80) || "Verafo Report";
+  const description = argString(args, "description");
+  const limit = Math.max(1, Math.min(100, argNumber(args, "limit") ?? 25));
+  const city = argString(args, "city");
+  const category = argString(args, "category");
+  const keyword = argString(args, "keyword");
+  const days = argNumber(args, "days");
+  const minPrice = argNumber(args, "min_price");
+  const maxPrice = argNumber(args, "max_price");
+  const rawMetric = argString(args, "metric");
+  const metric = ["orders", "spend", "refusals", "risk"].includes(rawMetric) ? rawMetric : "orders";
 
   let columns: FileColumnSpec[];
   let rows: Record<string, string | number>[];
   let chart: ChartSpec | null;
 
   if (dimension === "orders" || dimension === "order") {
-    const res = await toolSearchOrders(supabase, { city, category, keyword, min_price: minPrice, max_price: maxPrice, days, limit });
+    const res = await toolSearchOrders(supabase, { city, category, keyword, min_price: minPrice, max_price: maxPrice, days, limit }, storeIds);
     columns = [
       { key: "product", label: "Product" },
       { key: "category", label: "Category" },
       { key: "price", label: "Price", format: "pkr" },
       { key: "quantity", label: "Qty", format: "number" },
       { key: "city", label: "City" },
-      { key: "phone", label: "Buyer" },
+      { key: "buyer", label: "Buyer" },
       { key: "status", label: "Status" },
       { key: "date", label: "Date" },
     ];
-    rows = res.orders ?? [];
+    rows = toFileRows("orders" in res ? res.orders : []);
     chart = makeFileChart(rows, "Top orders by value", "product", [{ key: "price", label: "Spend", format: "pkr" }], "bar");
   } else if (dimension === "buyers" || dimension === "buyer") {
-    rows = (await toolTopBuyers(supabase, { city, category, days, min_price: minPrice, metric, limit: Math.min(limit, 50) })) as any;
+    const buyersRes = await toolTopBuyers(supabase, { city, category, days, min_price: minPrice, metric, limit: Math.min(limit, 50) }, storeIds);
+    if (!Array.isArray(buyersRes)) {
+      // The tool refused or failed. Report it the same way the branches above
+      // do, and never turn an error object into file rows.
+      return { noData: true, title, message: buyersRes.error };
+    }
+    rows = toFileRows(buyersRes);
     columns = [
-      { key: "phone", label: "Phone" },
+      { key: "buyer", label: "Buyer" },
       { key: "orders", label: "Orders", format: "number" },
       { key: "accepted", label: "Accepted", format: "number" },
       { key: "refused", label: "Refused", format: "number" },
@@ -1525,7 +1984,11 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
             : { key: "orders", label: "Orders", format: "number" as const };
     chart = makeFileChart(rows, `Top buyers by ${chartMetric.label.toLowerCase()}`, "phone", [chartMetric], "bar");
   } else if (dimension === "products" || dimension === "product") {
-    rows = (await toolTopProducts(supabase, { city, category, limit: Math.min(limit, 50) })) as any;
+    const productsRes = await toolTopProducts(supabase, { city, category, limit: Math.min(limit, 50) }, storeIds);
+    if (!Array.isArray(productsRes)) {
+      return { noData: true, title, message: productsRes.error };
+    }
+    rows = toFileRows(productsRes);
     columns = [
       { key: "product", label: "Product" },
       { key: "category", label: "Category" },
@@ -1538,7 +2001,15 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
     ];
     chart = makeFileChart(rows, "Top products by orders", "product", [{ key: "orders", label: "Orders", format: "number" }], "bar");
   } else if (dimension === "stores" || dimension === "store") {
-    rows = (await toolStoreOverview(supabase, { city })) as any;
+    // toolStoreOverview is gated by requireOwnStores and scoped to the
+    // caller's own stores, so a "stores" file can only ever list their own.
+    const storesRes = await toolStoreOverview(supabase, { city }, storeIds);
+    if (!Array.isArray(storesRes)) {
+      // The store tool is gated by requireOwnStores: its refusal is reported
+      // here, never downgraded into an empty or unscoped file.
+      return { noData: true, title, message: storesRes.error };
+    }
+    rows = toFileRows(storesRes);
     columns = [
       { key: "store", label: "Store" },
       { key: "orders", label: "Orders", format: "number" },
@@ -1550,7 +2021,11 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
     ];
     chart = makeFileChart(rows, "Orders by store", "store", [{ key: "orders", label: "Orders", format: "number" }], "bar");
   } else if (dimension === "categories" || dimension === "category") {
-    rows = (await toolCategoryOverview(supabase, { city })) as any;
+    const categoriesRes = await toolCategoryOverview(supabase, { city }, storeIds);
+    if (!Array.isArray(categoriesRes)) {
+      return { noData: true, title, message: categoriesRes.error };
+    }
+    rows = toFileRows(categoriesRes);
     columns = [
       { key: "category", label: "Category" },
       { key: "orders", label: "Orders", format: "number" },
@@ -1561,7 +2036,11 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
     ];
     chart = makeFileChart(rows, "Orders by category", "category", [{ key: "orders", label: "Orders", format: "number" }], "pie");
   } else if (dimension === "cities" || dimension === "city") {
-    rows = (await toolCityOverview(supabase, {})) as any;
+    const citiesRes = await toolCityOverview(supabase, {}, storeIds);
+    if (!Array.isArray(citiesRes)) {
+      return { noData: true, title, message: citiesRes.error };
+    }
+    rows = toFileRows(citiesRes);
     columns = [
       { key: "city", label: "City" },
       { key: "orders", label: "Orders", format: "number" },
@@ -1573,7 +2052,11 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
     ];
     chart = makeFileChart(rows, "Orders by city", "city", [{ key: "orders", label: "Orders", format: "number" }], "bar");
   } else if (dimension === "weekly" || dimension === "trend") {
-    rows = (await toolWeeklyTrend(supabase, { weeks: Math.max(1, Math.min(16, Number(args.weeks) || 8)), city })) as any;
+    const weeklyRes = await toolWeeklyTrend(supabase, { weeks: Math.max(1, Math.min(16, argNumber(args, "weeks") ?? 8)), city }, storeIds);
+    if (!Array.isArray(weeklyRes)) {
+      return { noData: true, title, message: weeklyRes.error };
+    }
+    rows = toFileRows(weeklyRes);
     columns = [
       { key: "week", label: "Week" },
       { key: "orders", label: "Orders", format: "number" },
@@ -1584,7 +2067,10 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
     ];
     chart = makeFileChart(rows, "Orders per week", "week", [{ key: "orders", label: "Orders", format: "number" }], "bar");
   } else {
-    return buildFileSpec(supabase, { ...args, dimension: "orders" });
+    // Unknown dimension: fall back to orders. `storeIds` MUST be forwarded, or
+    // the recursive call would hit requireOwnStores with an empty list and
+    // refuse a request the caller was entitled to make.
+    return buildFileSpec(supabase, { ...args, dimension: "orders" }, storeIds);
   }
 
   if (rows.length === 0) {
@@ -1592,8 +2078,8 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
     if (city) filters.push(`city "${city}"`);
     if (category) filters.push(`category "${category}"`);
     if (keyword) filters.push(`keyword "${keyword}"`);
-    if (Number.isFinite(days) && days > 0) filters.push(`last ${days} days`);
-    if (Number.isFinite(minPrice) && minPrice > 0) filters.push(`min ${minPrice} PKR`);
+    if (days != null && days > 0) filters.push(`last ${days} days`);
+    if (minPrice != null && minPrice > 0) filters.push(`min ${minPrice} PKR`);
     return {
       noData: true,
       title,
@@ -1615,7 +2101,7 @@ async function buildFileSpec(supabase: any, args: any): Promise<FileSpec | FileN
   };
 }
 
-const AGENT_TOOLS = [
+const AGENT_TOOLS: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
@@ -1815,14 +2301,16 @@ const AGENT_TOOLS = [
     function: {
       name: "search_buyers",
       description:
-        "Search buyers by phone substring (digits), minimum order count or maximum risk score, optionally restricted to a city. Use for 'find buyers with 000 in their number', 'buyers with 5+ orders', 'low risk buyers in Lahore'.",
+        "Look up buyers. With a COMPLETE phone number this returns that buyer's aggregate profile, even if they never ordered from this store. With no number it returns a masked ranking (last 4 digits only). Partial phone numbers are refused because they would let anyone enumerate buyers network-wide; ask the user for the full number instead.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Partial phone number digits to match, e.g. '30011'." },
-          city: { type: "string", description: "Optional exact city name to filter to." },
-          min_orders: { type: "number", description: "Only buyers with at least this many orders." },
-          max_risk: { type: "number", description: "Only buyers with risk score at or below this (0-1)." },
+          query: {
+            type: "string",
+            description:
+              "A COMPLETE phone number, e.g. '03001234567' or '+923001234567'. Never a partial number.",
+          },
+          city: { type: "string", description: "Optional exact city name to filter the masked ranking to." },
           limit: { type: "number", description: "Max buyers to return (default 10, max 20)." },
         },
       },
@@ -1852,40 +2340,62 @@ const AGENT_TOOLS = [
   },
 ];
 
-async function runAgentTool(name: string, args: any, supabase: any, openai: any): Promise<unknown> {
+/**
+ * Coerce a raw tool-argument payload into a plain object.
+ *
+ * `args` arrives from the model as `unknown`: it may be missing, null, an
+ * array, or a scalar. Every tool indexes it by key, so it is normalised once
+ * here (`args ?? {}` would have passed a string or array straight through).
+ */
+function asArgs(args: unknown): Record<string, unknown> {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return {};
+  return args as Record<string, unknown>;
+}
+
+async function runAgentTool(
+  name: string,
+  args: unknown,
+  supabase: Db,
+  openai: OpenAI,
+  storeIds: string[] = [],
+): Promise<unknown> {
+  // PRIVACY: every tool that returns private order or buyer detail is gated
+  // by requireOwnStores(storeIds) inside the tool itself, and its queries are
+  // filtered to those store ids. An empty list means DENY, never 'no filter'.
+  const a = asArgs(args);
   switch (name) {
     case "search_orders":
-      return await toolSearchOrders(supabase, args ?? {});
+      return await toolSearchOrders(supabase, a, storeIds);
     case "buyers_by_city":
-      return await toolBuyersByCity(supabase, args ?? {});
+      return await toolBuyersByCity(supabase, a, storeIds);
     case "buyer_profile":
-      return await toolBuyerProfile(supabase, args ?? {});
+      return await toolBuyerProfile(supabase, a, storeIds);
     case "top_buyers":
-      return await toolTopBuyers(supabase, args ?? {});
+      return await toolTopBuyers(supabase, a, storeIds);
     case "city_overview":
-      return await toolCityOverview(supabase, args ?? {});
+      return await toolCityOverview(supabase, a, storeIds);
     case "category_overview":
-      return await toolCategoryOverview(supabase, args ?? {});
+      return await toolCategoryOverview(supabase, a, storeIds);
     case "store_overview":
-      return await toolStoreOverview(supabase, args ?? {});
+      return await toolStoreOverview(supabase, a, storeIds);
     case "top_products":
-      return await toolTopProducts(supabase, args ?? {});
+      return await toolTopProducts(supabase, a, storeIds);
     case "network_overview":
-      return await toolNetworkOverview(supabase, args ?? {});
+      return await toolNetworkOverview(supabase, a, storeIds);
     case "refusal_reasons":
-      return await toolRefusalReasons(supabase, args ?? {});
+      return await toolRefusalReasons(supabase, a, storeIds);
     case "buyer_orders":
-      return await toolBuyerOrders(supabase, args ?? {});
+      return await toolBuyerOrders(supabase, a, storeIds);
     case "weekly_trend":
-      return await toolWeeklyTrend(supabase, args ?? {});
+      return await toolWeeklyTrend(supabase, a, storeIds);
     case "similar_buyers":
-      return await toolSimilarBuyers(supabase, args ?? {});
+      return await toolSimilarBuyers(supabase, a);
     case "buyer_verdict":
-      return await toolBuyerVerdict(supabase, args ?? {}, openai);
+      return await toolBuyerVerdict(supabase, a, openai, storeIds);
     case "search_buyers":
-      return await toolSearchBuyers(supabase, args ?? {});
+      return await toolSearchBuyers(supabase, a, storeIds);
     case "create_file":
-      return await buildFileSpec(supabase, args ?? {});
+      return await buildFileSpec(supabase, a, storeIds);
     default:
       return { error: `unknown tool: ${name}` };
   }
@@ -1927,9 +2437,14 @@ function cleanHistory(h: { role: string; content: string }[], rawPrompt: string)
     );
 }
 
-async function embedOne(supabase: any, openai: any, phone: string): Promise<number[]> {
-  const stats = await fetchStats(supabase, phone);
-  const fv = await buildFeatureVector(supabase, phone);
+async function embedBuyerVector(
+  supabase: Db,
+  openai: OpenAI,
+  phone: string,
+  storeIds: string[] = [],
+): Promise<number[]> {
+  const stats = await fetchStats(supabase, phone, storeIds);
+  const fv = await buildFeatureVector(supabase, phone, storeIds);
   const text = buildSummaryText(stats);
   const res = await openai.embeddings.create({
     model: "text-embedding-3-small",
@@ -2024,11 +2539,13 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const action = body.action as string;
     const phone = String(body.phone ?? "");
-
-    const supabase = createClient(
+const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    // PRIVACY: the service role bypasses RLS, so identify the caller here and
+    // hand the owned store ids to every tool that returns private data.
+    const { storeIds } = await authorizeCaller(req);
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) {
       return json({ error: "OPENAI_API_KEY is not set on this function" }, 500);
@@ -2036,8 +2553,8 @@ Deno.serve(async (req: Request) => {
     const openai = new OpenAI({ apiKey });
 
     if (action === "embed") {
-      const stats = await fetchStats(supabase, phone);
-      const fv = await buildFeatureVector(supabase, phone);
+      const stats = await fetchStats(supabase, phone, storeIds);
+      const fv = await buildFeatureVector(supabase, phone, storeIds);
       const text = buildSummaryText(stats);
       const res = await openai.embeddings.create({
         model: "text-embedding-3-small",
@@ -2085,7 +2602,7 @@ Deno.serve(async (req: Request) => {
         .order("total_orders", { ascending: false })
         .limit(MAX_MAP_BUYERS);
       if (error) throw new Error(error.message);
-      const rows = buyers ?? [];
+      const rows = asRows<BuyerEmbeddingRow>(buyers);
 
       const missing = rows
         .filter((b) => !b.embedding || !Array.isArray(b.embedding))
@@ -2095,7 +2612,7 @@ Deno.serve(async (req: Request) => {
       if (missing.length > 0) {
         const vectors = await mapLimit(missing, 10, async (phone) => {
           try {
-            return { phone, vector: await embedOne(supabase, openai, phone) };
+            return { phone, vector: await embedBuyerVector(supabase, openai, phone, storeIds) };
           } catch {
             failed.push(phone);
             return null;
@@ -2110,32 +2627,34 @@ Deno.serve(async (req: Request) => {
       }
 
       const vecs = rows
-        .filter((b) => b.embedding && Array.isArray(b.embedding) && (b.embedding as number[]).length > 0)
+        .filter((b): b is BuyerEmbeddingRow & { embedding: number[] } =>
+          Array.isArray(b.embedding) && b.embedding.length > 0
+        )
         .map((b) => ({
           phone: String(b.phone),
           risk: Number(b.risk_score ?? 0.5),
           orders: Number(b.total_orders ?? 0),
           accepted: Number(b.total_accepted ?? 0),
           refused: Number(b.total_refused ?? 0),
-          embedding: b.embedding as number[],
+          embedding: b.embedding,
         }));
 
       const spendMap = new Map<string, number>();
       if (vecs.length > 0) {
-        const orderRows = await fetchRows("orders", "select=buyer_phone,price&limit=10000");
+        const orderRows = await fetchRows<OrderRow>("orders", `select=buyer_phone,price&limit=10000${storeIdFilter(storeIds)}`);
         for (const o of orderRows) {
-          if ((o as any).price != null) {
-            const p = String((o as any).buyer_phone);
-            spendMap.set(p, (spendMap.get(p) ?? 0) + Number((o as any).price));
+          if (o.price != null) {
+            const p = String(o.buyer_phone);
+            spendMap.set(p, (spendMap.get(p) ?? 0) + Number(o.price));
           }
         }
       }
 
-      const points: any[] = [];
+      const points: BuyerMapPoint[] = [];
       if (vecs.length >= 2) {
         const n = vecs.length;
         const d = vecs[0].embedding.length;
-        const mean = new Array(d).fill(0);
+        const mean = new Array<number>(d).fill(0);
         for (const v of vecs) for (let k = 0; k < d; k++) mean[k] += v.embedding[k];
         for (let k = 0; k < d; k++) mean[k] /= n;
 
@@ -2202,7 +2721,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "explain") {
-      const stats = await fetchStats(supabase, phone);
+      const stats = await fetchStats(supabase, phone, storeIds);
       const text = buildSummaryText(stats);
       const res = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -2235,7 +2754,7 @@ Deno.serve(async (req: Request) => {
           try {
             context =
               `Buyer profile for ${mentionPhone}:\n` +
-              buildSummaryText(await fetchStats(supabase, mentionPhone));
+              buildSummaryText(await fetchStats(supabase, mentionPhone, storeIds));
           } catch {
             context = `Buyer ${mentionPhone} has no profile in the network yet.`;
           }
@@ -2280,7 +2799,7 @@ Deno.serve(async (req: Request) => {
               if (!mentionedCategory || !c.category || !KNOWN_CATEGORIES[String(c.category).trim().toLowerCase()]) {
                 delete c.category;
               }
-              const ch = await buildChartData(c, mentionPhone ?? undefined);
+              const ch = await buildChartData(c, mentionPhone ?? undefined, storeIds);
               if (ch) built.push(ch);
             }
             charts = built;
@@ -2439,9 +2958,13 @@ Deno.serve(async (req: Request) => {
                   }
                 }
                 if (tc.function.name === "city_overview") {
-                  const arr = Array.isArray(result) ? result : (result as any)?.data;
-                  if (Array.isArray(arr) && arr.length > 0 && !activeCity) {
-                    const top = arr.find((r: any) => r.city && typeof r.refused === "number");
+                  const arr = Array.isArray(result) ? result : [];
+                  if (arr.length > 0 && !activeCity) {
+                    const top = arr.find(
+                      (r): r is { city: string; refused: number } =>
+                        typeof (r as { city?: unknown }).city === "string" &&
+                        typeof (r as { refused?: unknown }).refused === "number",
+                    );
                     if (top) activeCity = top.city;
                   }
                 }
@@ -2590,26 +3113,26 @@ Deno.serve(async (req: Request) => {
 
     if (action === "analyze") {
       if (!phone) return json({ error: "phone is required" }, 400);
-      const stats = await fetchStats(supabase, phone);
+      const stats = await fetchStats(supabase, phone, storeIds);
       const { data: recent, error: rErr } = await supabase
         .from("orders")
         .select("product_name, product_category, price, city, ordered_at, outcomes(status, refusal_reason)")
         .eq("buyer_phone", phone)
+        .in("store_id", storeIds)
         .order("ordered_at", { ascending: false })
         .limit(10);
       if (rErr) throw new Error(rErr.message);
 
       const reasons = new Map<string, number>();
-      for (const o of recent ?? []) {
-        const reason = o.outcomes?.refusal_reason ?? o.outcomes?.status;
-        if (reason) {
-          reasons.set(String(reason), (reasons.get(String(reason)) ?? 0) + 1);
-        }
+      for (const o of asRows<OrderRow>(recent)) {
+        const oc = embedOne(o.outcomes);
+        const reason = oc?.refusal_reason ?? oc?.status;
+        reasons.set(String(reason), (reasons.get(String(reason)) ?? 0) + 1);
       }
-      const detail = (recent ?? [])
+      const detail = asRows<OrderRow>(recent)
         .map(
           (o) =>
-            `${o.product_name ?? o.product_category} - ${o.price ?? "?"} PKR - ${o.city ?? "?"} - ${o.outcomes?.status ?? "pending"}`,
+            `${o.product_name ?? o.product_category} - ${o.price ?? "?"} PKR - ${o.city ?? "?"} - ${embedOne(o.outcomes)?.status ?? "pending"}`,
         )
         .join("\n");
 
@@ -2649,17 +3172,37 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "trends") {
+      // PRIVACY: this action used to read the whole `orders` table and the
+      // whole `stores` table with the service role, then RETURN the riskiest
+      // buyers' PHONE NUMBERS and other merchants' store names. It was missed
+      // by the earlier per-tool fixes because it is a top-level action rather
+      // than an agent tool, and because it uses the client directly instead of
+      // fetchRows (whose store_id backstop would have thrown).
+      //
+      // Now: order rows and store identities are limited to the caller's own
+      // stores, and the buyer list carries a MASKED label so it cannot become
+      // a contact list. `denied` is returned rather than an empty result so a
+      // store-less caller gets a clear answer instead of a misleading zero.
+      const denied = requireOwnStores(storeIds);
+      if (denied) return json({ error: denied.error }, 403);
+
       const [buyersRes, ordersRes, storesRes] = await Promise.all([
-        supabase.from("buyers").select("phone, risk_score, total_orders"),
-        supabase.from("orders").select("price, product_category, store_id, ordered_at, outcomes(status)"),
-        supabase.from("stores").select("id, name"),
+        // Risk-band COUNTS only: no phone number is read, so none can leak.
+        supabase.from("buyers").select("risk_score, total_orders"),
+        supabase
+          .from("orders")
+          .select("price, product_category, store_id, ordered_at, outcomes(status)")
+          .in("store_id", storeIds),
+        supabase.from("stores").select("id, name").in("id", storeIds),
       ]);
       if (buyersRes.error) throw new Error(buyersRes.error.message);
       if (ordersRes.error) throw new Error(ordersRes.error.message);
 
-      const buyers = buyersRes.data ?? [];
-      const orders = ordersRes.data ?? [];
-      const storeNames = new Map((storesRes.data ?? []).map((s) => [String(s.id), String(s.name)]));
+      const buyers = asRows<Pick<BuyerRow, "risk_score" | "total_orders">>(buyersRes.data);
+      const orders = ordersRes.data;
+      const storeNames = new Map(
+        asRows<StoreRow>(storesRes.data).map((s) => [String(s.id), String(s.name)]),
+      );
 
       let accepted = 0;
       let refused = 0;
@@ -2671,8 +3214,8 @@ Deno.serve(async (req: Request) => {
       const storeOrders = new Map<string, number>();
       const weekBuckets = new Map<string, { label: string; total: number; accepted: number; refused: number }>();
 
-      for (const o of orders) {
-        const status = o.outcomes?.status ?? "pending";
+      for (const o of asRows<OrderRow>(orders)) {
+        const status = embedOne(o.outcomes)?.status ?? "pending";
         if (status === "accepted") accepted++;
         else if (status === "refused") refused++;
         else pending++;
@@ -2722,8 +3265,10 @@ Deno.serve(async (req: Request) => {
         .filter((b) => Number(b.total_orders) > 0)
         .sort((a, b) => Number(b.risk_score) - Number(a.risk_score))
         .slice(0, 6)
-        .map((b) => ({
-          phone: String(b.phone),
+        .map((b, i) => ({
+          // MASKED: this used to be the buyer's full phone number, taken from
+          // the network-wide `buyers` table.
+          buyer: `····${String(i + 1).padStart(4, "0")}`,
           risk_score: Number(b.risk_score),
           total_orders: Number(b.total_orders),
         }));
@@ -2893,3 +3438,4 @@ Deno.serve(async (req: Request) => {
     return json({ error: message }, 500);
   }
 });
+

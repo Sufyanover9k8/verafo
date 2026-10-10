@@ -16,9 +16,18 @@ alter table buyers
 --   GROUP G identity (phone age in network, distinct stores)
 --   cold-start rule (total_orders < 3 -> pull toward neutral)
 -- ============================================================
+-- ⚠️ These three functions MUST stay SECURITY DEFINER. They write `buyers`
+-- from a trigger on orders/outcomes, and after the buyer-privacy release
+-- (buyer-privacy-stage-c.sql) `authenticated` has no update policy or grant on
+-- buyers: an INVOKER trigger would be silently blocked, so every order logged
+-- through the web app would stop updating risk scores. rls-production.sql
+-- carries the same marker; this file must not strip it. Only the attributes
+-- below changed in the hardening pass — the scoring formula is untouched.
 create or replace function recompute_buyer(p_phone text)
 returns buyers
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   b buyers%rowtype;
@@ -128,6 +137,8 @@ $$;
 create or replace function on_order_change()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 begin
   perform recompute_buyer(new.buyer_phone);
@@ -138,6 +149,8 @@ $$;
 create or replace function on_outcome_change()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_phone text;
@@ -160,4 +173,8 @@ create trigger trg_outcome_recompute
 after insert or update of status on outcomes
 for each row execute function on_outcome_change();
 
-grant execute on function recompute_buyer(text) to anon;
+-- recompute_buyer returns a whole `buyers` row (embedding and feature_vector
+-- included) and now runs as the function owner, so it must NOT be executable
+-- by anon or authenticated. The trigger pipeline calls it as the owner, and
+-- buyer-privacy-stage-c.sql enforces the same rule.
+revoke all on function recompute_buyer(text) from public, anon, authenticated;
