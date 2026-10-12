@@ -5,8 +5,17 @@ export interface Buyer {
   total_accepted: number
   total_refused: number
   risk_score: number
-  embedding: number[] | null
-  updated_at: string | null
+  /**
+   * NOT returned to the browser any more. The raw 1536-dimension
+   * fingerprint and the feature vector are personal data, so they stay in
+   * the database and are used only inside SECURITY DEFINER functions.
+   * Optional for that reason; UI must not rely on them.
+   */
+  embedding?: number[] | null
+  feature_vector?: number[] | null
+  updated_at?: string | null
+  /** Distinct stores this buyer has ordered from. Aggregated, no identity. */
+  store_count?: number | null
 }
 
 export interface Store {
@@ -78,11 +87,16 @@ export interface OrderRow {
 }
 
 export interface SimilarBuyer {
-  phone: string
   risk_score: number
   total_orders: number
   total_refused: number
   similarity: number
+  /**
+   * Deliberately absent. The server no longer returns another buyer's phone
+   * number to the browser, so a similarity result cannot become a contact
+   * list for anyone's customers.
+   */
+  phone?: string
 }
 
 export interface ChatRow {

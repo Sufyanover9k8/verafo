@@ -30,6 +30,16 @@ interface LookupRow {
   buyers?: { risk_score: number; total_orders: number } | null
 }
 
+/** What buyer_network_lookup returns. Aggregates only — no identity. */
+interface NetworkLookupRow {
+  risk_score: number | null
+  total_orders: number | null
+  total_accepted: number | null
+  total_refused: number | null
+  store_count: number | null
+  first_seen: string | null
+}
+
 export function Lookup() {
   const toast = useToast()
   const { store } = useStoreScope()
@@ -69,45 +79,63 @@ export function Lookup() {
       setExplanation(null)
       setState({ kind: 'loading' })
 
+      // PRIVACY: this used to run `from('buyers').select('*')`, which pulled the
+      // raw embedding and feature vector into the browser, and it called
+      // find_similar_buyers() — a plain SQL function that returned other
+      // buyers' phone numbers. Both are gone.
+      //
+      // buyer_network_lookup returns an aggregate risk assessment only: no
+      // identity, no store identity, no order detail, no vector. The merchant
+      // still gets the answer for any number they already know.
       let ordersQuery = supabase.from('orders').select('*, stores(name), outcomes(status, resolved_at, refusal_reason)').eq('buyer_phone', normalized)
       if (store) ordersQuery = ordersQuery.eq('store_id', store.id)
 
-      const [buyerRes, ordersRes] = await Promise.all([
-        supabase.from('buyers').select('*').eq('phone', normalized).maybeSingle(),
+      const [lookupRes, ordersRes] = await Promise.all([
+        supabase.rpc('buyer_network_lookup', { p_phone: normalized }),
         ordersQuery.order('ordered_at', { ascending: false }),
       ])
 
-      if (buyerRes.error) {
-        toast.push({ kind: 'error', title: 'Lookup failed', detail: buyerRes.error.message })
+      if (lookupRes.error) {
+        toast.push({ kind: 'error', title: 'Lookup failed', detail: lookupRes.error.message })
         setState({ kind: 'idle' })
         return
       }
-      if (!buyerRes.data) {
+
+      const network = ((lookupRes.data ?? []) as NetworkLookupRow[])[0]
+      if (!network) {
         setState({ kind: 'not-found' })
         return
       }
-      const buyer = buyerRes.data as Buyer
-      let similar: SimilarBuyer[] = []
-      if (buyer.embedding) {
-        const { data, error } = await supabase.rpc('find_similar_buyers', {
-          p_embedding: buyer.embedding,
-          p_limit: 5,
-        })
-        if (!error) similar = (data ?? []) as SimilarBuyer[]
+
+      const buyer: Buyer = {
+        phone: normalized,
+        first_seen: network.first_seen ?? null,
+        total_orders: network.total_orders ?? 0,
+        total_accepted: network.total_accepted ?? 0,
+        total_refused: network.total_refused ?? 0,
+        risk_score: Number(network.risk_score ?? 0.5),
+        store_count: network.store_count ?? 0,
+        // No embedding is requested or received, so the AI actions stay hidden.
+        embedding: null,
       }
-      const { data: lookupRow, error: lookErr } = await supabase
-        .from('lookups')
-        .insert({ buyer_phone: normalized, owner_email: email })
-        .select('id, buyer_phone, searched_at, buyers(risk_score, total_orders)')
-        .single()
-      if (!lookErr && lookupRow) {
-        setRecents((prev) =>
-          [lookupRow as unknown as LookupRow, ...prev.filter((r) => r.buyer_phone !== normalized)].slice(0, 8),
-        )
-      } else {
+
+      const orders = (ordersRes.data ?? []) as unknown as OrderRow[]
+
+      // Similarity by phone: the server keeps the vector, and the result
+      // carries no phone number, so it cannot become a contact list.
+      let similar: SimilarBuyer[] = []
+      const simRes = await supabase.rpc('similar_buyers_by_phone', {
+        p_phone: normalized,
+        p_limit: 5,
+      })
+      if (!simRes.error) similar = (simRes.data ?? []) as SimilarBuyer[]
+
+      if (email) {
+        await supabase.from('lookups').insert({ buyer_phone: normalized, owner_email: email })
         void loadRecents()
       }
-      setState({ kind: 'found', buyer, orders: (ordersRes.data ?? []) as OrderRow[], similar })
+
+      setState({ kind: 'found', buyer, orders, similar })
     },
     [toast, loadRecents, store, email],
   )
@@ -134,10 +162,8 @@ export function Lookup() {
   }
 
   async function clearAll() {
-    if (!supabase) return
-    const ids = recents.map((r) => r.id)
-    if (ids.length === 0) return
-    const { error } = await supabase.from('lookups').delete().in('id', ids)
+    if (!supabase || !email) return
+    const { error } = await supabase.from('lookups').delete().eq('owner_email', email)
     if (error) {
       toast.push({ kind: 'error', title: 'Could not clear history', detail: error.message })
       return
@@ -311,28 +337,26 @@ export function Lookup() {
               </div>
             </Card>
 
-            {buyer.embedding && state.kind === 'found' && state.similar.length > 0 && (
+            {state.kind === 'found' && state.similar.length > 0 && (
               <Card>
                 <h3 className="card-title">
                   <Icon name="git-compare" size={16} /> Behaviourally similar buyers
                 </h3>
                 <p className="card-sub">
-                  Nearest neighbours by embedding — how similar people behaved, before this buyer had much history.
+                  Closest behaviour to this buyer, by fingerprint. The network never returns these
+                  buyers' phone numbers, so they cannot be opened from here — look one up with a
+                  number you already have.
                 </p>
                 <Reveal stagger className="similar-list">
-                  {state.similar.map((s) => {
-                    return (
-                      <button key={s.phone} className="similar-row" onClick={() => void search(s.phone)}>
-                        <span className="similar-phone">
-                          <Avatar phone={s.phone} size={26} /> {phone(s.phone)}
-                        </span>
-                        <span className="similar-meta">
-                          {s.total_orders} orders · {s.total_refused} refused
-                        </span>
-                        <VerdictChip risk_score={s.risk_score} total_orders={s.total_orders} />
-                      </button>
-                    )
-                  })}
+                  {state.similar.map((s, i) => (
+                    <div key={i} className="similar-row">
+                      <span className="similar-meta">
+                        {Math.round((1 - Math.min(1, Math.max(0, Number(s.similarity) || 0))) * 100)}% alike ·{' '}
+                        {s.total_orders ?? 0} orders · {s.total_refused ?? 0} refused
+                      </span>
+                      <VerdictChip risk_score={s.risk_score} total_orders={s.total_orders} />
+                    </div>
+                  ))}
                 </Reveal>
               </Card>
             )}
