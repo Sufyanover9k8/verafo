@@ -1,8 +1,12 @@
-# Verafo MVP
+# Verafo
 
-Prove that a shared, phone-keyed buyer profile can predict COD refusal risk across stores —
-with nothing more than order logs and delivery outcomes. Three screens, one background job,
-dark UI, [Ionicons](https://ionic.io/ionicons) throughout.
+Verafo is a standalone revenue-intelligence and COD risk product for Pakistani
+merchants. It scores every cash-on-delivery buyer before a seller ships, using
+order history across a network of connected stores.
+
+This repository root **is** the Verafo product: a React + Vite single-page app
+deployed to Vercel. `apps/shopify/` is a separate integration (an order source
+and webhook host) and is **not** the product — nothing in `src/` imports it.
 
 > "Type in a phone number, and before you ship, Verafo tells you how likely this buyer is
 > to accept the parcel — based on how they've behaved across every connected store, not just yours."
@@ -10,81 +14,89 @@ dark UI, [Ionicons](https://ionic.io/ionicons) throughout.
 ## Stack
 
 - **Supabase** — Postgres + pgvector + auto REST API + RLS. Schema, score logic and
-  nearest-neighbour search all live in SQL (`supabase/schema.sql`).
+  nearest-neighbour search live in SQL (`supabase/schema.sql`).
 - **OpenAI API** — one server-side Edge Function (`supabase/functions/verafo-ai`) for
   buyer embeddings and plain-English explanations. Never exposed in the browser bundle.
-- **React + Vite + TypeScript** — the seller-facing app.
+- **React 19 + Vite + TypeScript** — the merchant-facing app.
+- **Tailwind v4 + shadcn/ui** — styling, built on the Verafo design tokens in
+  `src/styles/`. Light by default, dark mode supported.
+- **recharts / three.js / Leaflet** — charts, the 3D buyer map, and city maps. All
+  lazy-loaded; none of them is in the first-paint bundle.
 
 ## Screens
 
-1. **New Order** (`/`) — log an order; the buyer's risk badge appears live as you type the
-   phone number, before the order is saved.
-2. **Mark Outcome** (`/outcomes`) — pending orders with Accepted / Refused buttons. Every
-   outcome re-scores the buyer immediately (database trigger).
-3. **Buyer Lookup** (`/lookup`) — full cross-store profile: badge, score bar, totals,
-   distinct stores, order timeline, similar buyers (embedding neighbours), and an optional
-   AI one-line explanation.
+| Route | Screen |
+|---|---|
+| `/` | Dashboard — today's verdict, money at risk, orders needing a decision |
+| `/orders` | Orders — every order with buyer risk, filters and outcomes |
+| `/orders/pending` | Outcomes — mark accepted or refused |
+| `/orders/new` | New Order — log an order and see the verdict live |
+| `/lookup` | Buyer Lookup — full cross-store profile for a phone number |
+| `/map` | RTO Insights — buyers across two dimensions, colour-coded by risk |
+| `/chat` | Ask Verafo — questions answered against your own order data |
+| `/import` | Bulk Import — load past orders from CSV |
+| `/settings` | Settings — appearance, data and connection |
+| `/stores` | Stores (admins) — every connected brand |
 
-## How the risk score works (v0 — pure SQL, no AI needed)
+Sign-in, password reset and first-store onboarding are handled before the shell.
 
-- No resolved orders → neutral `0.50`.
+## How the risk score works (pure SQL, no AI needed)
+
+- No resolved orders → not scored. The UI shows **UNKNOWN**, never "safe".
 - Otherwise the refusal rate, pulled toward `0.50` until 3+ resolved orders exist.
 - Boosters: never-seen-before address `+0.05`, phone first seen today `+0.05`,
   5+ accepted across 2+ stores `−0.20`. Clamped to `[0, 1]`.
 
-Thresholds used by the UI: `< 0.45` green (low risk), `0.45–0.65` amber (caution),
-`> 0.65` red (high risk).
+Thresholds live in `src/lib/risk.ts`, the single source of truth:
+`< 0.45` LOW RISK, `0.45–0.65` MEDIUM RISK, `> 0.65` HIGH RISK. A buyer with no
+resolved orders is UNKNOWN. The verdict word is always shown alongside colour.
+
+## Shared helpers (`src/lib/ui/`)
+
+Display and analytics logic that is pure, tested, and has no database access:
+
+| File | What it does |
+|---|---|
+| `phone.ts` | Pakistani phone parsing and `tel:` / WhatsApp links. Returns null rather than a broken link. |
+| `csv.ts` | CSV with quoting, a UTF-8 BOM, and defence against spreadsheet formula injection. |
+| `money.ts` | PKR formatting with thousands separators. |
+| `analytics.ts` | City, product and weekday refusal rates, refusal-rate trends, money at risk, buyer segments. Will not publish a rate below a 10-order sample, and keeps unknown outcomes in their own bucket. |
+| `prefs.ts` | Device-only display preferences; every read and write is guarded so private browsing cannot break a page. |
+| `use-auto-refresh.ts` | Timer that pauses while the tab is hidden and never overlaps itself. |
 
 ## Setup
 
 ### 1. Database
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor** and run `supabase/schema.sql`.
-3. (Optional but recommended for the demo) run `supabase/seed.sql` — 3 stores and 5 buyers
-   with realistic cross-store history, ready to explore.
+2. Open **SQL Editor** and run, in this order:
+   - `supabase/schema.sql`
+   - `supabase/rls-production.sql` — **edit the admin email list at the top first**
+   - `supabase/store-plans-migration.sql` (optional; only if you use the plan badge)
+   - `supabase/shopify-migration.sql` (only if you use the Shopify integration)
+3. Optional, for a demo: `supabase/seed.sql`.
 
 ### 2. Frontend
 
 ```bash
 npm install
-copy .env.example .env   # fill in VITE_SUPABASE_URL and your anon/publishable key
-npm run dev              # http://localhost:5173
+cp .env.example .env    # then fill in VITE_SUPABASE_URL and the publishable key
+npm run dev
 ```
 
-Without env vars the app shows a setup hint instead of erroring.
+Other scripts: `npm run build`, `npm run preview`, `npm test`, `npm run lint`.
 
-### 3. AI layer (optional — embeddings + explanations)
+## Testing notes
 
-```bash
-npm i -g supabase
-supabase login
-supabase link --project-ref <your-project-ref>
-supabase functions deploy verafo-ai --no-verify-jwt
-supabase secrets set OPENAI_API_KEY=sk-...
-```
+- `npm test` runs the Vitest suite. `vitest.config.ts` uses a single forked process
+  (`fileParallelism: false`) because the default worker-per-file pool times out on
+  constrained machines, and these tests are pure functions.
+- In restricted sandboxes `npm test`, `npm run dev` and `npm run build` can fail with
+  `spawn EPERM` — esbuild's config service needs a named pipe. That is an environment
+  limit, not a project defect. Run them outside the sandbox.
 
-Then in the Buyer Lookup screen: **Refresh fingerprint** embeds the buyer's behaviour
-(`text-embedding-3-small`, 1536-dim vector stored in `buyers.embedding`) and **Explain this
-buyer** generates a one-line summary. Everything degrades gracefully if the function is absent.
+## Deployment
 
-## Security notes
-
-- The OpenAI key and Supabase service key live **only** in the Edge Function env.
-- The browser uses only the anon key.
-- `schema.sql` enables RLS on all tables with permissive demo policies for `anon`.
-  Replace them with authenticated-role policies (one per store owner) before anything real.
-
-## Project layout
-
-```
-supabase/
-  schema.sql                 tables, triggers, recompute_buyer(), find_similar_buyers(), RLS
-  seed.sql                   demo data: 3 stores, 5 buyers
-  config.toml                edge function config
-  functions/verafo-ai/       OpenAI embeddings + explanations (Deno)
-src/
-  lib/                       supabase client, score rules, formatting, toast
-  components/                badge, scorebar, icons, states, layout pieces
-  pages/                     NewOrder · Outcomes · Lookup
-```
+The dashboard is the Vercel project **verafo**, built from this folder. See
+`DEPLOY.md` for the environment variables and the RLS step, and
+`DEPLOY-PLAN-BADGE.md` if you are deploying the plan badge.

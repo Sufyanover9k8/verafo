@@ -17,15 +17,15 @@ interface LineChartProps {
 }
 
 const tooltipStyle = {
-  background: 'var(--v-ink-850)',
-  border: '1px solid var(--v-ink-600)',
-  borderRadius: 8,
-  color: 'var(--v-ink-100)',
+  background: 'var(--panel)',
+  border: '1px solid var(--line-2)',
+  borderRadius: 10,
+  color: 'var(--ink)',
   fontSize: 12,
 }
-const tickStyle = { fill: 'var(--v-ink-400)', fontSize: 11 }
-const STROKE = 'var(--cyan-primary)'
-const FILL = 'rgba(33, 158, 188, 0.08)'
+const tickStyle = { fill: 'var(--ink-3)', fontSize: 11 }
+const STROKE = 'var(--teal)'
+const FILL = 'color-mix(in srgb, var(--teal) 8%, transparent)'
 
 /** Pre-themed line/area chart. Max two series. Grid is horizontal only. */
 export function LineChart({ data, series, height = 280, begin = 0 }: LineChartProps) {
@@ -48,10 +48,10 @@ export function LineChart({ data, series, height = 280, begin = 0 }: LineChartPr
             <stop offset="100%" stopColor={FILL} />
           </linearGradient>
         </defs>
-        <CartesianGrid vertical={false} stroke="var(--v-ink-600)" strokeWidth={1} />
+        <CartesianGrid vertical={false} stroke="var(--line-2)" strokeWidth={1} />
         <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
         <YAxis tick={tickStyle} axisLine={false} tickLine={false} width={42} />
-        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: 'var(--v-ink-300)' }} />
+        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: 'var(--ink-2)' }} />
         <Area
           type="monotone"
           dataKey="a"
@@ -68,7 +68,7 @@ export function LineChart({ data, series, height = 280, begin = 0 }: LineChartPr
             type="monotone"
             dataKey="b"
             name={series[1]?.name ?? ''}
-            stroke="var(--cyan-dim)"
+            stroke="var(--teal-deep)"
             strokeWidth={2}
             fill="transparent"
             dot={false}

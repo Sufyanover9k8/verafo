@@ -2,10 +2,10 @@ import { cn } from '@/lib/utils'
 import { hasEnoughData, toneFromScore, type VerdictTone } from '@/lib/risk'
 
 const TONE: Record<VerdictTone, { label: string; box: string; dot: string }> = {
-  safe: { label: 'Low risk', box: 'border-success/25 bg-success/10 text-success', dot: 'bg-success' },
-  watch: { label: 'Medium risk', box: 'border-warning/30 bg-warning/10 text-warning', dot: 'bg-warning' },
-  high: { label: 'High risk', box: 'border-destructive/25 bg-destructive/10 text-destructive', dot: 'bg-destructive' },
-  unknown: { label: 'Not enough data', box: 'border-border bg-muted text-muted-foreground', dot: 'bg-muted-foreground/50' },
+  safe: { label: 'LOW RISK', box: 'border-risk-safe/40 bg-risk-safe-soft text-risk-safe-strong', dot: 'bg-risk-safe' },
+  watch: { label: 'MEDIUM RISK', box: 'border-risk-watch/40 bg-risk-watch-soft text-risk-watch-strong', dot: 'bg-risk-watch' },
+  high: { label: 'HIGH RISK', box: 'border-risk-high/40 bg-risk-high-soft text-risk-high-strong', dot: 'bg-risk-high' },
+  unknown: { label: 'UNKNOWN', box: 'border-risk-unknown/40 bg-risk-unknown-soft text-risk-unknown-strong', dot: 'bg-risk-unknown' },
 }
 
 interface VerdictBadgeProps {
@@ -23,7 +23,7 @@ export function VerdictBadge({ riskScore, totalOrders, showScore = false, classN
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap',
         t.box,
         className,
       )}

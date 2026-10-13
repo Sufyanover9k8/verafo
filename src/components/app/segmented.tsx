@@ -14,7 +14,7 @@ export function Segmented<T extends string | number>({ value, onChange, options,
     <div
       role="group"
       aria-label={ariaLabel}
-      className={cn('inline-flex items-center rounded-lg border bg-muted/60 p-0.5', className)}
+      className={cn('inline-flex items-center rounded-[10px] border bg-muted/60 p-0.5', className)}
     >
       {options.map((o) => {
         const active = o.value === value
@@ -25,7 +25,7 @@ export function Segmented<T extends string | number>({ value, onChange, options,
             aria-pressed={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'h-7 rounded-md border-0 bg-transparent px-3 text-xs font-medium transition-colors',
+              'h-11 rounded-[10px] border-0 bg-transparent px-3 text-[13px] font-medium transition-colors md:h-8',
               active ? 'bg-card text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground',
             )}
           >

@@ -146,7 +146,9 @@ interface TrendsReport {
   riskBuckets: { safe: number; caution: number; high: number }
   topCategories: { category: string; count: number; refusalRate: number }[]
   topStores: { name: string; count: number }[]
-  riskiest: { phone: string; risk_score: number; total_orders: number }[]
+  /** Masked labels only. The edge function no longer returns buyer phone
+   *  numbers here, so this report cannot become a contact list. */
+  riskiest: { buyer: string; risk_score: number; total_orders: number }[]
   weeklyTrend: { label: string; total: number; accepted: number; refused: number }[]
 }
 
@@ -187,7 +189,7 @@ function formatTrends(t: TrendsReport): string {
   }
   lines.push('Riskiest buyers:')
   for (const b of t.riskiest) {
-    lines.push(`- ${b.phone}: risk ${b.risk_score.toFixed(2)}, ${b.total_orders} orders`)
+    lines.push(`- ${b.buyer}: risk ${b.risk_score.toFixed(2)}, ${b.total_orders} orders`)
   }
   return lines.join('\n')
 }
@@ -445,11 +447,22 @@ export function Chat() {
 
   const fetchMentions = useCallback(async (query: string) => {
     if (!supabase) return
+    const digits = query.replace(/[^\d]/g, '')
+    // PRIVACY: this used to run `ilike('phone', '%digits%')`, which turned the
+    // chat box into a phone-number enumeration endpoint — type a few digits
+    // and harvest matching numbers. Two changes:
+    //   · a minimum of 6 digits, so a partial probe returns nothing
+    //   · the read now depends on the `buyers` policy, which is limited to
+    //     this merchant's own buyers
+    if (digits.length < 6) {
+      setMentionResults([])
+      return
+    }
     const id = ++mentionId.current
     const { data, error } = await supabase
       .from('buyers')
       .select('phone')
-      .ilike('phone', `%${query.replace(/[^\d+]/g, '')}%`)
+      .ilike('phone', `%${digits}%`)
       .limit(8)
     if (error || id !== mentionId.current) return
     setMentionResults((data ?? []) as { phone: string }[])
@@ -1004,7 +1017,6 @@ export function Chat() {
           {sortedChats.length === 0 && (
             <div className="chat-items-empty">
               <EmptyState
-                icon="chatbubble-outline"
                 title={searchQuery ? 'No matches' : 'No chats yet'}
                 detail={searchQuery ? 'Try a different search.' : 'Start a conversation to get going.'}
               />
@@ -1087,7 +1099,6 @@ export function Chat() {
         {!activeChat ? (
           <div className="chat-window-empty">
             <EmptyState
-              icon="chatbubbles-outline"
               title="No chat selected"
               detail="Pick a conversation from the list, or start a new one."
             />
@@ -1165,7 +1176,6 @@ export function Chat() {
               {!loading && messages.length === 0 && (
                 <div className="chat-start-hint">
                   <EmptyState
-                    icon="sparkles-outline"
                     title="Say hello to Verafo"
                     detail="Ask about a buyer with @, a store with #, or use the shortcuts below for instant reports."
                   />

@@ -18,21 +18,23 @@ import {
 import type { ChartSpec } from '../lib/types'
 import { useAnimatedWidth } from './charts/useAnimatedWidth'
 
-const PALETTE = ['#219EBC', '#023047', '#8ECAE6', '#3FBF87', '#FFB703', '#E05252', '#4A5C5C']
+// The website's chart tokens: teal, purple, amber, rose, blue, plus the
+// deeper teal for a sixth series.
+const PALETTE = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)', 'var(--teal-deep)']
 
 const TOOLTIP_STYLE = {
-  background: 'var(--bg-2)',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  color: 'var(--text)',
+  background: 'var(--panel)',
+  border: '1px solid var(--line-2)',
+  borderRadius: 10,
+  color: 'var(--ink)',
   fontSize: 12,
 }
 
-const TICK_STYLE = { fill: 'var(--muted)', fontSize: 11 }
-const GRID_STROKE = 'var(--border)'
-const LEGEND_STYLE = { fontSize: 11, color: 'var(--muted)' }
-const CURSOR_FILL = 'color-mix(in srgb, var(--accent) 8%, transparent)'
-const CURSOR_STROKE = 'color-mix(in srgb, var(--accent) 40%, transparent)'
+const TICK_STYLE = { fill: 'var(--ink-3)', fontSize: 11 }
+const GRID_STROKE = 'var(--line-2)'
+const LEGEND_STYLE = { fontSize: 11, color: 'var(--ink-3)' }
+const CURSOR_FILL = 'color-mix(in srgb, var(--teal) 8%, transparent)'
+const CURSOR_STROKE = 'color-mix(in srgb, var(--teal) 40%, transparent)'
 
 const fmtValue = (v: number, format?: string) =>
   format === 'pkr' ? `${Math.round(v).toLocaleString('en-PK')} PKR` : format === 'percent' ? `${Math.round(v)}%` : String(v)

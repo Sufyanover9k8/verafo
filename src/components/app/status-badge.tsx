@@ -2,8 +2,8 @@ import { cn } from '@/lib/utils'
 import type { OutcomeStatus } from '@/lib/types'
 
 const STATUS: Record<OutcomeStatus, { label: string; box: string; dot: string }> = {
-  accepted: { label: 'Accepted', box: 'border-success/25 bg-success/10 text-success', dot: 'bg-success' },
-  refused: { label: 'Refused', box: 'border-destructive/25 bg-destructive/10 text-destructive', dot: 'bg-destructive' },
+  accepted: { label: 'Accepted', box: 'border-risk-safe/40 bg-risk-safe-soft text-risk-safe-strong', dot: 'bg-risk-safe' },
+  refused: { label: 'Refused', box: 'border-risk-high/40 bg-risk-high-soft text-risk-high-strong', dot: 'bg-risk-high' },
   pending: { label: 'Pending', box: 'border-border bg-muted text-muted-foreground', dot: 'bg-muted-foreground/60' },
 }
 

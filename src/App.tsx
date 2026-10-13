@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/shell/app-shell'
 import { Skeleton } from './components/primitives/Skeleton'
+import { FEATURES } from './lib/features'
 import { useSession } from './lib/session'
 import { useStoreScope } from './lib/store'
 
@@ -21,6 +22,9 @@ const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })
 const Lookup = lazy(() => import('./pages/Lookup').then((m) => ({ default: m.Lookup })))
 const NewOrder = lazy(() => import('./pages/NewOrder').then((m) => ({ default: m.NewOrder })))
 const Outcomes = lazy(() => import('./pages/Outcomes').then((m) => ({ default: m.Outcomes })))
+const Decide = lazy(() => import('./pages/Decide').then((m) => ({ default: m.Decide })))
+const Scan = lazy(() => import('./pages/Scan').then((m) => ({ default: m.Scan })))
+const Simulate = lazy(() => import('./pages/Simulate').then((m) => ({ default: m.Simulate })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 const StoreDashboard = lazy(() => import('./pages/StoreDashboard').then((m) => ({ default: m.StoreDashboard })))
 const Stores = lazy(() => import('./pages/Stores').then((m) => ({ default: m.Stores })))
@@ -58,6 +62,12 @@ export function App() {
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/orders/new" element={<NewOrder />} />
           <Route path="/orders/pending" element={<Outcomes />} />
+          {/* Unreleased pages: switched off in src/lib/features.ts. With the
+              route gone, a direct URL falls through to the catch-all below and
+              lands on the dashboard. */}
+          {FEATURES.decide && <Route path="/orders/decide" element={<Decide />} />}
+          {FEATURES.scan && <Route path="/orders/scan" element={<Scan />} />}
+          {FEATURES.simulate && <Route path="/simulate" element={<Simulate />} />}
           <Route path="/outcomes" element={<Navigate to="/orders/pending" replace />} />
           <Route path="/map" element={<BuyerMap />} />
           {isAdmin && <Route path="/stores" element={<Stores />} />}

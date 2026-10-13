@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <LayoutTickContext.Provider value={layoutTick}>
       <SidebarProvider open={open} onOpenChange={onOpenChange}>
         <AppSidebar />
-        <SidebarInset className="min-w-0 bg-background">
+        <SidebarInset className="min-w-0 overflow-x-hidden bg-background">
           <SiteHeader />
           <main className={`main${pathname === '/chat' ? ' chat-main' : ''}`}>{children}</main>
         </SidebarInset>

@@ -52,7 +52,12 @@ function ThemeMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9" aria-label="Change theme">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-11 rounded-full md:size-9"
+          aria-label="Change theme"
+        >
           <Icon className="size-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -85,21 +90,20 @@ export function SiteHeader() {
     .sort((a, b) => b.to.length - a.to.length)[0]
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
-      <SidebarTrigger className="-ms-1" />
-      <Separator orientation="vertical" className="mx-1 h-5" />
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
+      <SidebarTrigger className="-ms-1 size-11 md:size-8" />
+      <Separator orientation="vertical" className="mx-1 hidden h-5 sm:block" />
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
         {sectionOf?.label && <span className="hidden text-muted-foreground sm:inline">{sectionOf.label}</span>}
         {sectionOf?.label && <span className="hidden text-muted-foreground/50 sm:inline">/</span>}
-        <span className="truncate font-medium text-foreground">{current?.label ?? 'Overview'}</span>
-      </nav>
+        <span className="truncate font-medium text-foreground">{current?.label ?? 'Dashboard'}</span>      </nav>
 
       <div className="ms-auto flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={palette.open}
-          className="h-9 gap-2 px-3 text-muted-foreground"
+          className="h-11 gap-2 px-3 text-muted-foreground max-sm:w-11 max-sm:justify-center max-sm:px-0 md:h-9"
           aria-label="Open command palette (Ctrl+K)"
         >
           <Search className="size-4" />
@@ -110,7 +114,7 @@ export function SiteHeader() {
         </Button>
         <QuickCheck />
         <span
-          className="hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground xl:inline-flex"
+          className="hidden items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground xl:inline-flex"
           title={isConfigured ? 'Connected to Verafo' : 'Supabase is not configured'}
         >
           <span className={`size-1.5 rounded-full ${isConfigured ? 'bg-success' : 'bg-warning'}`} />

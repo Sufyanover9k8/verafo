@@ -11,5 +11,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}'],
+    // Run test files one at a time in a single forked process. The default
+    // spawns a worker per file, which times out on constrained machines; these
+    // tests are pure functions, so parallel workers buy nothing.
+    pool: 'forks',
+    fileParallelism: false,
   },
 })

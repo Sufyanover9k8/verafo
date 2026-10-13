@@ -19,7 +19,7 @@ const ROWS = [
   { key: 'safe', label: 'Low risk', cls: 'safe' },
   { key: 'watch', label: 'Medium risk', cls: 'watch' },
   { key: 'high', label: 'High risk', cls: 'high' },
-  { key: 'unknown', label: 'Insufficient data', cls: 'unknown' },
+  { key: 'unknown', label: 'Unknown', cls: 'unknown' },
 ] as const
 
 /** Risk-distribution breakdown. Semantic colour is permitted here because the subject IS risk. */

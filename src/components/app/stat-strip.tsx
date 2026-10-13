@@ -2,10 +2,11 @@ import type { ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export type Trend = 'up' | 'down' | 'flat'
 
-interface StatProps {
+export interface StatItem {
   label: string
   value: ReactNode
   /** Short line under the number, for example "vs yesterday (13)". */
@@ -15,7 +16,7 @@ interface StatProps {
   upIsGood?: boolean
 }
 
-function Stat({ label, value, hint, trend, upIsGood = true }: StatProps) {
+function Stat({ label, value, hint, trend, upIsGood = true }: StatItem) {
   const good = trend === 'flat' || trend == null ? null : (trend === 'up') === upIsGood
   const Icon = trend === 'up' ? ArrowUpRight : trend === 'down' ? ArrowDownRight : Minus
   return (
@@ -38,7 +39,22 @@ function Stat({ label, value, hint, trend, upIsGood = true }: StatProps) {
 }
 
 /** Four (or so) headline numbers in one card, divided by hairlines. Calmer than a row of separate tiles. */
-export function StatStrip({ items }: { items: StatProps[] }) {
+export function StatStrip({ items, loading = false }: { items: StatItem[]; loading?: boolean }) {
+  if (loading) {
+    return (
+      <Card className="gap-0 overflow-hidden p-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4">
+          {items.map((s) => (
+            <div key={s.label} className="flex flex-col gap-2 border-b border-e border-border px-5 py-4">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    )
+  }
   return (
     <Card className="gap-0 overflow-hidden p-0">
       <div className="grid grid-cols-2 divide-x divide-y divide-border lg:grid-cols-4 lg:divide-y-0">

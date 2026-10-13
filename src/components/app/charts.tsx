@@ -16,7 +16,7 @@ interface ChartProps {
   emptyText?: string
 }
 
-const TICK = { fill: 'var(--muted-foreground)', fontSize: 11 }
+const TICK = { fill: 'var(--ink-3)', fontSize: 11 }
 
 const compact = (n: number) =>
   Math.abs(n) >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : Math.abs(n) >= 1000 ? `${+(n / 1000).toFixed(1)}k` : String(n)
@@ -59,10 +59,10 @@ export function TrendArea({ data, height = 240, format = String, axisFormat = co
             <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 4" />
+        <CartesianGrid vertical={false} stroke="var(--line-2)" strokeDasharray="3 4" />
         <XAxis dataKey="label" tick={TICK} axisLine={false} tickLine={false} tickMargin={8} minTickGap={16} />
         <YAxis tick={TICK} axisLine={false} tickLine={false} width={44} tickFormatter={axisFormat} />
-        <Tooltip cursor={{ stroke: 'var(--border)' }} content={(p) => <Tip {...(p as unknown as TipProps)} format={format} />} />
+        <Tooltip cursor={{ stroke: 'var(--line-2)' }} content={(p) => <Tip {...(p as unknown as TipProps)} format={format} />} />
         <Area type="monotone" dataKey="value" stroke="var(--chart-1)" strokeWidth={2} fill={`url(#${gid})`} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
       </AreaChart>
     </ResponsiveContainer>
@@ -75,10 +75,10 @@ export function TrendBars({ data, height = 240, format = String, axisFormat = co
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 4" />
+        <CartesianGrid vertical={false} stroke="var(--line-2)" strokeDasharray="3 4" />
         <XAxis dataKey="label" tick={TICK} axisLine={false} tickLine={false} tickMargin={8} minTickGap={16} />
         <YAxis tick={TICK} axisLine={false} tickLine={false} width={32} allowDecimals={false} tickFormatter={axisFormat} />
-        <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.6 }} content={(p) => <Tip {...(p as unknown as TipProps)} format={format} />} />
+        <Tooltip cursor={{ fill: 'var(--bg-2)', opacity: 0.6 }} content={(p) => <Tip {...(p as unknown as TipProps)} format={format} />} />
         <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={26} />
       </BarChart>
     </ResponsiveContainer>

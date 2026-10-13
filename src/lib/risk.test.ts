@@ -11,12 +11,13 @@ import {
 } from './risk'
 
 describe('computeVerdict', () => {
-  it('keeps the grey withheld state only for buyers with zero resolved orders', () => {
+  it('keeps the unknown state only for buyers with zero resolved orders', () => {
     const v = computeVerdict({ risk_score: 0.9, total_orders: 0 })
     expect(v.tone).toBe('unknown')
     expect(v.numeral).toBe('—')
-    expect(v.label).toBe('INSUFFICIENT DATA')
-    expect(v.short).toBe('INSUFFICIENT')
+    // The merchant-facing word is UNKNOWN everywhere, matching the website.
+    expect(v.label).toBe('UNKNOWN')
+    expect(v.short).toBe('UNKNOWN')
     expect(v.confidence).toBeNull()
     expect(v.confidenceLabel).toBe('◔ LOW CONFIDENCE')
   })

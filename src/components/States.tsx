@@ -20,7 +20,7 @@ export function NeedsSetup() {
   )
 }
 
-export function EmptyState({ icon, title, detail }: { icon: string; title: string; detail?: string }) {
+export function EmptyState({ icon = 'information-circle', title, detail }: { icon?: string; title: string; detail?: string }) {
   return (
     <div className="empty-state">
       <div className="empty-icon">

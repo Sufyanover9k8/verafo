@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
+import { CardState } from '../components/app/card-state'
+import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
+import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
-import { dateOnly } from '../lib/format'
 import { useIsAdmin } from '../lib/admin'
+import { useStoreScope } from '../lib/store'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
@@ -32,6 +34,7 @@ function csv(rows: Record<string, unknown>[]): string {
 export function Settings() {
   const toast = useToast()
   const { admin } = useIsAdmin()
+  const { store } = useStoreScope()
   const { displayName } = useSession()
   const { theme, reducedMotion, resolved, setTheme, setReducedMotion } = useTheme()
   const [exporting, setExporting] = useState<'buyers' | 'orders' | null>(null)
@@ -86,26 +89,64 @@ export function Settings() {
 
   const exportBuyers = useCallback(async () => {
     if (!supabase) return
+
+    // PRIVACY: `buyers` is keyed by phone number. A merchant may export only
+    // the buyers who ordered from their own store; the whole-network export is
+    // admin-only. Without a store selected a merchant would be exporting other
+    // merchants' customers, so that is refused outright.
+    const decision = canExportAudience({
+      isAdmin: admin,
+      hasStoreScope: Boolean(store),
+      rowCount: 1, // refined below, once the row count is known
+    })
+    if (!admin && !store) {
+      toast.push({ kind: 'error', title: 'Select a store first', detail: decision.reason })
+      return
+    }
+
     setExporting('buyers')
     try {
-      const { data, error } = await supabase.from('buyers').select('*').order('phone')
+      // Own buyers only, resolved from this store's orders. No `select('*')`,
+      // so `embedding` and `feature_vector` never leave the database.
+      let phones: string[] = []
+      let orderQuery = supabase.from('orders').select('buyer_phone')
+      if (!admin) orderQuery = orderQuery.eq('store_id', store!.id)
+      const { data: orderRows, error: orderErr } = await orderQuery
+      if (orderErr) throw orderErr
+      phones = [...new Set((orderRows ?? []).map((r) => r.buyer_phone).filter(Boolean) as string[])]
+
+      if (phones.length === 0) {
+        toast.push({ kind: 'error', title: 'Nothing to export', detail: 'This store has no buyers yet.' })
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('buyers')
+        .select('phone, risk_score, total_orders, total_accepted, total_refused, first_seen')
+        .in('phone', phones.slice(0, 1000))
+        .order('phone')
       if (error) throw error
-      const rows = (data ?? []).map((b) => ({
-        phone: b.phone,
-        risk_score: b.risk_score,
-        total_orders: b.total_orders,
-        total_accepted: b.total_accepted,
-        total_refused: b.total_refused,
-        first_seen: dateOnly(b.first_seen),
-      }))
-      download(`verafo-buyers-${new Date().toISOString().slice(0, 10)}.csv`, csv(rows))
-      toast.push({ kind: 'success', title: 'Buyers exported', detail: `${rows.length} rows downloaded.` })
+
+      const buyers = (data ?? []) as AudienceBuyer[]
+      const finalDecision = canExportAudience({ isAdmin: admin, hasStoreScope: Boolean(store), rowCount: buyers.length })
+      const out = exportAudienceCsv(buyers, finalDecision)
+      if (!out.ok) {
+        toast.push({ kind: 'error', title: 'Export refused', detail: out.reason })
+        return
+      }
+
+      download(`verafo-buyers-${new Date().toISOString().slice(0, 10)}.csv`, out.csv)
+      toast.push({
+        kind: 'success',
+        title: 'Buyers exported',
+        detail: `${buyers.length} ${admin ? 'rows' : 'of your own buyers'} downloaded.`,
+      })
     } catch (err) {
       toast.push({ kind: 'error', title: 'Export failed', detail: err instanceof Error ? err.message : String(err) })
     } finally {
       setExporting(null)
     }
-  }, [toast])
+  }, [toast, admin, store])
 
   const exportOrders = useCallback(async () => {
     if (!supabase) return
@@ -172,12 +213,29 @@ export function Settings() {
 
   if (!isConfigured || !supabase) return <NeedsSetup />
 
+  // While the connection check is still running, show a skeleton instead of
+  // half-filled numbers. The real sections replace it once it settles.
+  if (conn === 'checking') {
+    return (
+      <div>
+        <PageHeader
+          title="Settings"
+          description="Appearance, data and connection — everything in one place."
+        />
+        <div className="settings-layout">
+          <section className="card settings-section">
+            <CardState loading skeletonHeight={280}>{null}</CardState>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <PageHeader
-        icon="settings-outline"
         title="Settings"
-        subtitle="Appearance, data and connection — everything in one place."
+        description="Appearance, data and connection — everything in one place."
       />
 
       <div className="settings-layout">
@@ -327,12 +385,12 @@ export function Settings() {
               <Icon name="server-outline" size={20} />
             </div>
             <div className="conn-meta">
-              <strong>Supabase {conn === 'ok' ? 'connected' : conn === 'checking' ? 'checking…' : 'unreachable'}</strong>
+              <strong>Supabase {conn === 'ok' ? 'connected' : 'unreachable'}</strong>
               <span>{isConfigured ? new URL(functionsBaseUrl() ?? '').host : 'not configured'}</span>
             </div>
             <span className={`conn-pill${conn === 'ok' ? '' : ' warn'}`}>
               <span className="conn-dot" />
-              {conn === 'ok' ? 'online' : conn === 'checking' ? 'checking' : 'offline'}
+              {conn === 'ok' ? 'online' : 'offline'}
             </span>
           </div>
           <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>

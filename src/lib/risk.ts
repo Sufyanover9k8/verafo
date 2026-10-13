@@ -86,9 +86,9 @@ export function computeVerdict(input: VerdictInput): Verdict {
   if (!hasEnoughData(totalOrders)) {
     return {
       tone: 'unknown',
-      label: 'INSUFFICIENT DATA',
-      title: 'Insufficient data',
-      short: 'INSUFFICIENT',
+      label: 'UNKNOWN',
+      title: 'Unknown',
+      short: 'UNKNOWN',
       numeral: '—',
       confidence: null,
       confidenceLabel: '◔ LOW CONFIDENCE',
@@ -167,8 +167,8 @@ export function riskLevel(score: number): Exclude<VerdictTone, 'unknown'> {
 }
 
 export const RISK = {
-  safe: { label: 'Low risk', color: 'var(--v-safe)', bg: 'var(--v-safe-bg)', border: 'color-mix(in srgb, var(--v-safe) 40%, transparent)', glow: 'transparent' },
-  watch: { label: 'Medium risk', color: 'var(--v-watch)', bg: 'var(--v-watch-bg)', border: 'color-mix(in srgb, var(--v-watch) 40%, transparent)', glow: 'transparent' },
-  high: { label: 'High risk', color: 'var(--v-risk)', bg: 'var(--v-risk-bg)', border: 'color-mix(in srgb, var(--v-risk) 40%, transparent)', glow: 'transparent' },
-  unknown: { label: 'Insufficient data', color: 'var(--v-unknown)', bg: 'var(--v-unknown-bg)', border: 'color-mix(in srgb, var(--v-unknown) 40%, transparent)', glow: 'transparent' },
+  safe: { label: 'Low risk', color: 'var(--v-safe-strong)', bg: 'var(--v-safe-bg)', border: 'color-mix(in srgb, var(--v-safe) 40%, transparent)', glow: 'transparent' },
+  watch: { label: 'Medium risk', color: 'var(--v-watch-strong)', bg: 'var(--v-watch-bg)', border: 'color-mix(in srgb, var(--v-watch) 40%, transparent)', glow: 'transparent' },
+  high: { label: 'High risk', color: 'var(--v-risk-strong)', bg: 'var(--v-risk-bg)', border: 'color-mix(in srgb, var(--v-risk) 40%, transparent)', glow: 'transparent' },
+  unknown: { label: 'Unknown', color: 'var(--v-unknown-strong)', bg: 'var(--v-unknown-bg)', border: 'color-mix(in srgb, var(--v-unknown) 40%, transparent)', glow: 'transparent' },
 } as const
