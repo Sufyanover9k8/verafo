@@ -139,6 +139,7 @@ export function Lookup() {
         // No embedding is requested or received, so the AI actions stay hidden.
         embedding: null,
       }
+
       const orders = (ordersRes.data ?? []) as unknown as OrderRow[]
 
       // Similarity by phone: the server keeps the vector, and the result
