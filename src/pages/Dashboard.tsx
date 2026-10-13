@@ -667,7 +667,8 @@ export function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Sales by city</CardTitle>            <CardDescription>Where your revenue comes from.</CardDescription>
+            <CardTitle>Sales by city</CardTitle>
+            <CardDescription>Where your revenue comes from.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <CardState

@@ -2449,7 +2449,7 @@ code {
 .map-stats strong { color: var(--v-ink-050); font-family: var(--v-font-mono); font-variant-numeric: tabular-nums; }
 .map-axes-hint { margin-left: auto; color: var(--v-ink-400); font-size: var(--t-caption); }
 
-.map-card { background: var(--v-ink-800); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: var(--s-5); }
+.map-card { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: var(--s-5); }
 .map-legend { display: flex; align-items: center; gap: var(--s-5); flex-wrap: wrap; margin-bottom: var(--s-2); font-size: var(--t-caption); color: var(--v-ink-300); }
 .map-legend-item { display: inline-flex; align-items: center; gap: var(--s-1); }
 .map-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
