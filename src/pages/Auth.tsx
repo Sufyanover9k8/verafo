@@ -14,6 +14,7 @@ export function Auth() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resetSent, setResetSent] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -33,7 +34,8 @@ export function Auth() {
         return
       }
       if (mode === 'up' && !res.data.session) {
-        toast.push({ kind: 'success', title: 'Account created', detail: 'Check your email to confirm, then sign in.' })
+        toast.push({ kind: 'success', title: 'Account created', detail: 'We emailed you a link. Click it, then sign in.' })
+        setNotice('Check your email to confirm your account')
         setMode('in')
         return
       }
@@ -69,9 +71,7 @@ export function Auth() {
     <div className="auth-split">
       <aside className="auth-left">
         <div className="auth-wordmark">
-          <span className="sidebar-brand-mark">
-            <ShieldCheck size={18} strokeWidth={2} />
-          </span>
+          <img src="/verafo-logo.png" alt="Verafo" className="size-8 shrink-0 object-contain" />
           <span className="sidebar-brand-name">Verafo</span>
         </div>
 
@@ -94,7 +94,7 @@ export function Auth() {
               <div className="auth-feature-title">Buyer risk verdict</div>
               <div className="auth-feature-sub">Scored the moment an order comes in</div>
             </div>
-            <span className="auth-feature-pill safe">Low risk</span>
+            <span className="auth-feature-pill safe">LOW RISK</span>
           </div>
 
           <div className="auth-feature-card">
@@ -130,8 +130,8 @@ export function Auth() {
           <h2>{mode === 'in' ? 'Welcome back' : 'Create your account'}</h2>
           <p>
             {mode === 'in'
-              ? 'Sign in to see your network-wide buyer risk profiles.'
-              : 'Join the network and start scoring buyers before delivery.'}
+              ? 'Sign in to see your buyer risk profiles and the verdict for today.'
+              : 'Create an account to start scoring buyers before you ship.'}
           </p>
 
           <form className="auth-form" onSubmit={submit}>
@@ -161,7 +161,7 @@ export function Auth() {
             {mode === 'in' && (
               <button
                 type="button"
-                className="link auth-forgot"
+                className="inline-flex h-11 items-center justify-end self-end rounded-[10px] px-2 text-[13px] font-semibold text-primary-text underline-offset-4 hover:underline disabled:opacity-60"
                 onClick={() => void sendReset()}
                 disabled={busy || resetSent}
               >
@@ -169,9 +169,15 @@ export function Auth() {
               </button>
             )}
 
+            {notice && (
+              <p className="rounded-[10px] border border-risk-safe/40 bg-risk-safe-soft px-3 py-2 text-[13px] text-risk-safe-strong">
+                {notice}
+              </p>
+            )}
+
             {error && <span className="field-error">{error}</span>}
 
-            <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>
+            <button type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={busy}>
               {busy ? (
                 <>
                   <Icon name="refresh" size={17} className="spin" /> Working…

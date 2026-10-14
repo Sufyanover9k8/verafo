@@ -5,13 +5,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="icon" type="image/png" href="/verafo-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0a0f1b" />
+    <meta name="theme-color" content="#FFFFFF" />
     <title>Verafo &mdash; COD Risk Intelligence</title>
+    <script>
+      /* Applied before first paint so there is no theme flash: the website
+         does the same with an inline script in each page head.
+         Light is the default. Keeps the browser chrome in step with the
+         page by swapping the theme-color meta, which is white in light
+         mode and the site's ink #0A0F10 in dark mode. */
+      (function () {
+        try {
+          var stored = localStorage.getItem('verafo.theme.v2');
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var theme = dark ? 'dark' : 'light';
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#0A0F10' : '#FFFFFF');
+        } catch (e) {
+          /* storage or matchMedia unavailable — stay on the light default */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

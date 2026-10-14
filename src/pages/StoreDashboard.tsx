@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
+import { PageHeader } from '../components/app/page-header'
 import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { Badge } from '../components/primitives/Badge'
 import { Card } from '../components/primitives/Card'
@@ -162,9 +162,8 @@ export function StoreDashboard() {
   return (
     <div className="stack">
       <PageHeader
-        icon="storefront"
         title={m ? m.name : 'Store dashboard'}
-        subtitle={
+        description={
           m
             ? `${m.buyers} buyers · onboarded ${m.created_at ? dateTime(m.created_at) : '—'} · ${m.orders} lifetime orders`
             : 'Loading store…'
@@ -187,7 +186,6 @@ export function StoreDashboard() {
       {!checking && !admin ? (
         <div className="card">
           <EmptyState
-            icon="shield-checkmark"
             title="Restricted to admins"
             detail="Only administrators can view store dashboards."
           />
@@ -276,13 +274,17 @@ export function StoreDashboard() {
           </Reveal>
           </section>
 
-          <Reveal stagger className="grid-12 chart-section">
-            <section className="col-6">
+          {/* Same two-column grid the main Dashboard uses: Tailwind's
+              grid-cols-* sizes tracks with minmax(0, 1fr), so a wide map or a
+              long product name can no longer squeeze the other card into a
+              narrow column. min-w-0 on each column keeps that promise. */}
+          <Reveal stagger className="chart-section grid gap-6 lg:grid-cols-2">
+            <section className="flex min-w-0 flex-col">
               <div className="verdict-panel-head">
                 <h3 className="card-title">Sales by city</h3>
                 <span className="verdict-conf">orders for this store · last {range} days</span>
               </div>
-              <Card>
+              <Card className="flex-1">
                 {loading ? (
                   <Skeleton height={240} />
                 ) : cityStats.length === 0 ? (
@@ -295,12 +297,12 @@ export function StoreDashboard() {
                 )}
               </Card>
             </section>
-            <section className="col-6">
+            <section className="flex min-w-0 flex-col">
               <div className="verdict-panel-head">
                 <h3 className="card-title">Top products</h3>
                 <span className="verdict-conf">by revenue</span>
               </div>
-              <Card>
+              <Card className="flex-1">
                 {loading ? (
                   <Skeleton height={240} />
                 ) : (

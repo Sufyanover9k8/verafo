@@ -17,9 +17,9 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null)
 
 const KIND_META: Record<ToastKind, { icon: string; color: string; border: string }> = {
-  success: { icon: 'checkmark-circle', color: 'var(--green)', border: 'var(--green-soft)' },
-  error: { icon: 'alert-circle', color: 'var(--red)', border: 'var(--red-soft)' },
-  info: { icon: 'information-circle', color: 'var(--accent)', border: 'var(--accent-soft)' },
+  success: { icon: 'checkmark-circle', color: 'var(--v-safe-strong)', border: 'var(--v-safe-bg)' },
+  error: { icon: 'alert-circle', color: 'var(--v-risk-strong)', border: 'var(--v-risk-bg)' },
+  info: { icon: 'information-circle', color: 'var(--teal-deep)', border: 'var(--tint)' },
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {

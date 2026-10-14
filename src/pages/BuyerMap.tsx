@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import { Icon } from '../components/Icon'
 import type { MapPoint3D } from '../components/Map3D'
-import { PageHeader } from '../components/PageHeader'
+import { PageHeader } from '../components/app/page-header'
 import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { money } from '../lib/format'
@@ -42,13 +42,16 @@ interface DimDef {
 
 const DIMS: DimDef[] = [
   { key: 'risk_score', label: 'Risk score', format: 'score' },
-  { key: 'total_orders', label: 'Total orders', format: 'count' },
+  { key: 'total_orders', label: 'Number of orders', format: 'count' },
   { key: 'total_accepted', label: 'Accepted orders', format: 'count' },
   { key: 'total_refused', label: 'Refused orders', format: 'count' },
   { key: 'refusal_rate', label: 'Refusal rate', format: 'rate' },
   { key: 'spend', label: 'Total spend', format: 'money' },
   { key: 'avg_order_value', label: 'Avg order value', format: 'money' },
 ]
+
+/** Plain axis titles, drawn inside the plot so they can never be clipped. */
+const AXIS_LABEL = { fill: 'var(--ink-3)', fontSize: 11 }
 
 interface BuyerRow {
   phone: string
@@ -74,9 +77,9 @@ interface MapPoint {
   radius: number
 }
 
-const TICK_STYLE = { fill: 'var(--muted)', fontSize: 11 }
-const GRID_STROKE = 'var(--border)'
-const CURSOR_STROKE = 'color-mix(in srgb, var(--accent) 40%, transparent)'
+const TICK_STYLE = { fill: 'var(--ink-3)', fontSize: 11 }
+const GRID_STROKE = 'var(--line-2)'
+const CURSOR_STROKE = 'color-mix(in srgb, var(--teal) 40%, transparent)'
 
 function fmtTick(format: DimDef['format'], v: number): string {
   if (format === 'money') return v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v))
@@ -131,10 +134,8 @@ export function BuyerMap() {
     setLoading(true)
     let ordersQuery = supabase.from('orders').select('buyer_phone, price')
     if (scope) ordersQuery = ordersQuery.eq('store_id', scope.id)
-    const [buyersRes, ordersRes] = await Promise.all([
-      supabase.from('buyers').select('phone, risk_score, total_orders, total_accepted, total_refused'),
-      ordersQuery,
-    ])
+    const ordersRes = await ordersQuery
+
     const scopedPhones = new Set<string>()
     const spend = new Map<string, number>()
     for (const o of ordersRes.data ?? []) {
@@ -145,8 +146,25 @@ export function BuyerMap() {
       }
     }
     setSpendMap(spend)
-    const all = (buyersRes.data ?? []) as unknown as BuyerRow[]
-    setBuyers(scope ? all.filter((b) => scopedPhones.has(b.phone)) : all)
+
+    // PRIVACY: this used to fetch EVERY buyer row on the network and filter
+    // them in the browser. The filter is now in the query, so the network's
+    // buyer list never leaves the database. Under the buyers policy this read
+    // is also confined to the merchant's own buyers.
+    let buyers: BuyerRow[] = []
+    if (!scope) {
+      const { data } = await supabase
+        .from('buyers')
+        .select('phone, risk_score, total_orders, total_accepted, total_refused')
+      buyers = (data ?? []) as unknown as BuyerRow[]
+    } else if (scopedPhones.size > 0) {
+      const { data } = await supabase
+        .from('buyers')
+        .select('phone, risk_score, total_orders, total_accepted, total_refused')
+        .in('phone', [...scopedPhones].slice(0, 1000))
+      buyers = (data ?? []) as unknown as BuyerRow[]
+    }
+    setBuyers(buyers)
     setLoading(false)
   }, [scope])
 
@@ -270,8 +288,7 @@ export function BuyerMap() {
     <div className="page map-page">
       <PageHeader
         title="Buyer Map"
-        subtitle="Scatter every buyer across any two dimensions and spot risk clusters."
-        icon="layers-outline"
+        description="Scatter every buyer across any two dimensions and spot risk clusters."
       />
 
       <div className="map-toolbar">
@@ -434,13 +451,11 @@ export function BuyerMap() {
           {mode === 'sim' ? (
             simLoading ? (
               <EmptyState
-                icon="sparkles-outline"
                 title="Computing AI vectors…"
                 detail="First run embeds every buyer with an AI fingerprint (~30s), then this is instant."
               />
             ) : simPoints === null || simPoints.length === 0 ? (
               <EmptyState
-                icon="sparkles-outline"
                 title="No vectors to show"
                 detail="Buyers could not be embedded. Try 'rebuild vectors' or check the edge function."
               />
@@ -469,6 +484,7 @@ export function BuyerMap() {
                     tick={TICK_STYLE}
                     domain={dimDomain(xDim.format)}
                     tickFormatter={(v) => fmtTick(xDim.format, Number(v))}
+                    label={{ value: xDim.label, position: 'insideBottom', offset: -2, ...AXIS_LABEL }}
                   />
                   <YAxis
                     type="number"
@@ -478,6 +494,7 @@ export function BuyerMap() {
                     width={52}
                     domain={dimDomain(yDim.format)}
                     tickFormatter={(v) => fmtTick(yDim.format, Number(v))}
+                    label={{ value: yDim.label, angle: -90, position: 'insideLeft', ...AXIS_LABEL }}
                   />
                   <Tooltip
                     content={<MapTooltip />}

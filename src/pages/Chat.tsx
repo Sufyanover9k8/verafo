@@ -1017,7 +1017,6 @@ export function Chat() {
           {sortedChats.length === 0 && (
             <div className="chat-items-empty">
               <EmptyState
-                icon="chatbubble-outline"
                 title={searchQuery ? 'No matches' : 'No chats yet'}
                 detail={searchQuery ? 'Try a different search.' : 'Start a conversation to get going.'}
               />
@@ -1100,7 +1099,6 @@ export function Chat() {
         {!activeChat ? (
           <div className="chat-window-empty">
             <EmptyState
-              icon="chatbubbles-outline"
               title="No chat selected"
               detail="Pick a conversation from the list, or start a new one."
             />
@@ -1178,7 +1176,6 @@ export function Chat() {
               {!loading && messages.length === 0 && (
                 <div className="chat-start-hint">
                   <EmptyState
-                    icon="sparkles-outline"
                     title="Say hello to Verafo"
                     detail="Ask about a buyer with @, a store with #, or use the shortcuts below for instant reports."
                   />

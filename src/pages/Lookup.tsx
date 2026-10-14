@@ -1,21 +1,32 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
-import { VerdictBlock } from '../components/verdict/VerdictBlock'
-import { VerdictChip } from '../components/verdict/VerdictChip'
-import { Card } from '../components/primitives/Card'
+import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { VerdictBadge } from '../components/app/verdict-badge'
+import { StatusBadge } from '../components/app/status-badge'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Avatar } from '../components/Avatar'
 import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
-import { riskFactors } from '../lib/risk'
+import { computeVerdict, riskFactors, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Buyer, OrderRow, SimilarBuyer } from '../lib/types'
+
+/** What buyer_network_lookup returns. Aggregates only — no identity. */
+interface NetworkLookupRow {
+  risk_score: number | null
+  total_orders: number | null
+  total_accepted: number | null
+  total_refused: number | null
+  store_count: number | null
+  first_seen: string | null
+}
 
 type SearchState =
   | { kind: 'idle' }
@@ -30,15 +41,25 @@ interface LookupRow {
   buyers?: { risk_score: number; total_orders: number } | null
 }
 
-/** What buyer_network_lookup returns. Aggregates only — no identity. */
-interface NetworkLookupRow {
-  risk_score: number | null
-  total_orders: number | null
-  total_accepted: number | null
-  total_refused: number | null
-  store_count: number | null
-  first_seen: string | null
+/** The verdict word's colour and dot, as tokens. The word is always shown. */
+const VERDICT_TEXT: Record<VerdictTone, string> = {
+  safe: 'text-risk-safe-strong',
+  watch: 'text-risk-watch-strong',
+  high: 'text-risk-high-strong',
+  unknown: 'text-risk-unknown-strong',
 }
+const VERDICT_DOT: Record<VerdictTone, string> = {
+  safe: 'bg-risk-safe',
+  watch: 'bg-risk-watch',
+  high: 'bg-risk-high',
+  unknown: 'bg-risk-unknown',
+}
+
+const inputClass =
+  'h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[16px] text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-10 md:text-[15px]'
+
+const buttonClass =
+  'inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50'
 
 export function Lookup() {
   const toast = useToast()
@@ -79,8 +100,8 @@ export function Lookup() {
       setExplanation(null)
       setState({ kind: 'loading' })
 
-      // PRIVACY: this used to run `from('buyers').select('*')`, which pulled the
-      // raw embedding and feature vector into the browser, and it called
+      // PRIVACY: this used to run `from('buyers').select('*')`, which pulled
+      // the raw embedding and feature vector into the browser, and it called
       // find_similar_buyers() — a plain SQL function that returned other
       // buyers' phone numbers. Both are gone.
       //
@@ -137,31 +158,35 @@ export function Lookup() {
 
       setState({ kind: 'found', buyer, orders, similar })
     },
-    [toast, loadRecents, store, email],
+    [store, email, loadRecents, toast],
   )
 
+  // A phone in the URL runs the search on arrival (the header quick-check links here).
   useEffect(() => {
-    const phoneParam = params.get('phone')
-    if (phoneParam) {
-      if (normalizePhone(phoneParam) !== searched) void search(phoneParam)
-      setInput(phoneParam)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, searched])
-
-  function handleSearch(e: FormEvent) {
-    e.preventDefault()
-    void search(input)
-    setParams(input ? { phone: normalizePhone(input) } : {})
-  }
-
-  function openRecent(p: string) {
+    const p = params.get('phone')
+    if (!p) return
     setInput(p)
-    setParams({ phone: p })
     void search(p)
-  }
+    setParams({}, { replace: true })
+  }, [params, search, setParams])
 
-  async function clearAll() {
+  const handleSearch = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault()
+      void search(input)
+    },
+    [input, search],
+  )
+
+  const openRecent = useCallback(
+    (p: string) => {
+      setInput(p)
+      void search(p)
+    },
+    [search],
+  )
+
+  const clearAll = useCallback(async () => {
     if (!supabase || !email) return
     const { error } = await supabase.from('lookups').delete().eq('owner_email', email)
     if (error) {
@@ -169,28 +194,33 @@ export function Lookup() {
       return
     }
     setRecents([])
-  }
+    toast.push({ kind: 'success', title: 'History cleared' })
+  }, [email, toast])
 
   async function explain(buyer: Buyer) {
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!supabase) return
     setExplaining(true)
-    setExplanation(null)
     try {
+      const base = functionsBaseUrl()
+      if (!base) throw new Error('Edge functions are not deployed.')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
       const res = await fetch(`${base}/verafo-ai`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'explain', phone: buyer.phone }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ mode: 'explain', buyer }),
       })
-      const json = (await res.json()) as { text?: string; error?: string }
-      if (!res.ok || !json.text) throw new Error(json.error ?? 'Request failed')
-      setExplanation(json.text)
+      if (!res.ok) throw new Error(`Request failed (${res.status})`)
+      const json = (await res.json()) as { text?: string }
+      setExplanation(json.text ?? null)
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
       toast.push({
         kind: 'error',
-        title: 'AI explain failed',
-        detail: `${message} — is the verafo-ai edge function deployed with an OpenAI key?`,
+        title: 'Could not explain this buyer',
+        detail: err instanceof Error ? err.message : String(err),
       })
     } finally {
       setExplaining(false)
@@ -198,25 +228,29 @@ export function Lookup() {
   }
 
   async function refreshEmbedding(buyer: Buyer) {
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!supabase) return
     setEmbeddingBusy(true)
     try {
+      const base = functionsBaseUrl()
+      if (!base) throw new Error('Edge functions are not deployed.')
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
       const res = await fetch(`${base}/verafo-ai`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'embed', phone: buyer.phone }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ mode: 'embed', phone: buyer.phone }),
       })
-      const json = (await res.json()) as { ok?: boolean; error?: string }
-      if (!res.ok || !json.ok) throw new Error(json.error ?? 'Request failed')
-      toast.push({ kind: 'success', title: 'AI fingerprint refreshed', detail: 'Embedding updated for this buyer.' })
-      await search(buyer.phone)
+      if (!res.ok) throw new Error(`Request failed (${res.status})`)
+      toast.push({ kind: 'success', title: 'Fingerprint refreshed' })
+      void search(buyer.phone)
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
       toast.push({
         kind: 'error',
-        title: 'Embedding failed',
-        detail: `${message} — is the verafo-ai edge function deployed with an OpenAI key?`,
+        title: 'Could not refresh the fingerprint',
+        detail: err instanceof Error ? err.message : String(err),
       })
     } finally {
       setEmbeddingBusy(false)
@@ -229,56 +263,75 @@ export function Lookup() {
   const orders = state.kind === 'found' ? state.orders : []
   const aiEnabled = Boolean(functionsBaseUrl())
 
+  const verdict = buyer
+    ? computeVerdict({
+        risk_score: buyer.risk_score,
+        total_orders: buyer.total_orders,
+        total_accepted: buyer.total_accepted,
+        total_refused: buyer.total_refused,
+      })
+    : null
+
   return (
-    <div className="stack">
+    <PageShell>
       <PageHeader
-        icon="search"
         title="Buyer Lookup"
-        subtitle="Type any phone number to see its full cross-store profile and risk score."
+        description="Type any phone number to see its full cross-store profile and risk score."
       />
 
-      <form className="lookup-search card" onSubmit={handleSearch}>
-        <Icon name="search" size={20} className="search-icon" />
-        <input
-          type="tel"
-          inputMode="tel"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="0301 234 5678"
-          aria-label="Buyer phone number"
-        />
-        <button type="submit" className="btn btn-primary">
-          <Icon name="arrow-forward" size={16} /> Look up
-        </button>
-      </form>
-
-      {state.kind === 'idle' && recents.length > 0 && (
-        <Card>
-          <div className="recent-head">
-            <h3 className="card-title">
-              <Icon name="time" size={16} /> Recent lookups
-            </h3>
-            <button className="recent-clear" onClick={() => void clearAll()} title="Clear history">
-              <Icon name="trash" size={15} />
+      {/* One clear search box. */}
+      <form className="rounded-[16px] border border-border bg-card p-6" onSubmit={handleSearch}>
+        <label className="flex flex-col gap-2">
+          <span className="text-[15px] font-semibold text-foreground">Enter a buyer&rsquo;s phone number</span>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              className={inputClass}
+              type="tel"
+              inputMode="tel"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="0301 234 5678"
+              aria-label="Buyer phone number"
+            />
+            <button type="submit" className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+              <Icon name="arrow-forward" size={16} /> Look up
             </button>
           </div>
-          <Reveal stagger className="recent-list">
-            {recents.map((r) => {
-              return (
-                <button key={r.id} className="recent-row" onClick={() => openRecent(r.buyer_phone)}>
-                  <Avatar phone={r.buyer_phone} size={26} />
-                  <span className="recent-phone">{phone(r.buyer_phone)}</span>
-                  <VerdictChip risk_score={r.buyers?.risk_score ?? 0.5} total_orders={r.buyers?.total_orders ?? 0} />
-                  <span className="recent-when">{timeAgo(r.searched_at)}</span>
-                </button>
-              )
-            })}
+          <span className="text-[13px] text-muted-foreground">
+            Search the network-wide profile: totals, stores, timeline and risk score.
+          </span>
+        </label>
+      </form>
+
+      {/* Before the first search. */}
+      {state.kind === 'idle' && recents.length > 0 && (
+        <Card className="gap-0 p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-[15px] font-semibold text-foreground">Recent lookups</h3>
+            <button type="button" className={buttonClass} onClick={() => void clearAll()}>
+              <Icon name="trash" size={15} /> Clear
+            </button>
+          </div>
+          <Reveal stagger className="flex flex-col gap-1">
+            {recents.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className="flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-2.5 text-start transition-colors hover:bg-muted"
+                onClick={() => openRecent(r.buyer_phone)}
+              >
+                <Avatar phone={r.buyer_phone} size={26} />
+                <span className="flex-1 font-mono text-[13px] font-medium">{phone(r.buyer_phone)}</span>
+                <VerdictBadge riskScore={r.buyers?.risk_score} totalOrders={r.buyers?.total_orders} />
+                <span className="hidden text-[13px] text-muted-foreground sm:inline">{timeAgo(r.searched_at)}</span>
+              </button>
+            ))}
           </Reveal>
         </Card>
       )}
 
       {state.kind === 'idle' && recents.length === 0 && (
-        <Card>
+        <Card className="gap-0 p-6">
           <EmptyState
             icon="fingerprint"
             title="Enter a phone number"
@@ -288,124 +341,155 @@ export function Lookup() {
       )}
 
       {state.kind === 'loading' && (
-        <div className="card">
-          <div className="stack">
-            <Skeleton width="40%" height={18} />
-            <Skeleton width="65%" height={12} />
-            <Skeleton width="50%" height={12} />
-            <Skeleton width="30%" height={12} />
-          </div>
-        </div>
-      )}
-
-      {state.kind === 'not-found' && (
-        <Card>
-          <EmptyState
-            icon="person"
-            title="No buyer found"
-            detail={`No profile exists for ${phone(searched)} yet. Log their first order to create one.`}
-          />
+        <Card className="gap-3 p-6">
+          <Skeleton width="40%" height={18} />
+          <Skeleton width="65%" height={12} />
+          <Skeleton width="50%" height={12} />
+          <Skeleton width="30%" height={12} />
         </Card>
       )}
 
-      {buyer && (
-        <Reveal stagger className="grid-12">
-          <section className="col-7 stack">
-            <VerdictBlock
-              risk_score={buyer.risk_score}
-              total_orders={buyer.total_orders}
-              total_accepted={buyer.total_accepted}
-              total_refused={buyer.total_refused}
-              stores={new Set(orders.map((o) => o.store_id)).size}
-              firstSeen={buyer.first_seen}
-            />
+      {state.kind === 'not-found' && (
+        <Card className="gap-0 p-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <p className="text-[15px] font-semibold text-foreground">No buyer found</p>
+            <p className="max-w-md text-[15px] text-muted-foreground">
+              {phone(searched)} has no profile yet. Their first order creates one.
+            </p>
+            <button type="button" className={buttonClass} onClick={() => setState({ kind: 'idle' })}>
+              Try another number
+            </button>
+          </div>
+        </Card>
+      )}
 
-            <Card>
-              <div className="verdict-panel-head">
-                <h3 className="card-title">Signals</h3>
-                <span className="verdict-conf">+ lowers risk · − raises</span>
+      {buyer && verdict && (
+        <Reveal stagger className="grid gap-6 lg:grid-cols-12">
+          <div className="flex flex-col gap-6 lg:col-span-7">
+            {/* Verdict first. */}
+            <Card className="gap-4 p-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className={`size-3 rounded-full ${VERDICT_DOT[verdict.tone]}`} aria-hidden="true" />
+                <h2 className={`text-3xl font-bold tracking-tight ${VERDICT_TEXT[verdict.tone]}`}>{verdict.label}</h2>
+                <span className="ms-auto font-mono text-[15px] text-muted-foreground">
+                  {phone(buyer.phone)} · {verdict.confidenceLabel}
+                </span>
               </div>
-              <div className="factor-list">
+
+              <ul className="flex flex-col gap-2 text-[15px] text-foreground">
+                <li>
+                  <strong className="font-semibold tabular-nums">{buyer.total_orders ?? 0}</strong> order
+                  {(buyer.total_orders ?? 0) === 1 ? '' : 's'} in the network
+                </li>
+                <li>
+                  <strong className="font-semibold tabular-nums">{buyer.total_accepted ?? 0}</strong> accepted ·{' '}
+                  <strong className="font-semibold tabular-nums">{buyer.total_refused ?? 0}</strong> refused
+                </li>
+                <li>
+                  <strong className="font-semibold tabular-nums">{new Set(orders.map((o) => o.store_id)).size}</strong> connected
+                  store{new Set(orders.map((o) => o.store_id)).size === 1 ? '' : 's'}
+                </li>
+                <li className="text-muted-foreground">
+                  First seen {buyer.first_seen ? dateTime(buyer.first_seen) : 'unknown'}
+                </li>
+              </ul>
+            </Card>
+
+            {/* The reasons, in plain lines. */}
+            <Card className="gap-0 p-6">
+              <h3 className="mb-3 text-[15px] font-semibold text-foreground">Main reasons</h3>
+              <ul className="flex flex-col divide-y divide-border">
                 {riskFactors({ ...buyer, orders }).map((f, i) => (
-                  <div className="factor-row" key={i}>
-                    <span className="factor-label">{f.label}</span>
-                    <span className={`factor-impact ${f.impact}`}>
-                      {f.impact === 'pos' ? '+' : f.impact === 'neg' ? '−' : '·'}
+                  <li key={i} className="flex items-center justify-between gap-3 py-3 text-[15px]">
+                    <span className="text-foreground">{f.label}</span>
+                    <span
+                      className={`shrink-0 font-mono text-[13px] ${
+                        f.impact === 'neg' ? 'text-risk-high-strong' : f.impact === 'pos' ? 'text-risk-safe-strong' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {f.impact === 'pos' ? 'lowers risk' : f.impact === 'neg' ? 'raises risk' : 'neutral'}
                     </span>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </Card>
 
             {state.kind === 'found' && state.similar.length > 0 && (
-              <Card>
-                <h3 className="card-title">
-                  <Icon name="git-compare" size={16} /> Behaviourally similar buyers
-                </h3>
-                <p className="card-sub">
-                  Closest behaviour to this buyer, by fingerprint. The network never returns these
-                  buyers' phone numbers, so they cannot be opened from here — look one up with a
-                  number you already have.
+              <Card className="gap-0 p-6">
+                <h3 className="text-[15px] font-semibold text-foreground">Similar buyers</h3>
+                <p className="mt-1 mb-3 text-[13px] text-muted-foreground">
+                  Buyers whose behaviour looks closest to this one, by fingerprint. Resemblance is not a risk
+                  verdict, and it is never evidence of fraud.
                 </p>
-                <Reveal stagger className="similar-list">
+                <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
                   {state.similar.map((s, i) => (
-                    <div key={i} className="similar-row">
-                      <span className="similar-meta">
-                        {Math.round((1 - Math.min(1, Math.max(0, Number(s.similarity) || 0))) * 100)}% alike ·{' '}
+                    <li key={i} className="flex min-h-11 flex-wrap items-center gap-3 py-3">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        {Math.round((1 - Math.min(1, Math.max(0, Number(s.similarity) || 0))) * 100)}% alike
+                      </span>
+                      <span className="text-[13px] text-muted-foreground">
                         {s.total_orders ?? 0} orders · {s.total_refused ?? 0} refused
                       </span>
-                      <VerdictChip risk_score={s.risk_score} total_orders={s.total_orders} />
-                    </div>
+                      <span className="ms-auto">
+                        <VerdictBadge riskScore={s.risk_score} totalOrders={s.total_orders} />
+                      </span>
+                    </li>
                   ))}
-                </Reveal>
+                </ul>
+                {/* The server does not return these buyers' numbers, so they
+                    cannot be opened from here. That is deliberate. */}
+                <p className="mt-3 text-[11.5px] text-muted-foreground">
+                  Verafo does not show other buyers&rsquo; phone numbers, so these cannot be opened. To check one,
+                  look it up with a number you already have.
+                </p>
               </Card>
             )}
 
-            <div className="ai-box">
-              <div className="ai-box-head">
-                <span className="ai-title">
-                  <Icon name="sparkles" size={15} /> AI assist
-                </span>
+            <Card className="gap-0 p-6">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-[15px] font-semibold text-foreground">AI assist</h3>
                 {buyer.embedding ? (
-                  <span className="chip chip-green">
-                    <Icon name="fingerprint" size={12} /> fingerprint embedded
+                  <span className="rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-1 text-[13px] font-medium text-risk-safe-strong">
+                    fingerprint embedded
                   </span>
                 ) : (
-                  <span className="chip">no fingerprint yet</span>
+                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[13px] font-medium text-muted-foreground">
+                    no fingerprint yet
+                  </span>
                 )}
               </div>
-              {explanation && <p className="ai-text">{explanation}</p>}
-              <div className="ai-actions">
-                <button className="btn btn-ghost" disabled={!aiEnabled || explaining} onClick={() => void explain(buyer)}>
+              {explanation && <p className="mb-3 text-[15px] text-muted-foreground">{explanation}</p>}
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={buttonClass} disabled={!aiEnabled || explaining} onClick={() => void explain(buyer)}>
                   {explaining ? <Icon name="refresh" size={15} className="spin" /> : <Icon name="sparkles" size={15} />}
                   Explain this buyer
                 </button>
                 <button
-                  className="btn btn-ghost"
+                  type="button"
+                  className={buttonClass}
                   disabled={!aiEnabled || embeddingBusy}
                   onClick={() => void refreshEmbedding(buyer)}
                 >
-                  {embeddingBusy ? (
-                    <Icon name="refresh" size={15} className="spin" />
-                  ) : (
-                    <Icon name="fingerprint" size={15} />
-                  )}
+                  {embeddingBusy ? <Icon name="refresh" size={15} className="spin" /> : <Icon name="fingerprint" size={15} />}
                   Refresh fingerprint
                 </button>
               </div>
               {!aiEnabled && (
-                <p className="ai-hint">
+                <p className="mt-3 text-[13px] text-muted-foreground">
                   Deploy the <code>verafo-ai</code> edge function to enable AI explanations and embeddings.
                 </p>
               )}
-            </div>
-          </section>
+            </Card>
+          </div>
 
-          <section className="col-5">
-            <Card>
-              <div className="verdict-panel-head">
-                <h3 className="card-title">Order history</h3>
-                <span className="verdict-conf">{orders.length} order{orders.length === 1 ? '' : 's'}</span>
+          {/* Details: the order history. */}
+          <div className="flex flex-col gap-6 lg:col-span-5">
+            <Card className="gap-0 p-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-[15px] font-semibold text-foreground">Order history</h3>
+                <span className="font-mono text-[13px] text-muted-foreground">
+                  {orders.length} order{orders.length === 1 ? '' : 's'}
+                </span>
               </div>
               {orders.length === 0 ? (
                 <EmptyState
@@ -414,53 +498,32 @@ export function Lookup() {
                   detail="This buyer has never placed an order in the network."
                 />
               ) : (
-                <div className="timeline">
-                  {orders.map((o) => {
-                    const status = o.outcomes?.status ?? 'pending'
-                    return (
-                      <div key={o.id} className="timeline-item">
-                        <div className={`timeline-dot ${status === 'accepted' ? 'ok' : ''} ${status === 'refused' ? 'bad' : ''} ${status === 'pending' ? 'pending' : ''}`}>
-                          <Icon
-                            name={status === 'accepted' ? 'check' : status === 'refused' ? 'close' : 'hourglass'}
-                            size={13}
-                          />
-                        </div>
-                        <div className="timeline-content">
-                          <div className="timeline-top">
-                            <span className="timeline-product">
-                              {o.product_name || o.product_category || 'Untitled product'}
-                            </span>
-                            {o.product_category && <span className="chip">{o.product_category}</span>}
-                            {status === 'accepted' && <span className="pill pill-ok">Accepted</span>}
-                            {status === 'refused' && <span className="pill pill-bad">Refused</span>}
-                            {status === 'pending' && <span className="pill pill-pending">Pending</span>}
-                          </div>
-                          <div className="timeline-meta">
-                            <span>
-                              <Icon name="storefront" size={13} /> {o.stores?.name ?? 'Unknown store'}
-                            </span>
-                            <span>
-                              <Icon name="card" size={13} /> {money(o.price)}
-                              {o.quantity && o.quantity > 1 ? ` x ${o.quantity}` : ''}
-                            </span>
-                            <span>
-                              <Icon name="location" size={13} /> {o.city ?? '—'}
-                              {o.address ? ` · ${o.address}` : ''}
-                            </span>
-                            <span>
-                              <Icon name="time" size={13} /> {dateTime(o.ordered_at)}
-                            </span>
-                          </div>
-                        </div>
+                <ul className="flex flex-col divide-y divide-border">
+                  {orders.map((o) => (
+                    <li key={o.id} className="flex flex-col gap-1.5 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[15px] font-medium text-foreground">
+                          {o.product_name || o.product_category || 'Untitled product'}
+                        </span>
+                        <StatusBadge status={o.outcomes?.status ?? 'pending'} />
                       </div>
-                    )
-                  })}
-                </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+                        <span>{o.stores?.name ?? 'Unknown store'}</span>
+                        <span className="tabular-nums">
+                          {money(o.price)}
+                          {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
+                        </span>
+                        <span>{o.city ?? '—'}</span>
+                        <span>{dateTime(o.ordered_at)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </Card>
-          </section>
+          </div>
         </Reveal>
       )}
-    </div>
+    </PageShell>
   )
 }

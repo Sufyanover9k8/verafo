@@ -1,0 +1,207 @@
+/* ============================================================
+   shadcn-theme.css — the design-system tokens for the new UI.
+
+   Values come from tokens.css, which is an exact copy of the
+   website's palette (https://verafo.com/styles.css). This file
+   only maps them onto the names shadcn/Tailwind components read,
+   so no component ever types a raw colour.
+
+   Brand rule from the website stylesheet:
+   "teal #14B8A6 accent on white, ink #0A0F10".
+   The retired GoKwik blue/navy palette is gone.
+   ============================================================ */
+
+:root {
+  --radius: var(--r-sm);
+  --radius-input: var(--r-sm);
+  --radius-card: var(--r-card);
+  --radius-hero: var(--r-xl);
+  --radius-pill: var(--r-pill);
+
+  /* Surfaces */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --panel-2: #F5F8F8;
+
+  /* Brand — the website's teal, not #1a7d96.
+     --primary is the fill shade: black-on-teal reads on a button.
+     Text and links use --primary-text, the deeper variant, because
+     #14B8A6 as text on white measures only 2.49:1. */
+  --primary: var(--teal);
+  --primary-foreground: #FFFFFF;
+  --primary-text: var(--teal-deep);
+  --primary-text-foreground: #FFFFFF;
+
+  --secondary: var(--bg-3);
+  --secondary-foreground: var(--ink);
+  --muted: var(--bg-2);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--tint);
+  --accent-foreground: var(--teal-deep);
+
+  /* Semantic. Fills vs text shades are split for contrast, exactly
+     as in tokens.css: `-strong` is safe as text, the base is a fill. */
+  --destructive: var(--v-risk);
+  --destructive-strong: var(--v-risk-strong);
+  --success: var(--v-safe);
+  --success-strong: var(--v-safe-strong);
+  --warning: var(--v-watch);
+  --warning-strong: var(--v-watch-strong);
+
+  --border: var(--line);
+  --input: var(--line-2);
+  --ring: var(--teal);
+
+  /* Risk bridge — maps the app's tone keys (safe/watch/high/unknown)
+     onto the website's levels (safe/medium/high/neutral). Styling
+     layer only; lib/risk.ts logic is untouched. */
+  --risk-safe: var(--v-safe);
+  --risk-safe-strong: var(--v-safe-strong);
+  --risk-safe-soft: var(--v-safe-bg);
+  --risk-watch: var(--v-watch);
+  --risk-watch-strong: var(--v-watch-strong);
+  --risk-watch-soft: var(--v-watch-bg);
+  --risk-high: var(--v-risk);
+  --risk-high-strong: var(--v-risk-strong);
+  --risk-high-soft: var(--v-risk-bg);
+  --risk-unknown: var(--v-unknown);
+  --risk-unknown-strong: var(--v-unknown-strong);
+  --risk-unknown-soft: var(--v-unknown-bg);
+
+  /* Charts — teal primary, then the site's accent family */
+  --chart-1: var(--teal);
+  --chart-2: var(--purple);
+  --chart-3: var(--amber);
+  --chart-4: var(--coral);
+  --chart-5: var(--v-unknown);
+
+  /* The sidebar follows the site's surfaces: white in light mode and
+     the panel ramp in dark mode. It is NOT a fixed navy panel. */
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--ink-2);
+  --sidebar-primary: var(--teal);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: var(--tint);
+  --sidebar-accent-foreground: var(--teal-deep);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--teal);
+}
+
+[data-theme='dark'] {
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --panel-2: #141D1F;
+
+  --primary: var(--teal);
+  --primary-foreground: #04201C;
+  --primary-text: var(--teal-deep);
+  --primary-text-foreground: #04201C;
+
+  --secondary: var(--bg-3);
+  --secondary-foreground: var(--ink);
+  --muted: var(--bg-2);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--tint);
+  --accent-foreground: var(--teal-deep);
+
+  --destructive: var(--v-risk);
+  --destructive-strong: var(--v-risk-strong);
+  --success: var(--v-safe);
+  --success-strong: var(--v-safe-strong);
+  --warning: var(--v-watch);
+  --warning-strong: var(--v-watch-strong);
+
+  --border: var(--line);
+  --input: var(--line-2);
+  --ring: var(--teal);
+
+  /* Sidebar surfaces in dark mode — the site's panel ramp. */
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--ink-2);
+  --sidebar-accent: var(--tint);
+  --sidebar-accent-foreground: var(--teal-deep);
+  --sidebar-border: var(--line);
+}
+
+@theme inline {
+  --font-sans: var(--v-font-sans);
+  --font-mono: var(--v-font-mono);
+  --font-serif: var(--v-font-serif);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-sm);
+  --radius-lg: var(--r);
+  --radius-xl: var(--r);
+  --radius-2xl: var(--r);
+
+  --text-body: var(--t-body);
+  --text-body-sm: var(--t-body-sm);
+  --text-caption: var(--t-caption);
+  --text-micro: var(--t-micro);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-strong: var(--destructive-strong);
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Risk utilities: bg-risk-safe, text-risk-watch-strong, and so on. */
+  --color-risk-safe: var(--risk-safe);
+  --color-risk-safe-strong: var(--risk-safe-strong);
+  --color-risk-safe-soft: var(--risk-safe-soft);
+  --color-risk-watch: var(--risk-watch);
+  --color-risk-watch-strong: var(--risk-watch-strong);
+  --color-risk-watch-soft: var(--risk-watch-soft);
+  --color-risk-high: var(--risk-high);
+  --color-risk-high-strong: var(--risk-high-strong);
+  --color-risk-high-soft: var(--risk-high-soft);
+  --color-risk-unknown: var(--risk-unknown);
+  --color-risk-unknown-strong: var(--risk-unknown-strong);
+  --color-risk-unknown-soft: var(--risk-unknown-soft);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+  --shadow-teal: var(--sh-teal);
+}

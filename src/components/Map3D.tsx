@@ -29,10 +29,18 @@ interface Map3DProps {
 }
 
 const CENTER: [number, number, number] = [0.5, 0.5, 0.5]
-const AXIS_KEYS: Array<{ letter: string; color: string; end: [number, number, number]; label: string; labelPos: [number, number, number] }> = [
-  { letter: 'X', color: '#f87171', end: [1, 0, 0], label: '', labelPos: [1.04, -0.03, 0] },
-  { letter: 'Y', color: '#6ee7b7', end: [0, 1, 0], label: '', labelPos: [-0.04, 1.04, 0] },
-  { letter: 'Z', color: '#6d8dff', end: [0, 0, 1], label: '', labelPos: [0, -0.03, 1.04] },
+// three.js reads these as WebGL colours, so a CSS var() would not resolve.
+// Two sets, chosen from the theme: the brighter website shades on the dark
+// ramp, the deeper ones on the light ramp, so the axes stay readable.
+const AXIS_KEYS_LIGHT: Array<{ letter: string; color: string; end: [number, number, number]; label: string; labelPos: [number, number, number] }> = [
+  { letter: 'X', color: '#BE123C', end: [1, 0, 0], label: '', labelPos: [1.04, -0.03, 0] },
+  { letter: 'Y', color: '#0F766E', end: [0, 1, 0], label: '', labelPos: [-0.04, 1.04, 0] },
+  { letter: 'Z', color: '#1D4ED8', end: [0, 0, 1], label: '', labelPos: [0, -0.03, 1.04] },
+]
+const AXIS_KEYS_DARK: typeof AXIS_KEYS_LIGHT = [
+  { letter: 'X', color: '#FDA4AF', end: [1, 0, 0], label: '', labelPos: [1.04, -0.03, 0] },
+  { letter: 'Y', color: '#2DD4BF', end: [0, 1, 0], label: '', labelPos: [-0.04, 1.04, 0] },
+  { letter: 'Z', color: '#93C5FD', end: [0, 0, 1], label: '', labelPos: [0, -0.03, 1.04] },
 ]
 
 function Dot({ p, onHover }: { p: MapPoint3D; onHover: (p: MapPoint3D | null) => void }) {
@@ -55,10 +63,13 @@ function Dot({ p, onHover }: { p: MapPoint3D; onHover: (p: MapPoint3D | null) =>
 export default function Map3D({ points, xLabel, yLabel, zLabel, autoRotate, resetKey, axes = true }: Map3DProps) {
   const [hover, setHover] = useState<MapPoint3D | null>(null)
   const { resolved } = useTheme()
-  const gridColors =
-    resolved === 'dark'
-      ? { cell: '#1c2a45', section: '#26375a' }
-      : { cell: '#dfe7f3', section: '#c3d0e5' }
+  const dark = resolved === 'dark'
+  // three.js reads these as WebGL colours, so a CSS var() would not resolve.
+  // Both sets are the website's own values, picked by the current theme.
+  const gridColors = dark
+    ? { cell: '#141D1F', section: '#F2F6F6' }   // --bg-3, --ink
+    : { cell: '#EDF3F3', section: '#0A0F10' }   // --bg-3, --ink
+  const axisKeys = dark ? AXIS_KEYS_DARK : AXIS_KEYS_LIGHT
 
   return (
     <div className="map3d-wrap">
@@ -83,7 +94,7 @@ export default function Map3D({ points, xLabel, yLabel, zLabel, autoRotate, rese
         />
 
         {axes &&
-          AXIS_KEYS.map((a) => (
+          axisKeys.map((a) => (
             <group key={a.letter}>
               <Line points={[[0, 0, 0], a.end]} color={a.color} lineWidth={1.4} />
               <Html position={a.labelPos} center>

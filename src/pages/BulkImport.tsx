@@ -1,7 +1,8 @@
 import { useIsAdmin } from '../lib/admin'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
+import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
 import { Reveal } from '../components/Reveal'
 import { NeedsSetup } from '../components/States'
 import { normalizePhone } from '../lib/format'
@@ -343,11 +344,10 @@ export function BulkImport() {
   if (!isConfigured) return <NeedsSetup />
 
   return (
-    <div>
+    <PageShell>
       <PageHeader
-        icon="documents-outline"
         title="Bulk Import"
-        subtitle="Load many orders (and their outcomes) from a CSV. Risk scores recompute automatically."
+        description="Load many orders (and their outcomes) from a CSV. Risk scores recompute automatically."
       />
 
       <Reveal stagger>
@@ -356,7 +356,7 @@ export function BulkImport() {
           <h3 className="card-title">
             <Icon name="document-text-outline" size={16} /> CSV format
           </h3>
-          <button className="btn btn-ghost" onClick={() => void copyTemplate()}>
+          <button className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" onClick={() => void copyTemplate()}>
             <Icon name="copy-outline" size={15} /> Copy template
           </button>
         </div>
@@ -425,7 +425,7 @@ export function BulkImport() {
           </label>
         </div>
         <div className="import-actions">
-          <button className="btn btn-primary" disabled={genBusy} onClick={() => void generateDummy()}>
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={genBusy} onClick={() => void generateDummy()}>
             {genBusy ? (
               <>
                 <Icon name="refresh-outline" size={16} className="spin" /> Generating…
@@ -526,7 +526,7 @@ export function BulkImport() {
 
         <div className="import-actions">
           <button
-            className="btn btn-primary"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             disabled={importing || parsed.rows.length === 0}
             onClick={() => void runImport()}
           >
@@ -541,7 +541,7 @@ export function BulkImport() {
             )}
           </button>
           {text && (
-            <button className="btn btn-ghost" onClick={() => setText('')} disabled={importing}>
+            <button className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" onClick={() => setText('')} disabled={importing}>
               <Icon name="trash-outline" size={15} /> Clear
             </button>
           )}
@@ -577,6 +577,6 @@ export function BulkImport() {
         )}
       </div>
       </Reveal>
-    </div>
+    </PageShell>
   )
 }

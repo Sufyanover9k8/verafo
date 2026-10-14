@@ -96,6 +96,38 @@ function fallbackOrder(category: string, daysAgo: number, ratio: number) {
   };
 }
 
+/**
+ * The JSON the generate-dummy prompt asks the model for. Every field is
+ * optional and every value is unchecked: the code that reads it falls back to
+ * its own values whenever a field is missing or the wrong type, so nothing
+ * here is trusted.
+ */
+interface DummyOrder {
+  category?: string;
+  product?: string;
+  price?: number;
+  quantity?: number;
+  address?: string;
+  days_ago?: number;
+  outcome?: string;
+}
+
+interface DummyBuyer {
+  phone?: string;
+  city?: string;
+  orders?: DummyOrder[];
+}
+
+interface DummyStore {
+  name?: string;
+  owner?: string;
+  buyers?: DummyBuyer[];
+}
+
+interface DummyPayload {
+  stores?: DummyStore[];
+}
+
 function toIsoDaysAgo(daysAgo: unknown, maxDays: number): string {
   const d = typeof daysAgo === "number" && daysAgo >= 0 ? Math.min(daysAgo, maxDays) : maxDays;
   return new Date(Date.now() - d * 86400000).toISOString();
@@ -1949,6 +1981,11 @@ async function buildFileSpec(
 
   if (dimension === "orders" || dimension === "order") {
     const res = await toolSearchOrders(supabase, { city, category, keyword, min_price: minPrice, max_price: maxPrice, days, limit }, storeIds);
+    if (!("orders" in res)) {
+      // A denied or failed search must not become an empty file: hand the
+      // tool's own error back to the user, exactly like the other branches.
+      return { noData: true, title, message: res.error };
+    }
     columns = [
       { key: "product", label: "Product" },
       { key: "category", label: "Category" },
@@ -1959,7 +1996,7 @@ async function buildFileSpec(
       { key: "status", label: "Status" },
       { key: "date", label: "Date" },
     ];
-    rows = toFileRows("orders" in res ? res.orders : []);
+    rows = toFileRows(res.orders);
     chart = makeFileChart(rows, "Top orders by value", "product", [{ key: "price", label: "Spend", format: "pkr" }], "bar");
   } else if (dimension === "buyers" || dimension === "buyer") {
     const buyersRes = await toolTopBuyers(supabase, { city, category, days, min_price: minPrice, metric, limit: Math.min(limit, 50) }, storeIds);
@@ -1982,7 +2019,9 @@ async function buildFileSpec(
         : metric === "refusals" ? { key: "refused", label: "Refused", format: "number" as const }
           : metric === "risk" ? { key: "risk_score", label: "Risk score", format: "number" as const }
             : { key: "orders", label: "Orders", format: "number" as const };
-    chart = makeFileChart(rows, `Top buyers by ${chartMetric.label.toLowerCase()}`, "phone", [chartMetric], "bar");
+    // The rows are keyed by "buyer" (the masked label), not "phone" — the
+    // ranking no longer returns a number, so this is the label to chart.
+    chart = makeFileChart(rows, `Top buyers by ${chartMetric.label.toLowerCase()}`, "buyer", [chartMetric], "bar");
   } else if (dimension === "products" || dimension === "product") {
     const productsRes = await toolTopProducts(supabase, { city, category, limit: Math.min(limit, 50) }, storeIds);
     if (!Array.isArray(productsRes)) {
@@ -2427,13 +2466,27 @@ function detectCity(prompt: string): string | null {
 
 const FILE_MARKER_RE = /\[\[FILE\]\][\s\S]*?\[\[\/FILE\]\]/g;
 
-function cleanHistory(h: { role: string; content: string }[], rawPrompt: string): { role: string; content: string }[] {
+/**
+ * One chat message replayed to the model. `role` is CHECKED, not trusted: the
+ * rows come from the client's own chat history, so anything that is not one of
+ * the three OpenAI roles is dropped instead of being sent on.
+ */
+type HistoryMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string };
+
+function cleanHistory(h: { role: string; content: string }[], rawPrompt: string): HistoryMessage[] {
   return h
     .filter((m) => !(m.role === "user" && m.content === rawPrompt))
     .map((m) =>
       m.role === "assistant"
         ? { ...m, content: m.content.replace(CHART_MARKER_RE, "").replace(FILE_MARKER_RE, "").trim() }
         : m,
+    )
+    .filter(
+      (m): m is HistoryMessage =>
+        m.role === "system" || m.role === "user" || m.role === "assistant",
     );
 }
 
@@ -2847,7 +2900,7 @@ const supabase = createClient(
             `Never present numbers from other cities or the whole network as if they belong to ${detectedCity}.`
           : "";
 
-        const messages: any[] = [
+        const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
           {
             role: "system",
             content:
@@ -2892,7 +2945,7 @@ const supabase = createClient(
               fileNote +
               cityScopeNote,
           },
-          ...cleanHistory(history, rawPrompt).map((m) => ({ role: m.role, content: m.content })),
+          ...cleanHistory(history, rawPrompt),
           { role: "user", content: userContent },
         ];
 
@@ -3162,12 +3215,15 @@ const supabase = createClient(
         ],
         temperature: 0.3,
       });
-      let report: any = null;
+      // The model writes this JSON, so it is only trusted as far as a shape
+      // check goes: an object (never an array or a scalar), or nothing.
+      let report: Record<string, unknown> | null = null;
       try {
-        report = JSON.parse(res.choices[0].message.content ?? "{}");
+        report = asOne<Record<string, unknown>>(JSON.parse(res.choices[0].message.content ?? "{}"));
       } catch {
         return json({ error: "AI returned invalid JSON" }, 500);
       }
+      if (!report) return json({ error: "AI returned invalid JSON" }, 500);
       return json({ ok: true, report });
     }
 
@@ -3339,7 +3395,7 @@ const supabase = createClient(
         ],
         temperature: 0.9,
       });
-      let parsed: any = {};
+      let parsed: DummyPayload = {};
       try {
         parsed = JSON.parse(gen.choices[0].message.content ?? "{}");
       } catch {
@@ -3371,18 +3427,20 @@ const supabase = createClient(
             .upsert({ phone }, { onConflict: "phone", ignoreDuplicates: true });
           counters.buyers++;
 
-          const aiOrders = Array.isArray(ab.orders) ? ab.orders : [];
+          const aiOrders: DummyOrder[] = Array.isArray(ab.orders) ? ab.orders : [];
           for (let o = 0; o < nOrders; o++) {
-            const ao = aiOrders[o] ?? null;
+            const ao: DummyOrder | null = aiOrders[o] ?? null;
             const category = ["skincare", "clothing", "electronics", "footwear", "beauty", "home", "accessories", "haircare"]
               .find((c) => typeof ao?.category === "string" && ao.category.toLowerCase() === c) ?? "skincare";
             const daysAgo = typeof ao?.days_ago === "number" ? ao.days_ago : 1 + rand(30);
             const fallback = fallbackOrder(category, daysAgo, ratio);
             const price = typeof ao?.price === "number" && ao.price > 0 ? Math.round(ao.price) : fallback.price;
             const product = typeof ao?.product === "string" && ao.product.trim() ? ao.product.trim().slice(0, 120) : fallback.product;
-            const outcome = ["accepted", "refused", "pending"].includes(ao?.outcome)
-              ? ao.outcome
-              : fallback.outcome;
+            const aiOutcome = ao?.outcome;
+            const outcome =
+              aiOutcome === "accepted" || aiOutcome === "refused" || aiOutcome === "pending"
+                ? aiOutcome
+                : fallback.outcome;
             const quantity = typeof ao?.quantity === "number" && ao.quantity > 0 ? Math.min(9, ao.quantity) : fallback.quantity;
             const city = typeof ab.city === "string" && ab.city.trim() ? ab.city.trim() : CITIES[rand(CITIES.length)];
             const address = typeof ao?.address === "string" && ao.address.trim() ? ao.address.trim().slice(0, 200) : fallback.address;

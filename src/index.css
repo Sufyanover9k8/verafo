@@ -1,9 +1,20 @@
 /* ============================================================
    index.css — Verafo entry stylesheet
-   Tokens live in styles/tokens.css; nothing raw is defined here.
+
+   Two design systems live side by side while pages are moved over:
+     - NEW: Tailwind + shadcn tokens (styles/tailwind.css, styles/shadcn-theme.css)
+     - LEGACY: the original hand-written CSS, kept in its own cascade
+       layer BELOW Tailwind's utilities, so a new component's classes
+       always win over the old global rules (for example the old global
+       input and button styles).
+   When the last legacy page is ported, delete the legacy imports.
    ============================================================ */
 
-@import './styles/tokens.css';
-@import './styles/base.css';
-@import './styles/utilities.css';
-@import './styles/components.css';
+@layer theme, base, legacy, components, utilities;
+
+@import './styles/tailwind.css';
+
+@import './styles/tokens.css' layer(legacy);
+@import './styles/base.css' layer(legacy);
+@import './styles/utilities.css' layer(legacy);
+@import './styles/components.css' layer(legacy);

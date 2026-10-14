@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
-import { Badge } from '../components/primitives/Badge'
+import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { StatusBadge } from '../components/app/status-badge'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
-import { Avatar } from '../components/Avatar'
-import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
@@ -19,11 +18,15 @@ type Tab = 'pending' | 'resolved'
 
 const EXIT_MS = 260
 
+const btnBase =
+  'inline-flex h-11 items-center gap-1.5 rounded-[10px] border px-3 text-[13px] font-semibold transition-colors disabled:opacity-50 md:h-9'
+
 export function Outcomes() {
   const toast = useToast()
   const { store } = useStoreScope()
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [tab, setTab] = useState<Tab>('pending')
   const [working, setWorking] = useState<string | null>(null)
   const [leaving, setLeaving] = useState<Record<string, boolean>>({})
@@ -31,12 +34,15 @@ export function Outcomes() {
 
   const load = useCallback(async () => {
     if (!supabase) return
+    setLoading(true)
+    setLoadError(false)
     let query = supabase
       .from('orders')
       .select('*, stores(name), outcomes(status, resolved_at, refusal_reason)')
     if (store) query = query.eq('store_id', store.id)
     const { data, error } = await query.order('ordered_at', { ascending: false }).limit(200)
     if (error) {
+      setLoadError(true)
       toast.push({ kind: 'error', title: 'Could not load orders', detail: error.message })
     } else {
       setOrders((data ?? []) as OrderRow[])
@@ -52,6 +58,7 @@ export function Outcomes() {
 
   const pending = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending')
   const resolved = orders.filter((o) => o.outcomes && o.outcomes.status !== 'pending').slice(0, 50)
+  const visible = tab === 'pending' ? pending : resolved
 
   async function mark(order: OrderRow, status: 'accepted' | 'refused') {
     if (!supabase || working) return
@@ -94,67 +101,65 @@ export function Outcomes() {
       label: 'Buyer',
       id: true,
       render: (o) => (
-        <span className="cell-avatar">
-          <Avatar phone={o.buyer_phone} size={26} />
-          <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-            {phone(o.buyer_phone)}
-          </Link>
-        </span>
+        <Link className="font-mono text-[13px] font-medium text-primary-text hover:underline" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
+          {phone(o.buyer_phone)}
+        </Link>
       ),
     },
     {
       key: 'product',
       label: 'Product',
-      render: (o) => (
-        <span>
-          {o.product_name || o.product_category || 'Untitled product'}
-          {o.product_category && <span className="chip">{o.product_category}</span>}
-        </span>
-      ),
+      // 'wrap' lets this cell break onto a second line, which is what makes the
+      // whole table fit at 100% zoom (see .out-table in components.css).
+      className: 'wrap',
+      render: (o) => o.product_name || o.product_category || 'Untitled product',
     },
     {
       key: 'store',
       label: 'Store',
-      render: (o) => (
-        <span className="cell-avatar">
-          <Avatar name={o.stores?.name} size={26} />
-          <span className="muted">{o.stores?.name ?? 'Unknown store'}</span>
-        </span>
-      ),
+      render: (o) => <span className="text-muted-foreground">{o.stores?.name ?? 'Unknown store'}</span>,
     },
     {
       key: 'price',
-      label: 'Total',
+      label: 'Amount',
       num: true,
       render: (o) => `${money(o.price)}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
     },
     {
       key: 'ordered_at',
-      label: 'Ordered',
-      render: (o) => <span className="muted">{dateTime(o.ordered_at)}</span>,
+      label: 'Date',
+      render: (o) => <span className="text-muted-foreground">{dateTime(o.ordered_at)}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (o) => <StatusBadge status={(o.outcomes?.status ?? 'pending') as OutcomeStatus} />,
     },
     {
       key: 'outcome',
-      label: 'Outcome',
-      className: 'outcome-cell',
+      label: 'Mark',
       render: (o) => {
         const status = (o.outcomes?.status ?? 'pending') as OutcomeStatus
-        if (status !== 'pending') return <Badge status={status} />
+        if (status !== 'pending') return <span className="text-[13px] text-muted-foreground">—</span>
         return (
-          <span className="outcome-cell">
+          <span className="flex flex-wrap justify-end gap-2">
             <button
-              className="btn btn-accept btn-sm"
+              type="button"
+              className={`${btnBase} border-risk-safe/40 text-risk-safe-strong hover:bg-risk-safe-soft`}
               disabled={working === o.id}
               onClick={() => void mark(o, 'accepted')}
+              aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
             >
-              {working === o.id ? <Icon name="refresh" size={14} className="spin" /> : <Icon name="check" size={14} />} A
+              {working === o.id ? <Icon name="refresh" size={14} className="spin" /> : <Icon name="check" size={14} />} Accept
             </button>
             <button
-              className="btn btn-refuse btn-sm"
+              type="button"
+              className={`${btnBase} border-risk-high/40 text-risk-high-strong hover:bg-risk-high-soft`}
               disabled={working === o.id}
               onClick={() => void mark(o, 'refused')}
+              aria-label={`Mark ${phone(o.buyer_phone)} as refused`}
             >
-              {working === o.id ? <Icon name="refresh" size={14} className="spin" /> : <Icon name="close" size={14} />} R
+              {working === o.id ? <Icon name="refresh" size={14} className="spin" /> : <Icon name="close" size={14} />} Refuse
             </button>
           </span>
         )
@@ -162,76 +167,86 @@ export function Outcomes() {
     },
   ]
 
-  const visible = tab === 'pending' ? pending : resolved
-
   return (
-    <div className="stack">
+    <PageShell>
       <PageHeader
-        icon="clipboard"
-        title="Mark Outcome"
-        subtitle={
+        title="Outcomes"
+        description={
           store
             ? `Recording outcomes for ${store.name} — every outcome instantly re-scores that buyer.`
             : 'After delivery, record accepted or refused. Every outcome instantly re-scores that buyer.'
         }
       />
 
-      <div className="cluster">
-        <div className="tabs">
-          <button className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>
-            Pending <span className="tab-count">{pending.length}</span>
-          </button>
-          <button className={`tab ${tab === 'resolved' ? 'active' : ''}`} onClick={() => setTab('resolved')}>
-            Resolved <span className="tab-count">{resolved.length}</span>
-          </button>
+      {/* Pending / resolved, and refresh. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex gap-1 rounded-[10px] border border-border bg-card p-1">
+          {(['pending', 'resolved'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={tab === t}
+              className={`inline-flex h-11 items-center gap-2 rounded-[10px] px-3 text-[13px] font-semibold transition-colors md:h-8 ${
+                tab === t ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setTab(t)}
+            >
+              {t === 'pending' ? 'Pending' : 'Resolved'}
+              <span className="rounded-full bg-muted px-2 text-[12px] tabular-nums">
+                {t === 'pending' ? pending.length : resolved.length}
+              </span>
+            </button>
+          ))}
         </div>
-        <button className="tab-refresh" onClick={() => void load()} title="Refresh">
+        <button
+          type="button"
+          className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
+          onClick={() => void load()}
+        >
           <Icon name="refresh" size={16} className={loading ? 'spin' : ''} /> Refresh
         </button>
       </div>
 
-      {loading ? (
-        <div className="card">
-          <div className="stack" style={{ padding: 'var(--s-2)' }}>
+      <div className="overflow-hidden rounded-[16px] border border-border bg-card">
+        {loading ? (
+          <div className="flex flex-col gap-3 p-6">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div className="skeleton-row" key={i}>
-                <Skeleton width="20%" height={14} />
-                <Skeleton width="30%" height={14} />
-                <Skeleton width="14%" height={14} />
-              </div>
+              <Skeleton key={i} width="100%" height={16} />
             ))}
           </div>
-        </div>
-      ) : visible.length === 0 ? (
-        <div className="card">
-          {tab === 'pending' ? (
-            <EmptyState
-              icon="checkmark-done"
-              title="No pending orders"
-              detail="Everything is resolved. Log a new order to get it queued here."
-            />
-          ) : (
-            <EmptyState icon="time" title="No resolved orders yet" detail="Marked outcomes will appear here." />
-          )}
-        </div>
-      ) : (
-        <Reveal>
-        <div className="card card--flush">
-          <Table
-            columns={columns}
-            rows={visible}
-            rowKey={(o) => o.id}
-            rowClassName={(o) => (leaving[o.id] ? 'out-table-row exit' : 'out-table-row')}
-            onRowKeyDown={(o, key) => {
-              if (o.outcomes?.status === 'pending') {
-                void mark(o, key === 'a' ? 'accepted' : 'refused')
-              }
-            }}
-            empty={<EmptyState icon="time" title="Nothing here" />}
+        ) : loadError ? (
+          <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <p className="text-[15px] text-foreground">We could not load your orders.</p>
+            <button type="button" className={`${btnBase} border-border`} onClick={() => void load()}>
+              Retry
+            </button>
+          </div>
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon={tab === 'pending' ? 'checkmark-done' : 'time'}
+            title={tab === 'pending' ? 'No pending orders' : 'No resolved orders yet'}
+            detail={
+              tab === 'pending'
+                ? 'Everything is resolved. Log a new order to get it queued here.'
+                : 'Marked outcomes will appear here.'
+            }
           />
-        </div>
-        </Reveal>
-      )}
-    </div>
+        ) : (
+          <div className="out-table">
+            <Table
+              columns={columns}
+              rows={visible}
+              rowKey={(o) => o.id}
+              rowClassName={(o) => (leaving[o.id] ? 'out-table-row exit' : 'out-table-row')}
+              onRowKeyDown={(o, key) => {
+                if ((o.outcomes?.status ?? 'pending') === 'pending') {
+                  void mark(o, key === 'a' ? 'accepted' : 'refused')
+                }
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </PageShell>
   )
 }

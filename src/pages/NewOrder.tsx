@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
+import { PageHeader } from '../components/app/page-header'
 import { VerdictBlock } from '../components/verdict/VerdictBlock'
 import { VerdictInline } from '../components/verdict/VerdictInline'
 import { EmptyState, NeedsSetup } from '../components/States'
@@ -11,6 +11,16 @@ import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Buyer, Store } from '../lib/types'
+
+/** What buyer_network_lookup returns. Aggregates only - no identity. */
+interface NetworkLookupRow {
+  risk_score: number | null
+  total_orders: number | null
+  total_accepted: number | null
+  total_refused: number | null
+  store_count: number | null
+  first_seen: string | null
+}
 
 const CATEGORIES = ['skincare', 'clothing', 'electronics', 'footwear', 'beauty', 'home', 'accessories', 'other']
 
@@ -66,16 +76,35 @@ export function NewOrder() {
   const fetchPreview = useCallback(async (p: string) => {
     if (!supabase) return
     setPreview({ kind: 'loading' })
-    const [buyerRes, ordersRes] = await Promise.all([
-      supabase.from('buyers').select('*').eq('phone', p).maybeSingle(),
+    // PRIVACY: this used to run `from('buyers').select('*')`, which pulled the
+    // raw embedding and feature vector into the browser. buyer_network_lookup
+    // returns the same risk answer as aggregate counts, with no vector and no
+    // identity, so the live verdict still works the same way.
+    const [lookupRes, ordersRes] = await Promise.all([
+      supabase.rpc('buyer_network_lookup', { p_phone: p }),
       supabase.from('orders').select('store_id').eq('buyer_phone', p),
     ])
-    if (buyerRes.error || !buyerRes.data) {
+    if (lookupRes.error) {
       setPreview({ kind: 'unknown' })
       return
     }
-    const storeCount = new Set((ordersRes.data ?? []).map((o) => o.store_id)).size
-    setPreview({ kind: 'buyer', buyer: buyerRes.data, storeCount })
+    const row = ((lookupRes.data ?? []) as NetworkLookupRow[])[0]
+    if (!row) {
+      setPreview({ kind: 'unknown' })
+      return
+    }
+    const buyer: Buyer = {
+      phone: p,
+      first_seen: row.first_seen ?? null,
+      total_orders: row.total_orders ?? 0,
+      total_accepted: row.total_accepted ?? 0,
+      total_refused: row.total_refused ?? 0,
+      risk_score: Number(row.risk_score ?? 0.5),
+      store_count: row.store_count ?? 0,
+      embedding: null,
+    }
+    const storeCount = row.store_count ?? new Set((ordersRes.data ?? []).map((o) => o.store_id)).size
+    setPreview({ kind: 'buyer', buyer, storeCount })
   }, [])
 
   useEffect(() => {
@@ -133,9 +162,12 @@ export function NewOrder() {
       })
       if (orderErr) throw orderErr
 
+      // PRIVACY: this used to be select('*') right after the score pipeline
+      // ran, which pulled the freshly written embedding and feature vector back
+      // into the browser. Only the fields the UI shows are requested now.
       const { data: buyer, error: fetchErr } = await supabase
         .from('buyers')
-        .select('*')
+        .select('phone, risk_score, total_orders, total_accepted, total_refused, first_seen')
         .eq('phone', normalizedPhone)
         .single()
       if (fetchErr) throw fetchErr
@@ -143,8 +175,10 @@ export function NewOrder() {
       const ordersRes = await supabase.from('orders').select('store_id').eq('buyer_phone', normalizedPhone)
       const storeCount = new Set((ordersRes.data ?? []).map((o) => o.store_id)).size
 
-      setLastOrder({ buyer, storeCount })
-      setPreview({ kind: 'buyer', buyer, storeCount })
+      const scoredBuyer: Buyer = { ...(buyer as unknown as Buyer), embedding: null }
+
+      setLastOrder({ buyer: scoredBuyer, storeCount })
+      setPreview({ kind: 'buyer', buyer: scoredBuyer, storeCount })
       toast.push({
         kind: 'success',
         title: 'Order logged',
@@ -166,9 +200,8 @@ export function NewOrder() {
   return (
     <div className="stack">
       <PageHeader
-        icon="bag-handle"
         title="New Order"
-        subtitle="Log an order and see the buyer's risk profile instantly — across every connected store."
+        description="Log an order and see the buyer's risk profile instantly — across every connected store."
       />
 
       <Reveal stagger className="order-layout">
@@ -312,7 +345,6 @@ export function NewOrder() {
 
           {preview.kind === 'idle' && (
             <EmptyState
-              icon="phone-portrait"
               title="Type a phone number"
               detail="The risk verdict appears here as you type — before the order is even saved."
             />

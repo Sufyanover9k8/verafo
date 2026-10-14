@@ -1,9 +1,8 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Sidebar } from './components/layout/Sidebar'
-import { Topbar } from './components/layout/Topbar'
+import { AppShell } from './components/shell/app-shell'
 import { Skeleton } from './components/primitives/Skeleton'
-import { LayoutTickContext } from './lib/motion'
+import { FEATURES } from './lib/features'
 import { useSession } from './lib/session'
 import { useStoreScope } from './lib/store'
 
@@ -23,6 +22,9 @@ const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })
 const Lookup = lazy(() => import('./pages/Lookup').then((m) => ({ default: m.Lookup })))
 const NewOrder = lazy(() => import('./pages/NewOrder').then((m) => ({ default: m.NewOrder })))
 const Outcomes = lazy(() => import('./pages/Outcomes').then((m) => ({ default: m.Outcomes })))
+const Decide = lazy(() => import('./pages/Decide').then((m) => ({ default: m.Decide })))
+const Scan = lazy(() => import('./pages/Scan').then((m) => ({ default: m.Scan })))
+const Simulate = lazy(() => import('./pages/Simulate').then((m) => ({ default: m.Simulate })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
 const StoreDashboard = lazy(() => import('./pages/StoreDashboard').then((m) => ({ default: m.StoreDashboard })))
 const Stores = lazy(() => import('./pages/Stores').then((m) => ({ default: m.Stores })))
@@ -44,84 +46,40 @@ function RouteFallback() {
   )
 }
 
-const SIDEBAR_KEY = 'verafo.sidebarCollapsed'
-
-function useMedia(query: string): boolean {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
-  useEffect(() => {
-    const mq = window.matchMedia(query)
-    const onChange = () => setMatches(mq.matches)
-    mq.addEventListener?.('change', onChange)
-    setMatches(mq.matches)
-    return () => mq.removeEventListener?.('change', onChange)
-  }, [query])
-  return matches
-}
-
 export function App() {
   const location = useLocation()
   const { session, loading: sessionLoading, isPasswordRecovery } = useSession()
   const { role, loading: scopeLoading, needsStore } = useStoreScope()
 
-  const belowLg = useMedia('(max-width: 1023px)')
-  const belowMd = useMedia('(max-width: 767px)')
-  const [userCollapsed, setUserCollapsed] = useState(() => localStorage.getItem(SIDEBAR_KEY) === '1')
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  const collapsed = !belowMd && (belowLg ? true : userCollapsed)
-  const [layoutTick, setLayoutTick] = useState(0)
-  const firstRender = useRef(true)
-
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_KEY, userCollapsed ? '1' : '0')
-  }, [userCollapsed])
-
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      return
-    }
-    setLayoutTick((t) => t + 1)
-  }, [collapsed, mobileOpen])
-
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [location.pathname])
-
   const isAdmin = role === 'admin'
 
   const shell = (
-    <LayoutTickContext.Provider value={layoutTick}>
-      <div className={`app${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' sidebar-open' : ''}`}>
-      <Sidebar
-        collapsed={collapsed}
-        mobileOpen={belowMd && mobileOpen}
-        onToggle={() => (belowMd ? setMobileOpen(false) : setUserCollapsed((c) => !c))}
-        onNavigate={() => setMobileOpen(false)}
-      />
-      <Topbar onMenu={() => setMobileOpen(true)} />
-      <main className={`main${location.pathname === '/chat' ? ' chat-main' : ''}`}>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/lookup" element={<Lookup />} />
-            <Route path="/orders/new" element={<NewOrder />} />
-            <Route path="/orders/pending" element={<Outcomes />} />
-            <Route path="/outcomes" element={<Navigate to="/orders/pending" replace />} />
-            <Route path="/map" element={<BuyerMap />} />
-            {isAdmin && <Route path="/stores" element={<Stores />} />}
-            {isAdmin && <Route path="/stores/add" element={<AddStore />} />}
-            {isAdmin && <Route path="/stores/:id" element={<StoreDashboard />} />}
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/import" element={<BulkImport />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </main>
-      </div>
-    </LayoutTickContext.Provider>
+    <AppShell>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/lookup" element={<Lookup />} />
+          <Route path="/orders/new" element={<NewOrder />} />
+          <Route path="/orders/pending" element={<Outcomes />} />
+          {/* Unreleased pages: switched off in src/lib/features.ts. With the
+              route gone, a direct URL falls through to the catch-all below and
+              lands on the dashboard. */}
+          {FEATURES.decide && <Route path="/orders/decide" element={<Decide />} />}
+          {FEATURES.scan && <Route path="/orders/scan" element={<Scan />} />}
+          {FEATURES.simulate && <Route path="/simulate" element={<Simulate />} />}
+          <Route path="/outcomes" element={<Navigate to="/orders/pending" replace />} />
+          <Route path="/map" element={<BuyerMap />} />
+          {isAdmin && <Route path="/stores" element={<Stores />} />}
+          {isAdmin && <Route path="/stores/add" element={<AddStore />} />}
+          {isAdmin && <Route path="/stores/:id" element={<StoreDashboard />} />}
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/import" element={<BulkImport />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </AppShell>
   )
 
   // 1. Still confirming whether anyone is signed in.

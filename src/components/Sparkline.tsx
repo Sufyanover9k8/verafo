@@ -32,15 +32,15 @@ export function Sparkline({ data, height = 30, className }: SparklineProps) {
     >
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--cyan-bright)" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="var(--cyan-bright)" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--teal)" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="var(--teal)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <polygon points={area} fill={`url(#${gid})`} />
       <polyline
         points={line}
         fill="none"
-        stroke="var(--cyan-bright)"
+        stroke="var(--teal)"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"

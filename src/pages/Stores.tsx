@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
-import { Card } from '../components/primitives/Card'
+import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { CountUpNumber } from '../components/CountUpNumber'
@@ -90,32 +91,30 @@ export function Stores() {
   if (!isConfigured) return <NeedsSetup />
 
   return (
-    <div className="stack">
+    <PageShell>
       <PageHeader
-        icon="storefront"
         title="Stores"
-        subtitle="Manage connected ecommerce brands."
+        description="Manage connected ecommerce brands."
         actions={
-          <Link className="btn btn-primary" to="/stores/add">
+          <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/stores/add">
             <Icon name="add" size={15} /> Add store
           </Link>
         }
       />
 
       {checking ? (
-        <Card>
+        <Card className="gap-0 p-6">
           <Skeleton height={16} />
           <Skeleton height={16} />
         </Card>
       ) : !admin ? (
-        <Card>
-          <EmptyState
-            icon="shield-checkmark"
+        <Card className="gap-0 p-6">
+          <EmptyState icon="shield-checkmark"
             title="Restricted to admins"
             detail="Only administrators can view and manage stores. Head back to the dashboard to continue."
           />
           <div className="store-restricted-cta">
-            <Link className="btn btn-primary" to="/">
+            <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/">
               <Icon name="arrow-forward" size={14} /> Back to dashboard
             </Link>
           </div>
@@ -137,7 +136,7 @@ export function Stores() {
               aria-label="Search stores"
             />
           </div>
-          <Card className="card--flush">
+          <Card className="gap-0 overflow-hidden p-0">
             {loading ? (
               <div className="store-list">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -153,8 +152,7 @@ export function Stores() {
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <EmptyState
-                icon="storefront"
+              <EmptyState icon="storefront"
                 title={stores.length === 0 ? 'No stores yet' : 'No matches'}
                 detail={
                   stores.length === 0
@@ -204,7 +202,7 @@ export function Stores() {
                       </span>
                     </div>
                     <div className="store-row-actions">
-                      <Link className="btn btn-secondary btn-sm" to={`/stores/${s.id}`}>
+                      <Link className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" to={`/stores/${s.id}`}>
                         <Icon name="arrow-forward" size={13} /> View
                       </Link>
                       <button
@@ -223,6 +221,6 @@ export function Stores() {
           </Card>
         </section>
       )}
-    </div>
+    </PageShell>
   )
 }

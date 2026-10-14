@@ -1,10 +1,12 @@
+// Avatar colours are the website's chart family, used as a per-buyer identity
+// colour rather than a risk signal. They are written as tokens with the
+// website's own hex as the fallback, so they follow light/dark mode instead of
+// staying fixed. Each background is dark enough for white initials.
 const PALETTE: { from: string; to: string; text: string }[] = [
-  { from: '#5EEAD4', to: '#0D9488', text: '#042F2E' },
-  { from: '#A78BFA', to: '#7C3AED', text: '#2E1065' },
-  { from: '#F9A8D4', to: '#DB2777', text: '#500724' },
-  { from: '#FCD34D', to: '#D97706', text: '#451A03' },
-  { from: '#6EE7B7', to: '#059669', text: '#022C22' },
-  { from: '#93C5FD', to: '#2563EB', text: '#172554' },
+  { from: 'var(--teal-bright)', to: 'var(--teal-deep)', text: '#FFFFFF' }, // teal
+  { from: 'var(--purple)', to: 'var(--v-unknown-strong)', text: '#FFFFFF' }, // purple
+  { from: 'var(--amber)', to: 'var(--v-watch-strong)', text: '#FFFFFF' }, // amber
+  { from: 'var(--coral)', to: 'var(--v-risk-strong)', text: '#FFFFFF' }, // rose
 ]
 
 function hash(s: string): number {

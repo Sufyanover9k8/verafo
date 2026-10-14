@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react'
-import { ShieldCheck } from 'lucide-react'
 import { Icon } from '../components/Icon'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
@@ -51,7 +50,9 @@ export function Onboarding() {
     setSaving(false)
 
     if (res.error) {
-      setError(res.error.message)
+      // Raw detail stays in the console; the merchant gets a plain sentence.
+      console.error('Could not create store:', res.error)
+      setError('We could not save your store. Please try again.')
       return
     }
     toast.push({ kind: 'success', title: 'Store created', detail: clean })
@@ -62,9 +63,7 @@ export function Onboarding() {
     <div className="auth-split">
       <aside className="auth-left">
         <div className="auth-wordmark">
-          <span className="sidebar-brand-mark">
-            <ShieldCheck size={18} strokeWidth={2} />
-          </span>
+          <img src="/verafo-logo.png" alt="Verafo" className="size-8 shrink-0 object-contain" />
           <span className="sidebar-brand-name">Verafo</span>
         </div>
         <h1 className="auth-left-title">
@@ -121,7 +120,7 @@ export function Onboarding() {
 
             {error && <span className="field-error">{error}</span>}
 
-            <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
+            <button type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={saving}>
               {saving ? (
                 <>
                   <Icon name="refresh" size={17} className="spin" /> Creating…

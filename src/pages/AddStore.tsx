@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { PageHeader } from '../components/PageHeader'
-import { Card } from '../components/primitives/Card'
+import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { Card } from '@/components/ui/card'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { Reveal } from '../components/Reveal'
 import { useIsAdmin } from '../lib/admin'
@@ -77,31 +78,29 @@ export function AddStore() {
   if (!isConfigured) return <NeedsSetup />
 
   return (
-    <div className="stack">
+    <PageShell>
       <PageHeader
-        icon="storefront"
         title="Add e-brand"
-        subtitle="Register a new store in the network."
+        description="Register a new store in the network."
         actions={
-          <Link className="btn btn-secondary btn-sm" to="/stores">
+          <Link className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" to="/stores">
             <Icon name="arrow-forward" size={14} /> Back to stores
           </Link>
         }
       />
 
       {checking ? (
-        <Card>
+        <Card className="gap-0 p-6">
           <EmptyState icon="shield-checkmark" title="Checking access…" />
         </Card>
       ) : !admin ? (
-        <Card>
-          <EmptyState
-            icon="shield-checkmark"
+        <Card className="gap-0 p-6">
+          <EmptyState icon="storefront"
             title="Restricted to admins"
             detail="Only administrators can add stores."
           />
           <div className="store-restricted-cta">
-            <Link className="btn btn-primary" to="/">
+            <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/">
               <Icon name="arrow-forward" size={14} /> Back to dashboard
             </Link>
           </div>
@@ -170,7 +169,7 @@ export function AddStore() {
               </label>
 
               <div className="add-store-submit">
-                <button className="btn btn-primary btn-lg" type="submit" disabled={saving}>
+                <button className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" type="submit" disabled={saving}>
                   {saving ? (
                     <>
                       <Icon name="refresh" size={16} className="spin" /> Adding…
@@ -216,6 +215,6 @@ export function AddStore() {
           </div>
         </Reveal>
       )}
-    </div>
+    </PageShell>
   )
 }
