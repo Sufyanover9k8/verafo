@@ -18,45 +18,64 @@
 
 /* ── LIGHT (default) ─────────────────────────────────────── */
 :root {
-  /* ── 1 · Colour — raw site palette, copied verbatim ───── */
-  --bg: #FFFFFF;
+  /* ── 1 · Colour — raw palette, copied verbatim ─────────
+     Brand rule: teal accent, ink text, a near-white page and a
+     tinted surface for quiet panels. Every value below is used
+     as given; the `-strong` shades further down are DERIVED for
+     text, because a fill colour rarely clears 4.5:1 as type. */
+  --teal-500: #14B8A6;
+  --teal-600: #0FA696;
+  --teal-700: #0F766E;
+  --ink: #0B1011;
+  --text: #4A575A;
+  --text-soft: #6E7C7F;   /* derived: muted labels on --bg */
+  --border-base: #D8D8D9;
+  --bg: #FCFDFD;
+  --bg-tint: #ECF8F8;
+  --banner: #DFF4F4;
+  --card-dark: #183434;
+  --card-dark-2: #234443;
+  --card-line: #20504D;
+  --warn: #FBD44F;
+  --warn-text: #6B5209;   /* derived: --warn as type is 1.5:1 */
+  --warn-bar: #D6AA3C;
+
   --bg-2: #F6F8F8;
   --bg-3: #EDF3F3;
   --panel: #FFFFFF;
   --panel-2: #F5F8F8;
-  --line: rgba(10, 15, 16, .09);
-  --line-2: rgba(10, 15, 16, .16);
+  --line: var(--border-base);
+  --line-2: #C4C6C8;
 
-  --teal: #14B8A6;
+  --teal: var(--teal-500);
   --teal-bright: #2DD4BF;
-  --teal-deep: #0F766E;
+  --teal-deep: var(--teal-700);
   --teal-glow: rgba(20, 184, 166, .26);
   --coral: #E11D48;
   --amber: #D97706;
   --purple: #7C3AED;
 
-  --ink: #0A0F10;
-  --ink-2: #4A575A;
-  --ink-3: #7C8A8D;
+  --ink-2: var(--text);
+  --ink-3: var(--text-soft);
 
   --surface: #FFFFFF;
   --field: #FFFFFF;
-  --tint: #E9FBF8;
+  --tint: var(--bg-tint);
   --tint-soft: #F2F8F7;
-  --tint-strong: #E4FAF6;
+  --tint-strong: var(--banner);
   --tint-lav: #F5F3FF;
-  --head-glass: rgba(255, 255, 255, .86);
-  --nav-glass: rgba(255, 255, 255, .98);
-  --subnav-glass: rgba(255, 255, 255, .9);
+  --head-glass: rgba(252, 253, 253, .86);
+  --nav-glass: rgba(252, 253, 253, .98);
+  --subnav-glass: rgba(252, 253, 253, .9);
   --plate: #FFFFFF;
   --ph: #9AA7A9;
   --err-fg: #9F1239;
   --err-bg: rgba(225, 29, 72, .08);
 
   --btn-teal-1: #16C2AE;
-  --btn-teal-2: #0FA394;
+  --btn-teal-2: var(--teal-600);
   --btn-teal-fg: #FFFFFF;
-  --shadow-rgb: 10, 15, 16;
+  --shadow-rgb: 11, 16, 17;
 
   /* ── 1 · Colour — surfaces ramp (legacy names, site values)
         ink-900/800/700/600 are SURFACES. ink-100/050 are text. ── */
@@ -112,13 +131,15 @@
         site shade fails 4.5:1 on light surfaces, so text uses the
         deeper variant. Fills, icons and borders keep the site shade.
         See the audit in the Stage 2 contrast table. ─────────── */
-  --v-safe: var(--teal);
-  --v-safe-strong: var(--teal-deep);
-  --v-safe-bg: var(--tint);
+  --v-safe: var(--teal-500);
+  --v-safe-strong: var(--teal-700);
+  --v-safe-bg: var(--bg-tint);
 
-  --v-watch: var(--amber);
-  --v-watch-strong: #B45309;
-  --v-watch-bg: rgba(217, 119, 6, .10);
+  /* --warn is a BAR fill (1.5:1 as type), so its text shade is derived. */
+  --v-watch: var(--warn);
+  --v-watch-strong: var(--warn-text);
+  --v-watch-bg: rgba(251, 212, 79, .18);
+  --v-watch-bar: var(--warn-bar);
 
   --v-risk: var(--coral);
   --v-risk-strong: #BE123C;
@@ -337,40 +358,41 @@
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #FFFFFF;
+  --bg: #FCFDFD;
   --bg-2: #F6F8F8;
   --bg-3: #EDF3F3;
   --panel: #FFFFFF;
   --panel-2: #F5F8F8;
-  --line: rgba(10, 15, 16, .09);
-  --line-2: rgba(10, 15, 16, .16);
-  --teal: #14B8A6;
-  --teal-deep: #0F766E;
+  --line: var(--border-base);
+  --line-2: #C4C6C8;
+  --teal: var(--teal-500);
+  --teal-deep: var(--teal-700);
   --teal-glow: rgba(20, 184, 166, .26);
-  --ink: #0A0F10;
-  --ink-2: #4A575A;
-  --ink-3: #7C8A8D;
+  --ink: #0B1011;
+  --ink-2: var(--text);
+  --ink-3: var(--text-soft);
   --surface: #FFFFFF;
   --field: #FFFFFF;
-  --tint: #E9FBF8;
+  --tint: var(--bg-tint);
   --tint-soft: #F2F8F7;
-  --tint-strong: #E4FAF6;
+  --tint-strong: var(--banner);
   --tint-lav: #F5F3FF;
   --plate: #FFFFFF;
   --ph: #9AA7A9;
   --err-fg: #9F1239;
   --err-bg: rgba(225, 29, 72, .08);
   --btn-teal-1: #16C2AE;
-  --btn-teal-2: #0FA394;
+  --btn-teal-2: var(--teal-600);
   --btn-teal-fg: #FFFFFF;
-  --shadow-rgb: 10, 15, 16;
-  --v-ink-500: rgba(10, 15, 16, .10);
-  --v-safe: var(--teal);
-  --v-safe-strong: var(--teal-deep);
-  --v-safe-bg: var(--tint);
-  --v-watch: var(--amber);
-  --v-watch-strong: #B45309;
-  --v-watch-bg: rgba(217, 119, 6, .10);
+  --shadow-rgb: 11, 16, 17;
+  --v-ink-500: rgba(11, 16, 17, .10);
+  --v-safe: var(--teal-500);
+  --v-safe-strong: var(--teal-700);
+  --v-safe-bg: var(--bg-tint);
+  --v-watch: var(--warn);
+  --v-watch-strong: var(--warn-text);
+  --v-watch-bg: rgba(251, 212, 79, .18);
+  --v-watch-bar: var(--warn-bar);
   --v-risk: var(--coral);
   --v-risk-strong: #BE123C;
   --v-risk-bg: var(--err-bg);

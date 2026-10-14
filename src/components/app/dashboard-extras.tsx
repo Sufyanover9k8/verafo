@@ -89,8 +89,12 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
 }
 
 /**
- * Two money cards: what is riding on COD right now, and what refusals cost in
+ * Two money figures: what is riding on COD right now, and what refusals cost in
  * the chosen period. Both are shown only when the underlying data exists.
+ *
+ * `layout="stack"` renders one card, so the block can sit in a grid column
+ * beside the risk distribution; the default renders two cards side by side and
+ * returns a fragment at the top level.
  */
 interface MoneyRiskProps {
   /** PKR of pending orders from MEDIUM or HIGH risk buyers. */
@@ -100,13 +104,20 @@ interface MoneyRiskProps {
   rangeLabel: string
   /** How many orders the figures were computed from. */
   basedOn: number
+  layout?: 'row' | 'stack'
 }
 
-export function MoneyRiskCards({ codAtRisk, lostToRefusals, rangeLabel, basedOn }: MoneyRiskProps) {
+export function MoneyRiskCards({
+  codAtRisk,
+  lostToRefusals,
+  rangeLabel,
+  basedOn,
+  layout = 'row',
+}: MoneyRiskProps) {
   if (codAtRisk == null && lostToRefusals == null) return null
 
-  const card = (label: string, value: number, help: string) => (
-    <div className="rounded-[16px] border border-border bg-card p-6">
+  const figure = (label: string, value: number, help: string) => (
+    <div>
       <p className="text-[11.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-2 font-mono text-[26px] leading-none font-semibold tabular-nums text-foreground">
         {formatPKR(value)}
@@ -115,19 +126,34 @@ export function MoneyRiskCards({ codAtRisk, lostToRefusals, rangeLabel, basedOn 
     </div>
   )
 
+  const cod =
+    codAtRisk != null &&
+    figure('Cash on delivery waiting', codAtRisk, 'Pending orders from buyers who look MEDIUM or HIGH risk.')
+  const lost =
+    lostToRefusals != null &&
+    figure('Lost to refusals', lostToRefusals, `Refused orders in the last ${rangeLabel}.`)
+  const footnote = (
+    <p className="text-[11.5px] text-muted-foreground">
+      Based on your latest {basedOn.toLocaleString('en-PK')} orders.
+    </p>
+  )
+
+  if (layout === 'stack') {
+    return (
+      <div className="flex flex-col gap-5 rounded-[16px] border border-border bg-card p-6">
+        <h2 className="text-[15px] font-semibold text-foreground">Money at stake</h2>
+        {cod}
+        {lost}
+        {footnote}
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-6 sm:grid-cols-2">
-      {codAtRisk != null &&
-        card(
-          'Cash on delivery waiting',
-          codAtRisk,
-          'Pending orders from buyers who look MEDIUM or HIGH risk.',
-        )}
-      {lostToRefusals != null &&
-        card('Lost to refusals', lostToRefusals, `Refused orders in the last ${rangeLabel}.`)}
-      <p className="text-[11.5px] text-muted-foreground sm:col-span-2">
-        Based on your latest {basedOn.toLocaleString('en-PK')} orders.
-      </p>
+      {cod && <div className="rounded-[16px] border border-border bg-card p-6">{cod}</div>}
+      {lost && <div className="rounded-[16px] border border-border bg-card p-6">{lost}</div>}
+      <div className="sm:col-span-2">{footnote}</div>
     </div>
   )
 }

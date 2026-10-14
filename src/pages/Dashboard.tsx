@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, RefreshCw } from 'lucide-react'
+import { ArrowRight, Banknote, Gauge, Package, PackageX, RefreshCw } from 'lucide-react'
 import { GeoMap } from '@/components/charts/GeoMap'
-import { CountUpNumber } from '@/components/CountUpNumber'
 import { NeedsSetup } from '@/components/States'
 import { PageHeader } from '@/components/app/page-header'
 import { PageShell } from '@/components/app/page-shell'
 import { Segmented } from '@/components/app/segmented'
-import { StatStrip, type StatItem } from '@/components/app/stat-strip'
 import { StatusBadge } from '@/components/app/status-badge'
-import { TrendArea, TrendBars } from '@/components/app/charts'
+import { MetricTrend, TrendArea, type MetricSeries } from '@/components/app/charts'
+import { KpiCard, RiskDonut, type DonutSlice } from '@/components/app/kpi-cards'
 import { VerdictBadge } from '@/components/app/verdict-badge'
 import { CardState } from '@/components/app/card-state'
 import { VerdictCard } from '@/components/app/verdict-card'
@@ -21,10 +20,13 @@ import { InsightCards } from '@/components/app/insight-cards'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 import { money, phone, timeAgo } from '@/lib/format'
+import { greetingForName } from '@/lib/greeting'
 import { hasEnoughData, toneFromScore, type VerdictTone } from '@/lib/risk'
 import { confirmOrderMessage } from '@/lib/ui'
 import { useAutoRefresh, useNowTicker } from '@/lib/ui/use-auto-refresh'
+import { useSession } from '@/lib/session'
 import { isConfigured, supabase } from '@/lib/supabase'
 import { computeCityStats, computeDailySales, computeTopProducts } from '@/lib/storeStats'
 import { useStoreScope } from '@/lib/store'
@@ -91,7 +93,10 @@ interface ToneBucket {
 export function Dashboard() {
   const toast = useToast()
   const { role, store, scopeStoreIds } = useStoreScope()
+  const { displayName } = useSession()
   const isAdmin = role === 'admin'
+  /** Which series the volume chart is showing. Orders is always available. */
+  const [metrics, setMetrics] = useState<string[]>(['orders'])
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [buyers, setBuyers] = useState<BuyerLight[]>([])
   const [sales, setSales] = useState<DailySalesRow[]>([])
@@ -182,6 +187,12 @@ export function Dashboard() {
   useAutoRefresh(load, 90_000, !loading)
   useNowTicker(lastLoaded != null && !loading)
 
+  const riskByPhone = useMemo(() => {
+    const m = new Map<string, BuyerLight>()
+    for (const b of buyers) m.set(b.phone, b)
+    return m
+  }, [buyers])
+
   const stats = useMemo(() => {
     const now = new Date()
     const today = keyOf(now)
@@ -199,25 +210,101 @@ export function Dashboard() {
       buyers.length > 0 ? buyers.reduce((sum, b) => sum + b.risk_score, 0) / buyers.length : 0.5
     const pending = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending').length
 
-    // Orders placed per day in the chosen range, counted from the orders
-    // already loaded. No new query.
+    // Averages real only when the caller asked for an average.
+    const averageOf = (values: number[]) =>
+      values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : null
+
     const dayCount = new Map<string, number>()
     for (const o of orders) {
       if (!o.ordered_at) continue
       const k = keyOf(new Date(o.ordered_at))
       dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
     }
-    const days: { label: string; value: number }[] = []
+
+    /**
+     * Buckets by whole days back from today, so an order placed this morning
+     * cannot fall outside a window. `wantRisk` adds the average risk score of
+     * the buyers who ordered that day — presented as a TREND, never as a
+     * per-order score, which this app does not have.
+     */
+    const days: { label: string; orders: number; revenue: number; risk: number | null }[] = []
+    const spendByDay = new Map<string, number>()
+    const riskByDay = new Map<string, number[]>()
+    for (const o of orders) {
+      if (!o.ordered_at) continue
+      const k = keyOf(new Date(o.ordered_at))
+      if (o.price != null) spendByDay.set(k, (spendByDay.get(k) ?? 0) + (o.price ?? 0) * (o.quantity ?? 1))
+      const b = riskByPhone.get(o.buyer_phone)
+      // Only buyers who have actually resolved an order are scored; an
+      // unscored buyer sits at the neutral 0.5 and would flatten the trend.
+      if (b != null && hasEnoughData(b.total_orders)) {
+        const list = riskByDay.get(k)
+        if (list) list.push(b.risk_score)
+        else riskByDay.set(k, [b.risk_score])
+      }
+    }
     for (let i = range - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 86400000)
+      const k = keyOf(d)
       days.push({
         label: d.toLocaleDateString('en-GB', range === 30 ? { day: 'numeric', month: 'short' } : { weekday: 'short' }),
-        value: dayCount.get(keyOf(d)) ?? 0,
+        orders: dayCount.get(k) ?? 0,
+        revenue: spendByDay.get(k) ?? 0,
+        risk: averageOf(riskByDay.get(k) ?? []),
       })
     }
 
-    return { todayOrders, todayRevenue, avg, pending, days }
-  }, [orders, buyers, range])
+    /** Totals for any whole-day window ending `offsetDays` ago. */
+    const windowTotals = (offsetDays: number) => {
+      const from = new Date(now.getTime() - (offsetDays + range - 1) * 86400000)
+      from.setHours(0, 0, 0, 0)
+      const toExclusive = new Date(now.getTime() - offsetDays * 86400000)
+      toExclusive.setHours(0, 0, 0, 0)
+      let count = 0
+      let revenue = 0
+      let refused = 0
+      let priced = false
+      for (const o of orders) {
+        if (!o.ordered_at) continue
+        const t = new Date(o.ordered_at).getTime()
+        if (t < from.getTime() || t >= toExclusive.getTime()) continue
+        count++
+        if (o.outcomes?.status === 'refused') refused++
+        if (o.price != null) {
+          priced = true
+          revenue += (o.price ?? 0) * (o.quantity ?? 1)
+        }
+      }
+      return { count, revenue: priced ? revenue : null, refused }
+    }
+
+    /** Percentage change, or null when the window before cannot support one. */
+    const deltaOf = (nowValue: number | null, prevValue: number | null, minBase: number) => {
+      if (nowValue == null || prevValue == null) return null
+      if (prevValue < minBase) return null
+      return ((nowValue - prevValue) / prevValue) * 100
+    }
+
+    const current = windowTotals(0)
+    const previous = windowTotals(range)
+    // MIN_DELTA_SAMPLE: below this the previous window is too thin to compare.
+    const MIN_DELTA_SAMPLE = 5
+
+    return {
+      todayOrders,
+      todayRevenue,
+      avg,
+      pending,
+      days,
+      current,
+      previous,
+      deltas: {
+        orders: deltaOf(current.count, previous.count, MIN_DELTA_SAMPLE),
+        revenue: deltaOf(current.revenue, previous.revenue, MIN_DELTA_SAMPLE),
+        refused: deltaOf(current.refused, previous.refused, MIN_DELTA_SAMPLE),
+      },
+    }
+  }, [orders, buyers, range, riskByPhone])
 
   const filteredOrders = useMemo(() => {
     const cutoff = new Date().getTime() - (range - 1) * 86400000
@@ -225,12 +312,6 @@ export function Dashboard() {
   }, [orders, range])
 
   const recent = filteredOrders.slice(0, 8)
-
-  const riskByPhone = useMemo(() => {
-    const m = new Map<string, BuyerLight>()
-    for (const b of buyers) m.set(b.phone, b)
-    return m
-  }, [buyers])
 
   /** Every pending order from a buyer with enough history to already look
    *  risky, worst first. This one list drives both the verdict and the
@@ -252,8 +333,6 @@ export function Dashboard() {
   const cityStats = useMemo(() => computeCityStats(filteredOrders), [filteredOrders])
   const topProducts = useMemo(() => computeTopProducts(filteredOrders), [filteredOrders])
 
-  const todayOrders = kpis?.today_orders ?? stats.todayOrders
-  const todayRevenue = kpis?.today_revenue ?? stats.todayRevenue
   const pending = kpis?.pending_orders ?? stats.pending
 
   const salesData = sales.map((s) => ({
@@ -371,25 +450,6 @@ export function Dashboard() {
   const averageBand: VerdictTone =
     buyers.length > 0 && hasEnoughData(buyers[0]?.total_orders ?? 0) ? toneFromScore(stats.avg) : 'unknown'
 
-  const kpiItems: StatItem[] = [
-    { label: 'Orders today', value: <CountUpNumber value={todayOrders} /> },
-    { label: 'Revenue today', value: <CountUpNumber prefix="PKR " value={todayRevenue} /> },
-    {
-      label: 'Average risk',
-      value: <CountUpNumber value={stats.avg} decimals={2} />,
-      hint: `${TONE_UI[averageBand].word} · ${buyers.length} buyer${buyers.length === 1 ? '' : 's'}`,
-    },
-    {
-      label: 'Pending outcomes',
-      value: <CountUpNumber value={pending} />,
-      hint: (
-        <Link className="font-medium text-primary-text underline-offset-4 hover:underline" to="/orders/pending">
-          Mark them now
-        </Link>
-      ),
-    },
-  ]
-
   const distTotal = buckets.reduce((sum, b) => sum + b.n, 0)
 
   /** "7 days" / "30 days", for the period-aware empty states below. */
@@ -403,10 +463,90 @@ export function Dashboard() {
     const inPeriod =
       what === 'sales'
         ? salesData.some((d) => d.a > 0)
-        : stats.days.some((d) => d.value > 0)
+        : stats.days.some((d) => d.orders > 0)
     if (inPeriod) return `No ${what} yet.`
     return orders.length > 0 ? `No ${what} in the last ${periodLabel}.` : `No ${what} yet.`
   }
+
+  /* ── The top-band figures ───────────────────────────────── */
+
+  const deltaLabel = `vs previous ${periodLabel}`
+
+  const kpiCards = [
+    {
+      label: `Orders · last ${periodLabel}`,
+      value: stats.current.count.toLocaleString('en-PK'),
+      icon: Package,
+      delta: stats.deltas.orders,
+      deltaLabel,
+      upIsGood: true,
+      hint: 'Orders placed in this period',
+    },
+    {
+      label: `Revenue · last ${periodLabel}`,
+      value: stats.current.revenue == null ? '—' : money(stats.current.revenue),
+      icon: Banknote,
+      delta: stats.deltas.revenue,
+      deltaLabel,
+      upIsGood: true,
+      hint: 'No order in this period carries a price',
+    },
+    {
+      label: `Refused · last ${periodLabel}`,
+      value: stats.current.refused.toLocaleString('en-PK'),
+      icon: PackageX,
+      delta: stats.deltas.refused,
+      deltaLabel,
+      upIsGood: false,
+      hint: 'Orders marked refused, returned to origin',
+    },
+    {
+      label: 'Average risk',
+      value: stats.avg.toFixed(2),
+      icon: Gauge,
+      delta: null,
+      hint: `${TONE_UI[averageBand].word} · ${buyers.length} buyer${buyers.length === 1 ? '' : 's'} scored`,
+    },
+  ]
+
+  /** Series the volume chart can show. Two axes only, so nothing is compared
+   *  against a scale it does not belong to. */
+  const metricSeries: MetricSeries[] = [
+    {
+      key: 'orders',
+      name: 'Orders',
+      color: 'var(--chart-1)',
+      format: (n) => `${Math.round(n)}`,
+      axis: 'left',
+    },
+    {
+      key: 'revenue',
+      name: 'Revenue',
+      color: 'var(--chart-3)',
+      format: (n) => money(n),
+      axis: 'right',
+    },
+    {
+      key: 'risk',
+      name: 'Average risk',
+      color: 'var(--chart-4)',
+      format: (n) => n.toFixed(2),
+      axis: 'right',
+    },
+  ]
+
+  const metricData = stats.days.map((d) => ({
+    label: d.label,
+    orders: d.orders,
+    revenue: d.revenue,
+    risk: d.risk ?? 0,
+  }))
+
+  const donutSlices: DonutSlice[] = buckets.map((b) => ({
+    label: b.label,
+    value: b.n,
+    band: b.tone,
+  }))
 
   const subtitle = loading ? (
     'Checking your orders…'
@@ -424,15 +564,20 @@ export function Dashboard() {
     </span>
   ) : (
     <span>
-      {isAdmin ? 'Across the network' : 'Your store'} · {pending} order{pending === 1 ? '' : 's'} awaiting a verdict.
+      {isAdmin ? 'Across the network' : store?.name ?? 'Your store'} · {pending} order
+      {pending === 1 ? '' : 's'} awaiting a verdict.
     </span>
   )
 
   return (
     <PageShell>
       <PageHeader
-        title="Is my store safe today?"
-        description={subtitle}
+        title={greetingForName(displayName)}
+        description={
+          <span>
+            <span className="font-medium text-foreground">Is my store safe today?</span> {subtitle}
+          </span>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
@@ -461,6 +606,24 @@ export function Dashboard() {
           </div>
         }
       />
+
+      {/* The period at a glance, with real period-over-period movement. */}
+      {!loading && !ordersError && orders.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {kpiCards.map((k) => (
+            <KpiCard
+              key={k.label}
+              label={k.label}
+              value={k.value}
+              icon={k.icon}
+              delta={k.delta}
+              deltaLabel={deltaLabel}
+              upIsGood={k.upIsGood}
+              hint={k.hint}
+            />
+          ))}
+        </div>
+      )}
 
       {/* The answer, first: one briefing line, then the verdict card. */}
       {!loading && !ordersError && (
@@ -518,19 +681,6 @@ export function Dashboard() {
           hasStore={Boolean(store) || orders.length > 0}
           hasScoredOrder={earlySignals.anyScored}
           hasOutcome={earlySignals.anyOutcome}
-        />
-      )}
-
-      {/* The four numbers. */}
-      <StatStrip items={kpiItems} loading={loading} />
-
-      {/* What COD is carrying right now, and what refusals cost. */}
-      {!loading && !ordersError && (
-        <MoneyRiskCards
-          codAtRisk={codAtRisk}
-          lostToRefusals={lostToRefusals}
-          rangeLabel={range === 30 ? '30 days' : '7 days'}
-          basedOn={orders.length}
         />
       )}
 
@@ -592,52 +742,109 @@ export function Dashboard() {
             </CardState>
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
+      {/* Volume over time, with a metric switcher. Revenue and average risk
+          read on their own right-hand scale, so nothing is compared against an
+          axis it does not belong to. */}
+      <Card className="gap-0">
+        <CardHeader>
+          <CardTitle>Order volume &amp; risk trend</CardTitle>
+          <CardDescription>
+            Totals per day over the last {range} days.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div
+            role="group"
+            aria-label="Metrics shown"
+            className="inline-flex flex-wrap items-center rounded-[10px] border border-border bg-muted/60 p-0.5"
+          >
+            {metricSeries.map((s) => {
+              const on = metrics.includes(s.key)
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    setMetrics((cur) =>
+                      cur.includes(s.key)
+                        ? // Never leave the chart with nothing to draw.
+                          cur.length === 1
+                          ? cur
+                          : cur.filter((k) => k !== s.key)
+                        : [...cur, s.key],
+                    )
+                  }
+                  className={cn(
+                    'inline-flex h-11 items-center gap-2 rounded-[10px] px-3 text-[13px] font-medium transition-colors md:h-8',
+                    on
+                      ? 'bg-card text-foreground shadow-1 ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <span className="size-2.5 rounded-full" style={{ background: s.color }} aria-hidden="true" />
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
+
+          <CardState
+            loading={loading}
+            error={ordersError}
+            onRetry={() => void load()}
+            empty={stats.days.every((d) => d.orders === 0)}
+            emptyText={trendEmptyText('orders')}
+            skeletonHeight={260}
+          >
+            <MetricTrend
+              data={metricData}
+              series={metricSeries}
+              active={metrics}
+              label={`Orders, revenue and average risk per day over the last ${range} days`}
+              emptyText={trendEmptyText('orders')}
+            />
+          </CardState>
+        </CardContent>
+      </Card>
+
+      {/* How risky the book is, what COD is carrying, and the daily sales line
+          the admin-only daily_sales function feeds. */}
+      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+        <Card className="gap-0">
           <CardHeader>
             <CardTitle>Risk distribution</CardTitle>
-            <CardDescription>{isAdmin ? 'Every buyer on the network.' : 'Buyers who ordered from your store.'}</CardDescription>
+            <CardDescription>
+              {isAdmin ? 'Every buyer on the network.' : 'Buyers who ordered from your store.'}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent>
             <CardState
               loading={loading}
               error={buyersError}
               onRetry={() => void load()}
               empty={distTotal === 0}
               emptyText="No buyers have been scored yet."
-              skeletonHeight={160}
+              skeletonHeight={200}
             >
-              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Risk distribution">
-                {buckets.map((b) => (
-                  <div key={b.tone} className={TONE_UI[b.tone].bar} style={{ width: `${(b.n / distTotal) * 100}%` }} />
-                ))}
-              </div>
-              {/* The bar is decorative; this is what a screen reader reads. */}
-              <p className="sr-only">
-                {buckets.map((b) => `${b.label}: ${b.n}`).join('. ')}
-              </p>
-              <ul className="m-0 list-none space-y-3 p-0">
-                {buckets.map((b) => (
-                  <li key={b.tone} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 text-muted-foreground">
-                      <span className={`size-2.5 rounded-full ${TONE_UI[b.tone].bar}`} />
-                      {b.label}
-                    </span>
-                    <span className="tabular-nums">
-                      <span className="font-semibold text-foreground">{b.n}</span>
-                      <span className="ms-2 text-xs text-muted-foreground">{Math.round((b.n / distTotal) * 100)}%</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <RiskDonut slices={donutSlices} total={distTotal} />
             </CardState>
           </CardContent>
         </Card>
-      </div>
 
-      {/* The two trends. */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+        {!loading && !ordersError && (
+          <MoneyRiskCards
+            codAtRisk={codAtRisk}
+            lostToRefusals={lostToRefusals}
+            rangeLabel={range === 30 ? '30 days' : '7 days'}
+            basedOn={orders.length}
+            layout="stack"
+          />
+        )}
+
+        <Card className="gap-0">
           <CardHeader>
             <CardTitle>Sales</CardTitle>
             <CardDescription>Gross order value per day, last {range} days.</CardDescription>
@@ -649,35 +856,13 @@ export function Dashboard() {
               onRetry={() => void load()}
               empty={salesData.length === 0 || salesData.every((d) => d.a === 0)}
               emptyText={trendEmptyText('sales')}
-              skeletonHeight={240}
+              skeletonHeight={200}
             >
               <TrendArea
                 data={salesData.map((s) => ({ label: s.label, value: s.a }))}
                 format={(n) => money(n)}
+                height={210}
                 label={`Gross order value per day over the last ${range} days`}
-              />
-            </CardState>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Orders per day</CardTitle>
-            <CardDescription>Orders placed per day, last {range} days.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CardState
-              loading={loading}
-              error={ordersError}
-              onRetry={() => void load()}
-              empty={stats.days.every((d) => d.value === 0)}
-              emptyText={trendEmptyText('orders')}
-              skeletonHeight={240}
-            >
-              <TrendBars
-                data={stats.days}
-                emptyText={trendEmptyText('orders')}
-                label={`Orders placed per day over the last ${range} days`}
               />
             </CardState>
           </CardContent>
