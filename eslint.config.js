@@ -5,7 +5,10 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules'] },
+  // The underscore-prefixed folders are local scratch copies of this repo, not
+  // part of the app. Leaving them linted makes the parser resolve several
+  // candidate tsconfig roots and the whole run fails before it reads a file.
+  { ignores: ['dist', 'node_modules', 'apps', '_*-clean'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

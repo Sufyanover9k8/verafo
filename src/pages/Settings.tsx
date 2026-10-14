@@ -1,9 +1,35 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Icon } from '../components/Icon'
+import {
+  Building2,
+  CloudUpload,
+  Database,
+  Download,
+  Loader2,
+  LogOut,
+  Palette,
+  Server,
+  ShieldCheck,
+  Trash2,
+  User,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { CardState } from '../components/app/card-state'
-import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
 import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { Reveal } from '../components/Reveal'
+import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
 import { NeedsSetup } from '../components/States'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
@@ -31,6 +57,51 @@ function csv(rows: Record<string, unknown>[]): string {
   return [keys.join(','), ...rows.map((r) => keys.map((k) => esc(r[k])).join(','))].join('\n')
 }
 
+/** One titled block. Every settings section has the same shape. */
+function Section({
+  icon: Icon,
+  eyebrow,
+  children,
+}: {
+  icon: LucideIcon
+  eyebrow: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-[16px] border border-border bg-card p-6">
+      <div className="mb-4 flex items-center gap-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-muted text-primary-text">
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+        <span className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{eyebrow}</span>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** A label/description on the left, its control on the right. */
+function Row({ title, desc, control }: { title: string; desc: string; control: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-4 first:pt-0 last:border-b-0 last:pb-0">
+      <div className="min-w-[15rem] flex-1">
+        <p className="text-[14px] font-semibold text-foreground">{title}</p>
+        <p className="mt-0.5 max-w-prose text-[12.5px] text-muted-foreground">{desc}</p>
+      </div>
+      {control}
+    </div>
+  )
+}
+
+function Tile({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="rounded-[10px] border border-border bg-muted/40 px-3 py-2.5">
+      <p className="text-[11.5px] text-muted-foreground">{label}</p>
+      <p className={cn('mt-0.5 text-[14px] font-medium text-foreground', mono && 'font-mono tabular-nums')}>{value}</p>
+    </div>
+  )
+}
+
 export function Settings() {
   const toast = useToast()
   const { admin } = useIsAdmin()
@@ -39,6 +110,8 @@ export function Settings() {
   const { theme, reducedMotion, resolved, setTheme, setReducedMotion } = useTheme()
   const [exporting, setExporting] = useState<'buyers' | 'orders' | null>(null)
   const [clearing, setClearing] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [conn, setConn] = useState<'checking' | 'ok' | 'fail'>('checking')
   const [buyerCount, setBuyerCount] = useState<number | null>(null)
   const [orderCount, setOrderCount] = useState<number | null>(null)
@@ -189,6 +262,7 @@ export function Settings() {
       toast.push({ kind: 'error', title: 'Could not clear history', detail: err instanceof Error ? err.message : String(err) })
     } finally {
       setClearing(false)
+      setConfirmClear(false)
     }
   }, [toast])
 
@@ -217,42 +291,28 @@ export function Settings() {
   // half-filled numbers. The real sections replace it once it settles.
   if (conn === 'checking') {
     return (
-      <div>
-        <PageHeader
-          title="Settings"
-          description="Appearance, data and connection — everything in one place."
-        />
-        <div className="settings-layout">
-          <section className="card settings-section">
-            <CardState loading skeletonHeight={280}>{null}</CardState>
-          </section>
+      <PageShell>
+        <PageHeader title="Settings" description="Appearance, data and connection — everything in one place." />
+        <div className="rounded-[16px] border border-border bg-card p-6">
+          <CardState loading skeletonHeight={280}>{null}</CardState>
         </div>
-      </div>
+      </PageShell>
     )
   }
 
-  return (
-    <div>
-      <PageHeader
-        title="Settings"
-        description="Appearance, data and connection — everything in one place."
-      />
+  const edgeHost = functionsBaseUrl() ? new URL(functionsBaseUrl()!).host : null
 
-      <div className="settings-layout">
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon blue">
-              <Icon name="person" size={16} />
-            </span>
-            <span className="eyebrow">Personal information</span>
-          </div>
-          <div className="settings-rows">
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Your name</div>
-                <div className="setting-desc">Used for the personalised greeting on the dashboard.</div>
-              </div>
-              <form className="setting-control" onSubmit={(e) => void saveName(e)}>
+  return (
+    <PageShell>
+      <PageHeader title="Settings" description="Appearance, data and connection — everything in one place." />
+
+      <Reveal stagger className="flex flex-col gap-6">
+        <Section icon={User} eyebrow="Personal information">
+          <Row
+            title="Your name"
+            desc="Used for the personalised greeting on the dashboard."
+            control={
+              <form className="flex items-center gap-2" onSubmit={(e) => void saveName(e)}>
                 <input
                   type="text"
                   value={name}
@@ -260,210 +320,229 @@ export function Settings() {
                   placeholder="e.g. Ali"
                   maxLength={40}
                   aria-label="Your name"
+                  className="h-11 w-full min-w-[10rem] rounded-[10px] border border-input bg-card px-3 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-9"
                 />
-                <button className="btn btn-ghost btn-sm" type="submit" disabled={savingName}>
-                  {savingName ? <Icon name="refresh" size={14} className="spin" /> : 'Save'}
-                </button>
+                <Button type="submit" variant="outline" size="sm" className="h-11 gap-1.5 px-3 md:h-9" disabled={savingName}>
+                  {savingName ? <Loader2 className="size-3.5 animate-spin" /> : 'Save'}
+                </Button>
               </form>
-            </div>
-          </div>
-        </section>
+            }
+          />
+        </Section>
 
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon amber">
-              <Icon name="sunny" size={16} />
-            </span>
-            <span className="eyebrow">Appearance</span>
-          </div>
-          <div className="settings-rows">
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Theme</div>
-                <div className="setting-desc">Choose how Verafo looks. System follows your device.</div>
-              </div>
-              <div className="seg" role="group" aria-label="Theme">
+        <Section icon={Palette} eyebrow="Appearance">
+          <Row
+            title="Theme"
+            desc="Choose how Verafo looks. System follows your device."
+            control={
+              <div
+                role="group"
+                aria-label="Theme"
+                className="inline-flex items-center rounded-[10px] border border-border bg-muted/60 p-0.5"
+              >
                 {(['dark', 'light', 'system'] as Theme[]).map((t) => (
                   <button
                     key={t}
-                    className={theme === t ? 'active' : ''}
-                    onClick={() => setTheme(t)}
+                    type="button"
+                    aria-pressed={theme === t}
                     title={t === 'system' ? `Resolved: ${resolved}` : undefined}
+                    onClick={() => setTheme(t)}
+                    className={cn(
+                      'h-11 rounded-[10px] px-3 text-[13px] font-medium transition-colors md:h-8',
+                      theme === t
+                        ? 'bg-card text-foreground shadow-1 ring-1 ring-border'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
                   >
                     {t[0].toUpperCase() + t.slice(1)}
                   </button>
                 ))}
               </div>
-            </div>
+            }
+          />
 
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Reduced motion</div>
-                <div className="setting-desc">Disable animations and transitions.</div>
-              </div>
-              <button
-                className={`switch${reducedMotion ? ' on' : ''}`}
-                role="switch"
-                aria-checked={reducedMotion}
-                onClick={() => setReducedMotion(!reducedMotion)}
+          <Row
+            title="Reduced motion"
+            desc="Disable animations and transitions."
+            control={
+              <Switch
+                checked={reducedMotion}
+                onCheckedChange={setReducedMotion}
+                aria-label="Reduced motion"
               />
-            </div>
-          </div>
-        </section>
+            }
+          />
+        </Section>
 
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon orange">
-              <Icon name="trash" size={16} />
-            </span>
-            <span className="eyebrow">Activity</span>
-          </div>
-          <div className="settings-rows">
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Clear your lookup history</div>
-                <div className="setting-desc">
-                  Remove your recent searches from the Buyer Lookup page. This only clears
-                  your own history — it doesn't affect other people on your team.
-                </div>
-              </div>
-              <button className="btn btn-refuse btn-sm" disabled={clearing} onClick={() => void clearLookups()}>
-                {clearing ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="trash-outline" size={14} />}
+        <Section icon={Trash2} eyebrow="Activity">
+          <Row
+            title="Clear your lookup history"
+            desc="Remove your recent searches from the Buyer Lookup page. This only clears your own history — it doesn't affect other people on your team."
+            control={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
+                disabled={clearing}
+                onClick={() => setConfirmClear(true)}
+              >
+                {clearing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                 Clear history
-              </button>
-            </div>
-          </div>
-        </section>
+              </Button>
+            }
+          />
+        </Section>
 
         {admin && (
-          <section className="card settings-section">
-            <div className="settings-section-head">
-              <span className="kpi-icon safe">
-                <Icon name="cloud-upload" size={16} />
-              </span>
-              <span className="eyebrow">Data</span>
-            </div>
-            <div className="settings-rows">
-              <div className="setting-row">
-                <div className="setting-info">
-                  <div className="setting-title">Export buyers</div>
-                  <div className="setting-desc">
-                    Download all {buyerCount ?? '…'} buyer profiles as a CSV.
-                  </div>
-                </div>
-                <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportBuyers()}>
-                  {exporting === 'buyers' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
+          <Section icon={Database} eyebrow="Data">
+            <Row
+              title="Export buyers"
+              desc={`Download all ${buyerCount ?? '…'} buyer profiles as a CSV.`}
+              control={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-11 gap-1.5 px-3 md:h-9"
+                  disabled={exporting !== null}
+                  onClick={() => void exportBuyers()}
+                >
+                  {exporting === 'buyers' ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
                   Export CSV
-                </button>
-              </div>
-
-              <div className="setting-row">
-                <div className="setting-info">
-                  <div className="setting-title">Export orders</div>
-                  <div className="setting-desc">
-                    Download up to 2000 orders (with store and outcome) as a CSV.
-                  </div>
-                </div>
-                <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportOrders()}>
-                  {exporting === 'orders' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
+                </Button>
+              }
+            />
+            <Row
+              title="Export orders"
+              desc="Download up to 2000 orders (with store and outcome) as a CSV."
+              control={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-11 gap-1.5 px-3 md:h-9"
+                  disabled={exporting !== null}
+                  onClick={() => void exportOrders()}
+                >
+                  {exporting === 'orders' ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
                   Export CSV
-                </button>
-              </div>
-            </div>
-          </section>
+                </Button>
+              }
+            />
+          </Section>
         )}
 
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon blue">
-              <Icon name="server" size={16} />
+        <Section icon={Server} eyebrow="Connection">
+          <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-border bg-muted/40 p-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-card text-primary-text">
+              <CloudUpload className="size-4" aria-hidden="true" />
             </span>
-            <span className="eyebrow">Connection</span>
-          </div>
-          <div className="conn-card">
-            <div className="conn-avatar">
-              <Icon name="server-outline" size={20} />
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-foreground">
+                Supabase {conn === 'ok' ? 'connected' : 'unreachable'}
+              </p>
+              <p className="truncate font-mono text-[12px] text-muted-foreground">{edgeHost ?? 'not configured'}</p>
             </div>
-            <div className="conn-meta">
-              <strong>Supabase {conn === 'ok' ? 'connected' : 'unreachable'}</strong>
-              <span>{isConfigured ? new URL(functionsBaseUrl() ?? '').host : 'not configured'}</span>
-            </div>
-            <span className={`conn-pill${conn === 'ok' ? '' : ' warn'}`}>
-              <span className="conn-dot" />
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium',
+                conn === 'ok'
+                  ? 'border-risk-safe/40 bg-risk-safe-soft text-risk-safe-strong'
+                  : 'border-risk-watch/40 bg-risk-watch-soft text-risk-watch-strong',
+              )}
+            >
+              <span className={cn('size-1.5 rounded-full', conn === 'ok' ? 'bg-risk-safe' : 'bg-risk-watch')} />
               {conn === 'ok' ? 'online' : 'offline'}
             </span>
           </div>
-          <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>
-            <div className="info-tile">
-              <div className="info-tile-label">Buyers</div>
-              <div className="info-tile-value mono">{buyerCount ?? '…'}</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">Orders</div>
-              <div className="info-tile-value mono">{orderCount ?? '…'}</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">Edge functions</div>
-              <div className="info-tile-value">{functionsBaseUrl() ? 'Deployed' : 'Not deployed'}</div>
-            </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Tile label="Buyers" value={buyerCount ?? '…'} mono />
+            <Tile label="Orders" value={orderCount ?? '…'} mono />
+            <Tile label="Edge functions" value={functionsBaseUrl() ? 'Deployed' : 'Not deployed'} />
           </div>
-        </section>
+        </Section>
 
-        <section className="card settings-section">
-          <div className="about-brand">
-            <span className="brand-mark">
-              <Icon name="shield-checkmark" size={20} />
-            </span>
+        <Section icon={ShieldCheck} eyebrow="About">
+          <div className="flex items-center gap-3">
+            <img src="/verafo-logo.png" alt="" className="size-9 shrink-0 object-contain dark:brightness-0 dark:invert" />
             <div>
-              <h3>Verafo</h3>
-              <p>COD risk intelligence</p>
+              <p className="text-[15px] font-semibold text-foreground">Verafo</p>
+              <p className="text-[12.5px] text-muted-foreground">COD risk intelligence</p>
             </div>
           </div>
-          <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>
-            <div className="info-tile">
-              <div className="info-tile-label">Version</div>
-              <div className="info-tile-value mono">v0.2</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">Backend</div>
-              <div className="info-tile-value">Supabase</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">AI functions</div>
-              <div className="info-tile-value">OpenAI edge functions</div>
-            </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Tile label="Version" value="v0.2" mono />
+            <Tile label="Backend" value="Supabase" />
+            <Tile label="AI functions" value="OpenAI edge functions" />
           </div>
           {!functionsBaseUrl() && (
-            <div className="ai-hint" style={{ marginTop: 14 }}>
-              Deploy the <code>verafo-ai</code> edge function to unlock chat, analysis and AI
+            <p className="mt-4 rounded-[10px] border border-risk-watch/40 bg-risk-watch-soft px-3 py-2.5 text-[12.5px] text-risk-watch-strong">
+              Deploy the <code className="font-mono">verafo-ai</code> edge function to unlock chat, analysis and AI
               explanations.
-            </div>
+            </p>
           )}
-        </section>
+        </Section>
 
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon amber">
-              <Icon name="log-out" size={16} />
-            </span>
-            <span className="eyebrow">Account</span>
-          </div>
-          <div className="settings-rows">
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Sign out</div>
-                <div className="setting-desc">Log out of your Verafo account on this device.</div>
-              </div>
-              <button
-                className="btn btn-refuse btn-sm"
-                onClick={() => void supabase?.auth.signOut()}
+        <Section icon={Building2} eyebrow="Account">
+          <Row
+            title="Sign out"
+            desc="Log out of your Verafo account on this device."
+            control={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
+                onClick={() => setConfirmSignOut(true)}
               >
-                <Icon name="log-out-outline" size={14} /> Sign out
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
+                <LogOut className="size-3.5" /> Sign out
+              </Button>
+            }
+          />
+        </Section>
+      </Reveal>
+
+      {/* Clearing history and signing out cannot be undone, so both ask first. */}
+      <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clear your lookup history?</DialogTitle>
+            <DialogDescription>
+              Your recent searches on the Buyer Lookup page will be removed. This cannot be undone, and it does not
+              affect anyone else on your team.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setConfirmClear(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" className="h-11" disabled={clearing} onClick={() => void clearLookups()}>
+              {clearing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Clear history
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmSignOut} onOpenChange={setConfirmSignOut}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sign out of Verafo?</DialogTitle>
+            <DialogDescription>You will need to sign in again on this device.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setConfirmSignOut(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="h-11"
+              onClick={() => {
+                setConfirmSignOut(false)
+                void supabase?.auth.signOut()
+              }}
+            >
+              <LogOut className="size-4" /> Sign out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageShell>
   )
 }

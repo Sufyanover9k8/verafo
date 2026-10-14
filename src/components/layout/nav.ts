@@ -61,7 +61,9 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Analyse',
     items: [
       { to: '/lookup', label: 'Buyer Lookup', icon: Search },
-      { to: '/map', label: 'Buyer Map', icon: MapPinned },
+      // The page is the RTO/refusal view: where refusals come from, plotted on
+      // the buyer map. The route stays /map so existing links keep working.
+      { to: '/map', label: 'RTO Insights', icon: MapPinned },
       { to: '/chat', label: 'Ask Verafo', icon: MessageSquare },
     ],
   },

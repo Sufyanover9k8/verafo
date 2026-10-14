@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChartCard } from './ChartCard'
-import { Icon } from './Icon'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { FileColumn, FileSpec } from '../lib/types'
 
 function cellText(col: FileColumn, value: string | number | undefined): string {
@@ -21,6 +22,11 @@ const KIND_LABEL: Record<FileSpec['kind'], string> = {
   excel: 'Excel',
 }
 
+/**
+ * A file the assistant generated: what it is, a short preview of its rows, and
+ * the download actions. The heavy export libraries are still imported only when
+ * a format is actually requested.
+ */
 export function FileCard({ spec }: { spec: FileSpec }) {
   const [downloading, setDownloading] = useState<string | null>(null)
 
@@ -38,71 +44,85 @@ export function FileCard({ spec }: { spec: FileSpec }) {
   }
 
   const previewRows = spec.rows.slice(0, 8)
+  const numeric = (c: FileColumn) => c.format === 'pkr' || c.format === 'percent' || c.format === 'number'
 
   return (
-    <div className="file-card">
-      <div className="file-head">
-        <span className="file-badge">
-          <Icon name="document-text-outline" size={16} />
+    <div className="rounded-[10px] border border-border bg-muted/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5 text-[11.5px] font-semibold tracking-wide text-foreground uppercase">
           {KIND_LABEL[spec.kind] ?? 'File'}
         </span>
-        <span className="file-meta">
+        <span className="text-[12px] text-muted-foreground">
           {spec.rows.length} rows · {spec.columns.length} columns
         </span>
       </div>
-      <div className="file-title">{spec.title}</div>
-      {spec.description && <div className="file-desc">{spec.description}</div>}
-      <div className="file-generated">
-        Generated {new Date(spec.generated_at).toLocaleString('en-GB', {
+
+      <p className="mt-2 text-[14px] font-semibold text-foreground">{spec.title}</p>
+      {spec.description && <p className="mt-1 text-[13px] text-muted-foreground">{spec.description}</p>}
+      <p className="mt-1 text-[11.5px] text-muted-foreground">
+        Generated{' '}
+        {new Date(spec.generated_at).toLocaleString('en-GB', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
         })}
-      </div>
+      </p>
 
       {previewRows.length > 0 && (
-        <div className="file-preview">
-          <table>
-            <thead>
-              <tr>
-                {spec.columns.map((c) => (
-                  <th key={c.key}>{c.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {previewRows.map((r, i) => (
-                <tr key={i}>
+        <div className="mt-3 rounded-[10px] border border-border bg-card">
+          {/* Preview only: a wide file scrolls inside this box, never the page. */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
                   {spec.columns.map((c) => (
-                    <td key={c.key}>{cellText(c, r[c.key])}</td>
+                    <TableHead key={c.key} className={numeric(c) ? 'text-end whitespace-nowrap' : 'whitespace-nowrap'}>
+                      {c.label}
+                    </TableHead>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {previewRows.map((r, i) => (
+                  <TableRow key={i}>
+                    {spec.columns.map((c) => (
+                      <TableCell
+                        key={c.key}
+                        className={numeric(c) ? 'text-end font-mono text-[12.5px] tabular-nums' : 'text-[12.5px]'}
+                      >
+                        {cellText(c, r[c.key])}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           {spec.rows.length > previewRows.length && (
-            <div className="file-more">+ {spec.rows.length - previewRows.length} more rows in the file</div>
+            <p className="border-t border-border px-4 py-2 text-[11.5px] text-muted-foreground">
+              + {spec.rows.length - previewRows.length} more rows in the file
+            </p>
           )}
         </div>
       )}
 
       {spec.chart && spec.chart.labels.length > 0 && <ChartCard spec={spec.chart} />}
 
-      <div className="file-actions">
-        <button className="btn btn-sm file-dl primary" disabled={!!downloading} onClick={() => void handle('pdf')}>
-          <Icon name="download-outline" size={13} />
-          {downloading === 'pdf' ? 'Preparing…' : 'PDF'}
-        </button>
-        <button className="btn btn-sm ghost" disabled={!!downloading} onClick={() => void handle('csv')}>
-          <Icon name="download-outline" size={13} />
-          {downloading === 'csv' ? 'Preparing…' : 'CSV'}
-        </button>
-        <button className="btn btn-sm ghost" disabled={!!downloading} onClick={() => void handle('xlsx')}>
-          <Icon name="download-outline" size={13} />
-          {downloading === 'xlsx' ? 'Preparing…' : 'Excel'}
-        </button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(['pdf', 'csv', 'xlsx'] as const).map((format, i) => (
+          <Button
+            key={format}
+            size="sm"
+            variant={i === 0 ? 'default' : 'outline'}
+            className="h-11 px-3 md:h-9"
+            disabled={downloading != null}
+            onClick={() => void handle(format)}
+          >
+            {downloading === format ? 'Preparing…' : KIND_LABEL[format]}
+          </Button>
+        ))}
       </div>
     </div>
   )

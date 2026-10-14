@@ -1,8 +1,10 @@
 /* ============================================================
    tailwind.css — Tailwind v4 (no preflight) + shadcn theme.
-   The legacy stylesheets still power pages that have not been
-   moved to the new UI yet, so Tailwind's global reset is left out
-   on purpose. It is added back when the last legacy page is gone.
+
+   The legacy hand-written CSS is gone; this file now carries the
+   small global reset the app used to get from it. Tokens come from
+   styles/tokens.css (the website palette), mapped for Tailwind by
+   shadcn-theme.css.
    ============================================================ */
 
 @import 'tailwindcss/theme.css' layer(theme);
@@ -14,21 +16,131 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @layer base {
+  /* Reset. Deliberately NOT Tailwind's preflight: this app styles native
+     controls itself, and preflight's button/input normalisation would fight
+     the shadcn components. This is the subset the app actually relied on. */
   *,
   ::before,
   ::after {
+    box-sizing: border-box;
     border-color: var(--border);
     outline-color: color-mix(in srgb, var(--ring) 50%, transparent);
   }
 
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+  [data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--v-font-sans);
+    font-size: var(--t-body);
+    line-height: 1.62;
+    font-weight: 400;
+    letter-spacing: -0.004em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The ambient brand wash behind everything. Painted below in-flow content
+     so it can never dim text, and inert to the pointer. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--v-aurora);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  p {
+    margin: 0;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
   button:not(:disabled),
   [role='button']:not(:disabled) {
     cursor: pointer;
   }
+  img,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
 
-  /* Tailwind's preflight is not loaded yet (legacy pages would break), so the
-     few resets the shadcn components rely on are applied only to the elements
-     they generate: controls and lists that carry a data-slot / data-sidebar. */
+  /* The website's focus treatment, verbatim. Keyboard users always get a
+     visible ring; pointer users do not. */
+  :focus-visible {
+    outline: var(--v-focus-ring);
+    outline-offset: var(--v-focus-offset);
+    border-radius: var(--r-sm);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    :focus:not(:focus-visible) {
+      outline: none;
+    }
+  }
+
+  ::selection {
+    background: var(--tint-strong);
+    color: var(--ink);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-2);
+    border-radius: 8px;
+    border: 2px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-3);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Numbers line up in every table and metric. */
+  table,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The list resets the shadcn components rely on. */
   button:where([data-slot], [data-sidebar]),
   [data-sidebar] button,
   input:where([data-slot]),
@@ -59,12 +171,134 @@
   }
 }
 
+/* Reduced motion, and the app's own data-motion="off" switch. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+[data-motion='off'] *,
+[data-motion='off'] *::before,
+[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+
+/* Entrance motion, as Tailwind utilities so no page needs a legacy class.
+   The reduced-motion rule above collapses every animation. */
+@keyframes vf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@theme inline {
+  --animate-rise: vf-rise 460ms var(--ease-out) both;
+  --animate-fade: vf-fade 240ms var(--ease-out) both;
+}
+
+/* Reveal adds `animate-rise` from an IntersectionObserver callback, so the
+   scanner cannot see it in the source. It is emitted explicitly. */
+@source inline('animate-rise');
+
 @utility no-scrollbar {
   &::-webkit-scrollbar {
     display: none;
   }
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ── Leaflet map chrome ──────────────────────────────────────
+   Leaflet builds its markers and popups from HTML strings, so Tailwind
+   utilities cannot reach them; these classes are the contract with
+   CityMap.tsx. Tokens only — no raw colour, both themes included. */
+
+/* The map surface itself. */
+.city-map {
+  width: 100%;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+}
+
+/* One revenue dot. Sized inline from the data; the top city gets a ring. */
+.city-map-pin {
+  display: block;
+  border-radius: 999px;
+  border: 1.5px solid var(--bg);
+  background: var(--teal);
+  box-shadow: 0 2px 10px -2px rgba(20, 184, 166, 0.55);
+  transition: transform 150ms var(--ease-out);
+}
+.city-map-pin.top {
+  background: var(--teal-deep);
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--teal) 22%, transparent),
+    0 2px 12px -2px rgba(20, 184, 166, 0.6);
+}
+.leaflet-marker-icon:hover .city-map-pin {
+  transform: scale(1.12);
+}
+
+/* The popup body. */
+.city-map-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--v-font-sans);
+  color: var(--ink);
+}
+.city-map-tip strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.city-map-tip span {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* Leaflet's own popup and control chrome, restyled to the app surface. */
+.leaflet-container {
+  font-family: var(--v-font-sans);
+  background: var(--bg-2);
+}
+.city-map-popup .leaflet-popup-content-wrapper {
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  box-shadow: var(--sh-2);
+}
+.city-map-popup .leaflet-popup-content {
+  margin: 10px 12px;
+}
+.city-map-popup .leaflet-popup-tip {
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+}
+.leaflet-control-zoom a {
+  border-color: var(--line-2) !important;
+  background: var(--panel) !important;
+  color: var(--ink-2) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--bg-2) !important;
+  color: var(--ink) !important;
 }
 
 /* Radix collapsible animation used by the sidebar groups. */

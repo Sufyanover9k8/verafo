@@ -15,8 +15,13 @@ export function useAutoRefresh(
   enabled = true,
 ): void {
   const loadRef = useRef(load)
-  loadRef.current = load
   const running = useRef(false)
+
+  // Written in an effect rather than during render, so React never sees a ref
+  // change while rendering. It lands before the timer effect below can fire.
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
 
   useEffect(() => {
     if (!enabled || intervalMs <= 0) return

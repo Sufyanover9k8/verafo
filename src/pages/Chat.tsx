@@ -1,91 +1,50 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ChartCard } from '../components/ChartCard'
-import { FileCard } from '../components/FileCard'
-import { Icon } from '../components/Icon'
+import {
+  Check,
+  CheckCheck,
+  Download,
+  Loader2,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  Star,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { Avatar } from '../components/Avatar'
-import { Skeleton } from '../components/primitives/Skeleton'
+import { FileCard } from '../components/FileCard'
+import { PageHeader } from '../components/app/page-header'
+import { ChatMessageBubble, plainText } from '../components/app/chat-message'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Reveal } from '../components/Reveal'
-import { EmptyState, NeedsSetup } from '../components/States'
+import { EmptyHint } from '../components/app/empty-hint'
+import { NeedsSetup } from '../components/States'
+import { cn } from '@/lib/utils'
 import { timeAgo } from '../lib/format'
-import { activeMention, mentionPhones, renderMentions, type ActiveMention } from '../lib/mentions'
+import { activeMention, mentionPhones, type ActiveMention } from '../lib/mentions'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
-import type { AnalyzeReport, ChatMessage, ChatRow, ChartSpec, FileSpec } from '../lib/types'
-
-const CHART_MARKER_RE = /\[\[CHART\]\]([\s\S]*?)\[\[\/CHART\]\]/g
-const FILE_MARKER_RE = /\[\[FILE\]\]([\s\S]*?)\[\[\/FILE\]\]/g
-const CITES_MARKER_RE = /\[\[CITES\]\]([\s\S]*?)\[\[\/CITES\]\]/g
-
-const TOOL_LABELS: Record<string, string> = {
-  search_orders: 'searched orders',
-  buyers_by_city: 'buyers by city',
-  top_buyers: 'top buyers',
-  buyer_profile: 'buyer profile',
-  city_overview: 'city overview',
-  category_overview: 'category overview',
-  store_overview: 'store overview',
-  top_products: 'top products',
-  network_overview: 'network overview',
-  refusal_reasons: 'refusal reasons',
-  buyer_orders: 'order history',
-  weekly_trend: 'weekly trend',
-  similar_buyers: 'similar buyers',
-  buyer_verdict: 'buyer verdict',
-  search_buyers: 'search buyers',
-  create_file: 'generated a file',
-}
-
-function parseCharts(content: string): { text: string; charts: ChartSpec[] } {
-  const charts: ChartSpec[] = []
-  let lastIndex = 0
-  for (const m of content.matchAll(CHART_MARKER_RE)) {
-    try {
-      charts.push(JSON.parse(m[1]) as ChartSpec)
-    } catch {
-      // skip malformed markers
-    }
-    lastIndex = (m.index ?? 0) + m[0].length
-  }
-  const text =
-    lastIndex > 0
-      ? content.slice(0, lastIndex).replace(CHART_MARKER_RE, '').trim()
-      : content.trim()
-  return { text, charts }
-}
-
-function parseFiles(content: string): { text: string; files: FileSpec[] } {
-  const files: FileSpec[] = []
-  let lastIndex = 0
-  for (const m of content.matchAll(FILE_MARKER_RE)) {
-    try {
-      files.push(JSON.parse(m[1]) as FileSpec)
-    } catch {
-      // skip malformed markers
-    }
-    lastIndex = (m.index ?? 0) + m[0].length
-  }
-  const text =
-    lastIndex > 0
-      ? content.slice(0, lastIndex).replace(FILE_MARKER_RE, '').trim()
-      : content.trim()
-  return { text, files }
-}
-
-function parseCites(content: string): { text: string; cites: string[] } {
-  const cites: string[] = []
-  const text = content.replace(CITES_MARKER_RE, (_m, inner) => {
-    for (const t of String(inner ?? '').split('|')) if (t.trim()) cites.push(t.trim())
-    return ''
-  })
-  return { text: text.trim(), cites }
-}
-
-function plainText(content: string): string {
-  const { text: noCites } = parseCites(content)
-  const { text: noCharts } = parseCharts(noCites)
-  const { text } = parseFiles(noCharts)
-  return text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*/g, '').trim()
-}
+import type { AnalyzeReport, ChatMessage, ChatRow, FileSpec } from '../lib/types'
 
 const FALLBACK_SUGGESTIONS = [
   'Should I ship an order to a buyer in my network?',
@@ -95,12 +54,12 @@ const FALLBACK_SUGGESTIONS = [
 ]
 
 const QUICK_ACTIONS = [
-  { key: 'analyze', label: 'Analyze buyer', icon: 'stats-chart' },
-  { key: 'trends', label: 'Trends', icon: 'trending-up' },
-  { key: 'suggest', label: 'Suggestions', icon: 'sparkles' },
-  { key: 'topbuyers', label: 'Top buyers', icon: 'person' },
-  { key: 'topproducts', label: 'Top products', icon: 'bag-handle' },
-  { key: 'paste', label: 'Paste orders', icon: 'clipboard' },
+  { key: 'analyze', label: 'Analyze buyer', icon: Sparkles },
+  { key: 'trends', label: 'Trends', icon: Sparkles },
+  { key: 'suggest', label: 'Suggestions', icon: Sparkles },
+  { key: 'topbuyers', label: 'Top buyers', icon: Sparkles },
+  { key: 'topproducts', label: 'Top products', icon: Sparkles },
+  { key: 'paste', label: 'Paste orders', icon: Sparkles },
 ] as const
 
 const FILTERS = [
@@ -110,12 +69,6 @@ const FILTERS = [
   { label: 'Footwear', token: 'footwear' },
   { label: 'Pending only', token: 'pending orders only' },
 ] as const
-
-const REPORT_RE = /^\[(Analyze|Trends|Suggestions)\]/
-
-function plain(text: string): string {
-  return text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*/g, '')
-}
 
 function formatAnalyze(phone: string, r: AnalyzeReport): string {
   const lines = [
@@ -152,21 +105,6 @@ interface TrendsReport {
   weeklyTrend: { label: string; total: number; accepted: number; refused: number }[]
 }
 
-interface ToolStep {
-  id: number
-  name: string
-  label: string
-  args: string
-  status: 'running' | 'done' | 'error'
-  summary?: string
-}
-
-interface WorkingState {
-  phase: 'thinking' | 'understanding' | 'researching' | 'writing'
-  label: string
-  tools: ToolStep[]
-}
-
 function formatTrends(t: TrendsReport): string {
   const lines = [
     '[Trends] Network snapshot',
@@ -194,101 +132,23 @@ function formatTrends(t: TrendsReport): string {
   return lines.join('\n')
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
-  const [copied, setCopied] = useState(false)
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(plainText(msg.content))
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1600)
-    } catch {
-      /* clipboard unavailable */
-    }
-  }
-
-  if (msg.role === 'user') {
-    return (
-      <div className="chat-bubble user">
-        <span className="chat-name">You</span>
-        <button className="msg-copy" title="Copy message" onClick={() => void copy()}>
-          <Icon name={copied ? 'check' : 'copy'} size={13} />
-        </button>
-        <p>{renderMentions(msg.content)}</p>
-      </div>
-    )
-  }
-
-  const kind = msg.content.startsWith('[Analyze]')
-    ? 'analyze'
-    : msg.content.startsWith('[Trends]')
-      ? 'trends'
-      : msg.content.startsWith('[Suggestions]')
-        ? 'suggest'
-        : 'chat'
-  const label =
-    kind === 'analyze'
-      ? 'Buyer analysis'
-      : kind === 'trends'
-        ? 'Network trends'
-        : kind === 'suggest'
-          ? 'Suggestions'
-          : 'Verafo'
-  const icon =
-    kind === 'analyze' ? 'stats-chart-outline' : kind === 'trends' ? 'trending-up-outline' : 'sparkles-outline'
-  const { text: citesText, cites } = parseCites(msg.content)
-  const { text: chartText, charts } = parseCharts(citesText)
-  const { text, files } = parseFiles(chartText)
-  const lines = text.split('\n').filter((l) => l && !REPORT_RE.test(l))
-
-  return (
-    <div className={`chat-bubble ai${kind !== 'chat' ? ` report ${kind}` : ''}`}>
-      <span className="chat-name">
-        <Icon name={icon} size={13} /> {label}
-      </span>
-      <button className="msg-copy" title="Copy answer" onClick={() => void copy()}>
-        <Icon name={copied ? 'check' : 'copy'} size={13} />
-      </button>
-      <div className="msg-body">
-        {lines.map((line, i) => {
-          if (line.startsWith('- ')) {
-            return (
-              <div key={i} className="msg-bullet">
-                {renderMentions(plain(line.slice(2)))}
-              </div>
-            )
-          }
-          if (/^(Verdict|Recommendation|Confidence):/.test(line)) {
-            const idx = line.indexOf(': ')
-            return (
-              <p key={i} className="msg-fact">
-                <strong>{line.slice(0, idx)}:</strong>
-                {plain(line.slice(idx + 1))}
-              </p>
-            )
-          }
-          return <p key={i}>{renderMentions(plain(line))}</p>
-        })}
-        {charts.map((c, i) => (
-          <ChartCard key={i} spec={c} />
-        ))}
-        {files.map((f, i) => (
-          <FileCard key={i} spec={f} />
-        ))}
-        {cites.length > 0 && (
-          <div className="msg-cites">
-            <Icon name="server" size={12} /> Based on{' '}
-            {cites.map((c, i) => (
-              <span key={`${c}-${i}`} className="msg-cite">
-                {TOOL_LABELS[c] ?? c}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+interface ToolStep {
+  id: number
+  name: string
+  label: string
+  args: string
+  status: 'running' | 'done' | 'error'
+  summary?: string
 }
+
+interface WorkingState {
+  phase: 'thinking' | 'understanding' | 'researching' | 'writing'
+  label: string
+  tools: ToolStep[]
+}
+
+/** The small print under the composer. Kept honest and short. */
+const COMPOSER_HINT = 'Enter sends · Shift + Enter adds a line · @ for a buyer · # for a store'
 
 export function Chat() {
   const toast = useToast()
@@ -303,6 +163,7 @@ export function Chat() {
   const [streamText, setStreamText] = useState('')
   const [liveFiles, setLiveFiles] = useState<FileSpec[]>([])
   const [mention, setMention] = useState<ActiveMention | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionResults, setMentionResults] = useState<{ phone: string }[]>([])
   const [storeMentionResults, setStoreMentionResults] = useState<{ id: string; name: string }[]>([])
   const [suggestions, setSuggestions] = useState<string[]>(FALLBACK_SUGGESTIONS)
@@ -311,6 +172,9 @@ export function Chat() {
   const [analyzeOpen, setAnalyzeOpen] = useState(false)
   const [analyzePhone, setAnalyzePhone] = useState('')
   const [quickOpen, setQuickOpen] = useState(false)
+  /** On phones the rail is an overlay drawer; on desktop it is a column you can
+   *  hide. One piece of state, steer the interaction by breakpoint at the moment
+   *  the control is used, so a desktop toggle can never leave no way back. */
   const [railOpen, setRailOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [manageMode, setManageMode] = useState(false)
@@ -324,6 +188,9 @@ export function Chat() {
   const toolStepId = useRef(0)
   const toolsUsedRef = useRef<string[]>([])
   const doneMsgIdRef = useRef<string | null>(null)
+  /** Deltas as received, so the finished turn can be saved if the stream did not. */
+  const streamedRef = useRef('')
+  const sendRef = useRef<((override?: string) => void) | null>(null)
 
   useEffect(() => {
     if (!quickOpen) return
@@ -366,19 +233,16 @@ export function Chat() {
     }
   }, [toast])
 
-  const loadMessages = useCallback(
-    async (chatId: string) => {
-      if (!supabase) return
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true })
-      if (error) throw error
-      setMessages(data ?? [])
-    },
-    [],
-  )
+  const loadMessages = useCallback(async (chatId: string) => {
+    if (!supabase) return
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    setMessages(data ?? [])
+  }, [])
 
   const loadSuggestions = useCallback(async () => {
     const base = functionsBaseUrl()
@@ -459,11 +323,7 @@ export function Chat() {
       return
     }
     const id = ++mentionId.current
-    const { data, error } = await supabase
-      .from('buyers')
-      .select('phone')
-      .ilike('phone', `%${digits}%`)
-      .limit(8)
+    const { data, error } = await supabase.from('buyers').select('phone').ilike('phone', `%${digits}%`).limit(8)
     if (error || id !== mentionId.current) return
     setMentionResults((data ?? []) as { phone: string }[])
   }, [])
@@ -471,11 +331,7 @@ export function Chat() {
   const fetchStoreMentions = useCallback(async (query: string) => {
     if (!supabase) return
     const id = ++mentionId.current
-    const { data, error } = await supabase
-      .from('stores')
-      .select('id,name')
-      .ilike('name', `%${query}%`)
-      .limit(8)
+    const { data, error } = await supabase.from('stores').select('id,name').ilike('name', `%${query}%`).limit(8)
     if (error || id !== mentionId.current) return
     setStoreMentionResults((data ?? []) as { id: string; name: string }[])
   }, [])
@@ -489,6 +345,11 @@ export function Chat() {
     if (mention.kind === 'store') void fetchStoreMentions(mention.query)
     else void fetchMentions(mention.query)
   }, [mention, fetchMentions, fetchStoreMentions])
+
+  /** True on the narrow layout, where the rail is a drawer rather than a column. */
+  function isNarrow() {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+  }
 
   async function newChat() {
     if (!supabase) return
@@ -595,6 +456,7 @@ export function Chat() {
     const value = e.target.value
     setComposing(value)
     setMention(activeMention(value, e.target.selectionStart ?? value.length))
+    setMentionIndex(0)
   }
 
   function pickMention(value: string) {
@@ -603,13 +465,39 @@ export function Chat() {
     const next = composing.slice(0, mention.at) + token + composing.slice(mention.at + 1 + mention.query.length)
     setComposing(next)
     setMention(null)
+    setMentionIndex(0)
     window.setTimeout(() => textareaRef.current?.focus(), 0)
   }
 
+  /** The rows currently offered by the @ / # picker. */
+  const mentionRows: { key: string; value: string; label: string; name?: string; phone?: string }[] =
+    mention == null
+      ? []
+      : mention.kind === 'store'
+        ? storeMentionResults.map((s) => ({ key: s.id, value: s.name, label: s.name, name: s.name }))
+        : mentionResults.map((b) => ({ key: b.phone, value: b.phone, label: b.phone, phone: b.phone }))
+
   function handleComposeKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (mention && mentionRows.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex((i) => (i + 1) % mentionRows.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex((i) => (i - 1 + mentionRows.length) % mentionRows.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        pickMention(mentionRows[Math.min(mentionIndex, mentionRows.length - 1)].value)
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      void send()
+      sendRef.current?.()
     } else if (e.key === 'Escape') {
       setMention(null)
     }
@@ -633,7 +521,9 @@ export function Chat() {
       case 'phase': {
         const phase = String(data.phase ?? 'thinking')
         setWorking((w) => ({
-          phase: (['understanding', 'researching', 'writing'].includes(phase) ? phase : 'thinking') as WorkingState['phase'],
+          phase: (['understanding', 'researching', 'writing'].includes(phase)
+            ? phase
+            : 'thinking') as WorkingState['phase'],
           label: String(data.label ?? 'Working…'),
           tools: w?.tools ?? [],
         }))
@@ -676,7 +566,10 @@ export function Chat() {
       case 'delta': {
         const content = String(data.content ?? '')
         if (content) {
-          setStreamText((t) => t + content)
+          setStreamText((t) => {
+            streamedRef.current = `${streamedRef.current}${content}`.slice(-200_000)
+            return t + content
+          })
           setWorking((w) =>
             w ? { ...w, phase: 'writing', label: w.label } : { phase: 'writing', label: 'Writing your answer…', tools: [] },
           )
@@ -714,6 +607,30 @@ export function Chat() {
     await supabase.from('chat_messages').update({ content: data.content + cites }).eq('id', mid)
   }, [])
 
+  /**
+   * Safety net for the case the backend did not store the assistant turn.
+   *
+   * The verafo-ai function inserts the assistant row and puts its id in the
+   * `done` frame; the composer then reloads the thread from `chat_messages`. If
+   * the row is absent the answer would vanish the moment it finished arriving.
+   *
+   * The guard is the `done` frame's message id, NOT a read of the row: the
+   * function sends an id on every successful turn, and a missing id means it
+   * did not write, so a client-side save is strictly better than losing the
+   * answer. Reading the row instead would race the function's own insert and
+   * could write a second copy, so it is deliberately not done. In normal
+   * operation this is a single no-op check.
+   */
+  const persistAssistantTurn = useCallback(
+    async (chatId: string) => {
+      const text = streamedRef.current
+      if (!supabase || !text) return
+      if (doneMsgIdRef.current) return // the function stored it; never write again
+      await supabase.from('chat_messages').insert({ chat_id: chatId, role: 'assistant', content: text, phone: null })
+    },
+    [],
+  )
+
   const send = useCallback(
     async (override?: string) => {
       const raw = (override ?? composing).trim()
@@ -728,6 +645,7 @@ export function Chat() {
       setWorking({ phase: 'thinking', label: 'Thinking…', tools: [] })
       toolsUsedRef.current = []
       doneMsgIdRef.current = null
+      streamedRef.current = ''
       setMessages((m) => [
         ...m,
         {
@@ -775,13 +693,14 @@ export function Chat() {
           buf += decoder.decode(value ?? new Uint8Array(), { stream: !done })
           let sep: number
           while ((sep = buf.indexOf('\n\n')) >= 0) {
-            const raw = buf.slice(0, sep)
+            const chunk = buf.slice(0, sep)
             buf = buf.slice(sep + 2)
-            if (raw.trim()) handleSseEvent(raw)
+            if (chunk.trim()) handleSseEvent(chunk)
           }
         }
         if (buf.trim()) handleSseEvent(buf)
         await persistCitations()
+        await persistAssistantTurn(activeId)
         await Promise.all([loadMessages(activeId), loadChats()])
         void loadSuggestions()
       } catch (err) {
@@ -805,8 +724,15 @@ export function Chat() {
         toolsUsedRef.current = []
       }
     },
-    [composing, busy, activeId, activeChat, toast, loadMessages, loadChats, loadSuggestions, persistCitations],
+    [composing, busy, activeId, activeChat, toast, loadMessages, loadChats, loadSuggestions, persistCitations, persistAssistantTurn],
   )
+
+  // The keyboard handler lives on the textarea. Keeping the latest `send` in a
+  // ref means Enter-to-send never calls a stale copy, and the ref is written in
+  // an effect rather than during render.
+  useEffect(() => {
+    sendRef.current = (override?: string) => void send(override)
+  }, [send])
 
   async function appendAssistant(content: string) {
     if (!supabase || !activeId) return
@@ -921,6 +847,7 @@ export function Chat() {
   function applyFilter(token: string) {
     const next = composing.trim() ? `${composing} ${token}` : token
     setComposing(next)
+    setQuickOpen(false)
     window.setTimeout(() => textareaRef.current?.focus(), 0)
   }
 
@@ -929,9 +856,9 @@ export function Chat() {
     const lines = messages.map((m) => {
       const txt = plainText(m.content)
       const label = m.role === 'user' ? 'You' : 'Verafo'
-      const phone = m.phone ? ` (${m.phone})` : ''
+      const who = m.phone ? ` (${m.phone})` : ''
       const stamp = new Date(m.created_at).toLocaleString('en-GB')
-      return `[${label}${phone}] ${stamp}\n${txt}\n`
+      return `[${label}${who}] ${stamp}\n${txt}\n`
     })
     const blob = new Blob(
       [`Ask Verafo — ${activeChat?.title ?? 'Chat'}\n${'='.repeat(40)}\n\n${lines.join('\n')}`],
@@ -949,7 +876,9 @@ export function Chat() {
   async function copyChat() {
     if (messages.length === 0) return
     const text = messages
-      .map((m) => `[${m.role === 'user' ? 'You' : 'Verafo'}${m.phone ? ` (${m.phone})` : ''}]\n${plainText(m.content)}`)
+      .map(
+        (m) => `[${m.role === 'user' ? 'You' : 'Verafo'}${m.phone ? ` (${m.phone})` : ''}]\n${plainText(m.content)}`,
+      )
       .join('\n\n')
     try {
       await navigator.clipboard.writeText(text)
@@ -961,471 +890,645 @@ export function Chat() {
 
   if (!isConfigured) return <NeedsSetup />
 
-  return (
-    <div className={`chat-page${railOpen ? '' : ' rail-closed'}`}>
-      <aside className="card chat-rail">
-        <div className="chat-rail-head">
-          <div>
-            <h2>
-              <Icon name="chatbubbles-outline" size={17} /> Ask Verafo
-            </h2>
-            <p>COD risk assistant</p>
-          </div>
-          <button className="btn btn-primary btn-sm" onClick={() => void newChat()}>
-            <Icon name="add" size={15} /> New
-          </button>
-        </div>
+  const canSend = Boolean(activeChat) && composing.trim().length > 0 && !busy
+  const lastIsAssistant = messages.length > 0 && messages[messages.length - 1].role === 'assistant'
 
-        <div className="chat-rail-tools">
-          <div className="chat-search">
-            <Icon name="search" size={14} />
-            <input
+  return (
+    <>
+      <PageHeader
+        title="Ask Verafo"
+        description="Questions answered against your own order data — not a general chatbot."
+        actions={
+          <Button size="sm" className="h-11 gap-1.5 md:h-9" onClick={() => void newChat()}>
+            <Plus className="size-4" /> New chat
+          </Button>
+        }
+      />
+
+      <div className="grid min-h-[calc(100dvh-var(--v-topbar-h)-11rem)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+        {/* ── Conversation rail: a column on desktop, a drawer on phones ── */}
+        <aside
+          className={cn(
+            'flex min-h-0 flex-col gap-3 rounded-[16px] border border-border bg-card p-4',
+            !railOpen && 'hidden lg:hidden',
+          )}
+          aria-label="Your conversations"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold text-foreground">
+              <MessageSquare className="size-4 shrink-0 text-primary-text" aria-hidden="true" />
+              <span className="truncate">Conversations</span>
+            </h2>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-11 shrink-0 md:size-9 lg:hidden"
+              aria-label="Hide conversations"
+              onClick={() => setRailOpen(false)}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search chats…"
+              placeholder="Search chats"
               aria-label="Search chats"
+              className="h-11 ps-8 md:h-9"
             />
           </div>
+
           {manageMode && (
-            <div className="chat-manage">
-              <button
-                className="btn btn-secondary btn-sm"
+            <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-border bg-muted/50 p-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-11 px-3 md:h-8"
                 onClick={() =>
                   setSelected(selected.size === sortedChats.length ? new Set() : new Set(sortedChats.map((c) => c.id)))
                 }
               >
                 {selected.size === sortedChats.length ? 'None' : 'All'}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => void deleteEmptyChats()}>
+              </Button>
+              <Button size="sm" variant="outline" className="h-11 px-3 md:h-8" onClick={() => void deleteEmptyChats()}>
                 Empty
-              </button>
-              <button
-                className="btn btn-danger btn-sm"
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-11 px-3 md:h-8"
                 disabled={selected.size === 0}
                 onClick={() => void deleteSelected()}
               >
-                Delete ({selected.size})
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setManageMode(false); setSelected(new Set()) }}>
+                <Trash2 className="size-3.5" /> Delete ({selected.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-11 px-3 md:h-8"
+                onClick={() => {
+                  setManageMode(false)
+                  setSelected(new Set())
+                }}
+              >
                 Done
-              </button>
+              </Button>
             </div>
           )}
-        </div>
 
-        <Reveal stagger className="chat-items">
-          {sortedChats.length === 0 && (
-            <div className="chat-items-empty">
-              <EmptyState
-                title={searchQuery ? 'No matches' : 'No chats yet'}
-                detail={searchQuery ? 'Try a different search.' : 'Start a conversation to get going.'}
-              />
-            </div>
-          )}
-          {sortedChats.map((c) => (
-            <div
-              key={c.id}
-              role="button"
-              tabIndex={0}
-              className={`chat-item${activeId === c.id ? ' active' : ''}`}
-              onClick={() => {
-                setRenaming(false)
-                setAnalyzeOpen(false)
-                setActiveId(c.id)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setActiveId(c.id)
-                }
-              }}
-            >
-              <div className="chat-item-line">
-                {manageMode && (
-                  <span
-                    className={`chat-item-check${selected.has(c.id) ? ' on' : ''}`}
-                    role="checkbox"
-                    aria-checked={selected.has(c.id)}
-                    tabIndex={-1}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelected((s) => {
-                        const next = new Set(s)
-                        if (next.has(c.id)) next.delete(c.id)
-                        else next.add(c.id)
-                        return next
-                      })
+          <Reveal stagger className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+            {sortedChats.length === 0 && (
+              <div className="py-4">
+                <EmptyHint
+                  title={searchQuery ? 'No matches' : 'No chats yet'}
+                  detail={searchQuery ? 'Try a different search.' : 'Start a conversation to get going.'}
+                />
+              </div>
+            )}
+            {sortedChats.map((c) => {
+              const active = activeId === c.id
+              return (
+                <div
+                  key={c.id}
+                  className={cn(
+                    'group/row flex items-start gap-2 rounded-[10px] border border-transparent px-2 py-2 transition-colors',
+                    active ? 'border-border bg-muted' : 'hover:bg-muted/60',
+                  )}
+                >
+                  {manageMode && (
+                    <input
+                      type="checkbox"
+                      className="mt-1.5 size-4 shrink-0 accent-[var(--teal)]"
+                      checked={selected.has(c.id)}
+                      onChange={() =>
+                        setSelected((s) => {
+                          const next = new Set(s)
+                          if (next.has(c.id)) next.delete(c.id)
+                          else next.add(c.id)
+                          return next
+                        })
+                      }
+                      aria-label={`Select ${c.title}`}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-start"
+                    aria-current={active ? 'true' : undefined}
+                    onClick={() => {
+                      setRenaming(false)
+                      setAnalyzeOpen(false)
+                      setActiveId(c.id)
+                      // On a phone the drawer has done its job once a chat is
+                      // open. On desktop the column stays where it is.
+                      if (isNarrow()) setRailOpen(false)
                     }}
                   >
-                    <Icon name="check" size={11} />
-                  </span>
-                )}
-                <span className="chat-item-title">{c.title}</span>
-                <span className="chat-item-time">{timeAgo(c.last_message_at ?? c.created_at)}</span>
-              </div>
-              <span className="chat-item-snippet">
-                {c.last_message ?? <span className="muted">No messages yet</span>}
-              </span>
-              <span className="chat-item-phone">
-                {c.phone && (
-                  <span className="chat-item-pin">
-                    <Icon name="at-outline" size={11} /> {c.phone}
-                  </span>
-                )}
-                <button
-                  className={`pin-btn${c.pinned ? ' on' : ''}`}
-                  title={c.pinned ? 'Unpin' : 'Pin conversation'}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void togglePin(c)
-                  }}
-                >
-                  <Icon name="star" size={13} />
-                </button>
-              </span>
-            </div>
-          ))}
-        </Reveal>
-
-        <div className="chat-rail-foot">
-          <button className="btn btn-ghost btn-sm" onClick={() => setManageMode((v) => !v)}>
-            <Icon name={manageMode ? 'close' : 'checkmark-done'} size={13} />{' '}
-            {manageMode ? 'Exit manage' : 'Manage chats'}
-          </button>
-        </div>
-      </aside>
-
-      <section className="card chat-window spotlight">
-        {!activeChat ? (
-          <div className="chat-window-empty">
-            <EmptyState
-              title="No chat selected"
-              detail="Pick a conversation from the list, or start a new one."
-            />
-            <button className="btn btn-primary" onClick={() => void newChat()}>
-              <Icon name="add" size={16} /> New chat
-            </button>
-          </div>
-        ) : (
-          <>
-            <header className="chat-head">
-              <div className="chat-head-main">
-                {renaming ? (
-                  <input
-                    className="title-input"
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={() => void saveRename()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void saveRename()
-                      else if (e.key === 'Escape') setRenaming(false)
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <h3 title="Double-click to rename" onDoubleClick={startRename}>
-                    {activeChat.title}
-                  </h3>
-                )}
-                <span className="chat-head-meta">
-                  {activeChat.phone && (
-                    <span className="pinned-badge">
-                      <Icon name="at-outline" size={12} /> {activeChat.phone}
-                    </span>
-                  )}
-                  <span>
-                    {messages.length} message{messages.length === 1 ? '' : 's'}
-                  </span>
-                </span>
-              </div>
-              <div className="chat-head-actions">
-                <button
-                  className="icon-btn"
-                  title={railOpen ? 'Hide history' : 'Show history'}
-                  onClick={() => setRailOpen((v) => !v)}
-                >
-                  <Icon name="chatbubbles-outline" size={15} />
-                </button>
-                <button className="icon-btn" title="Copy chat" onClick={() => void copyChat()}>
-                  <Icon name="copy" size={15} />
-                </button>
-                <button className="icon-btn" title="Export chat (.txt)" onClick={exportChat}>
-                  <Icon name="download" size={15} />
-                </button>
-                <button className="icon-btn" title="Rename" onClick={startRename}>
-                  <Icon name="pencil-outline" size={15} />
-                </button>
-                <button className="icon-btn danger" title="Delete chat" onClick={() => void deleteChat(activeChat.id)}>
-                  <Icon name="trash-outline" size={15} />
-                </button>
-              </div>
-            </header>
-
-            <div ref={listRef} className="chat-msgs">
-              {loading && (
-                <div className="chat-loading">
-                  <div className="chat-bubble ai">
-                    <Skeleton width="55%" height={13} />
-                    <Skeleton width="38%" height={13} />
-                  </div>
-                  <div className="chat-bubble ai">
-                    <Skeleton width="30%" height={13} />
-                  </div>
-                </div>
-              )}
-              {!loading && messages.length === 0 && (
-                <div className="chat-start-hint">
-                  <EmptyState
-                    title="Say hello to Verafo"
-                    detail="Ask about a buyer with @, a store with #, or use the shortcuts below for instant reports."
-                  />
-                </div>
-              )}
-              {messages.map((m) => (
-                <MessageBubble key={m.id} msg={m} />
-              ))}
-              {working && (
-                <div className="chat-bubble ai working-bubble">
-                  <span className="chat-name">
-                    <Icon name="sparkles-outline" size={13} /> Verafo
-                  </span>
-                  <div className="working-body">
-                    <div className="working-phase">
-                      <span className="working-spinner">
-                        <Icon name="ellipsis-horizontal" size={16} className="working-dots" />
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[13.5px] font-semibold text-foreground">{c.title}</span>
+                      <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                        {timeAgo(c.last_message_at ?? c.created_at)}
                       </span>
-                      <span>{working.label}</span>
-                    </div>
-                    {working.tools.length > 0 && (
-                      <div className="working-tools">
-                        {working.tools.map((t) => (
-                          <div key={t.id} className={`working-tool${t.status === 'error' ? ' error' : ''}`}>
-                            <span className={`working-tool-status ${t.status}`}>
-                              {t.status === 'running' ? (
-                                <Icon name="refresh-outline" size={13} className="spin" />
-                              ) : t.status === 'done' ? (
-                                <Icon name="checkmark" size={13} />
-                              ) : (
-                                <Icon name="close" size={13} />
-                              )}
-                            </span>
-                            <span className="working-tool-label">
-                              {t.label}
-                              {t.args && <span className="working-tool-args"> ({t.args})</span>}
-                            </span>
-                            {t.summary && <span className="working-tool-summary">{t.summary}</span>}
-                          </div>
-                        ))}
-                      </div>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
+                      {c.last_message ?? 'No messages yet'}
+                    </span>
+                    {c.phone && (
+                      <span className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-primary-text">
+                        {c.phone}
+                      </span>
                     )}
-                    {liveFiles.map((f, i) => (
-                      <FileCard key={`live-${i}`} spec={f} />
-                    ))}
-                    {streamText && (
-                      <div className="working-text">
-                        {streamText}
-                        <span className="working-caret" />
-                      </div>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'mt-0.5 grid size-8 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-card',
+                      c.pinned ? 'text-risk-watch-strong' : 'text-muted-foreground/60 hover:text-foreground',
                     )}
+                    title={c.pinned ? 'Unpin' : 'Pin conversation'}
+                    aria-pressed={Boolean(c.pinned)}
+                    onClick={() => void togglePin(c)}
+                  >
+                    <Star className={cn('size-3.5', c.pinned && 'fill-current')} />
+                  </button>
+                </div>
+              )
+            })}
+          </Reveal>
+
+          <div className="border-t border-border pt-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-11 w-full justify-start gap-2 md:h-9"
+              onClick={() => setManageMode((v) => !v)}
+            >
+              {manageMode ? <X className="size-3.5" /> : <CheckCheck className="size-3.5" />}
+              {manageMode ? 'Exit manage' : 'Manage chats'}
+            </Button>
+          </div>
+        </aside>
+
+        {/* ── The conversation ── */}
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-border bg-card">
+          {!activeChat ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+              <EmptyHint
+                large
+                title="No conversation open"
+                detail="Pick one from the list, or start a new chat to ask about buyers, orders or refusals."
+                action={
+                  <Button onClick={() => void newChat()} className="h-11">
+                    <Plus className="size-4" /> New chat
+                  </Button>
+                }
+              />
+              <Button
+                variant="outline"
+                className="h-11 lg:hidden"
+                onClick={() => setRailOpen(true)}
+              >
+                <MessageSquare className="size-4" /> Show conversations
+              </Button>
+            </div>
+          ) : (
+            <>
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11 shrink-0 md:size-9 lg:hidden"
+                    aria-label="Show conversations"
+                    onClick={() => setRailOpen(true)}
+                  >
+                    <MessageSquare className="size-4" />
+                  </Button>
+                  <div className="min-w-0">
+                    {renaming ? (
+                      <input
+                        className="h-9 w-full max-w-xs rounded-[10px] border border-input bg-card px-2 text-[15px] font-semibold text-foreground"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => void saveRename()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void saveRename()
+                          else if (e.key === 'Escape') setRenaming(false)
+                        }}
+                        autoFocus
+                        aria-label="Chat title"
+                      />
+                    ) : (
+                      <h2
+                        className="truncate text-[15px] font-semibold text-foreground"
+                        title="Double-click to rename"
+                        onDoubleClick={startRename}
+                      >
+                        {activeChat.title}
+                      </h2>
+                    )}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted-foreground">
+                      {activeChat.phone && <span className="font-mono text-primary-text">{activeChat.phone}</span>}
+                      <span>
+                        {messages.length} message{messages.length === 1 ? '' : 's'}
+                      </span>
+                    </p>
                   </div>
                 </div>
-              )}
-              {messages.length > 0 && !busy && !working && messages[messages.length - 1].role === 'assistant' && (
-                <div className="followup-row">
-                  <span className="suggest-label">
-                    <Icon name="sparkles-outline" size={13} /> Follow up
-                  </span>
-                  {suggestions.slice(0, 3).map((s) => (
-                    <button
-                      key={s}
-                      className="chip"
-                      onClick={() => {
-                        setComposing(s)
-                        window.setTimeout(() => textareaRef.current?.focus(), 0)
-                      }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            <footer className="chat-composer">
-              {messages.length === 0 && (
-                <div className="suggest-row">
-                  <span className="suggest-label">
-                    <Icon name="sparkles-outline" size={13} /> Try asking
-                  </span>
-                  {suggestions.map((s) => (
-                    <button
-                      key={s}
-                      className="chip"
-                      disabled={busy}
-                      onClick={() => {
-                        setComposing(s)
-                        window.setTimeout(() => textareaRef.current?.focus(), 0)
-                      }}
-                    >
-                      {s}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden size-9 lg:inline-flex"
+                    title={railOpen ? 'Hide the conversation list' : 'Show the conversation list'}
+                    aria-label={railOpen ? 'Hide the conversation list' : 'Show the conversation list'}
+                    aria-pressed={railOpen}
+                    onClick={() => setRailOpen((v) => !v)}
+                  >
+                    <MessageSquare className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11 md:size-9"
+                    title="Copy chat"
+                    aria-label="Copy chat"
+                    onClick={() => void copyChat()}
+                  >
+                    <CheckCheck className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11 md:size-9"
+                    title="Export chat (.txt)"
+                    aria-label="Export chat"
+                    onClick={exportChat}
+                  >
+                    <Download className="size-4" />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="size-11 md:size-9" aria-label="More chat actions">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem onSelect={startRename}>
+                        <Pencil className="size-4" /> Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void togglePin(activeChat)}>
+                        <Star className="size-4" /> {activeChat.pinned ? 'Unpin' : 'Pin'}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => void deleteChat(activeChat.id)}>
+                        <Trash2 className="size-4" /> Delete chat
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              )}
+              </header>
 
-              <div ref={composerRef} className="composer-row">
-                <button
-                  className={`tools-btn${quickOpen ? ' active' : ''}`}
-                  title="Quick options"
-                  aria-label="Quick options"
-                  onClick={() => setQuickOpen((v) => !v)}
-                >
-                  <Icon name="add" size={18} />
-                </button>
-                {quickOpen && (
-                  <div className="tools-pop">
-                    <div className="chat-actions">
-                      {QUICK_ACTIONS.map((a) => (
-                        <button
-                          key={a.key}
-                          className="tools-pop-item"
-                          disabled={busy || featureBusy}
-                          onClick={() => handleQuickAction(a.key)}
-                        >
-                          <Icon name={a.icon} size={14} /> {a.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="chat-filters">
-                      {FILTERS.map((f) => (
-                        <button key={f.label} className="chat-filter" onClick={() => applyFilter(f.token)}>
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                    {analyzeOpen && (
-                      <form className="analyze-form" onSubmit={(e) => void runAnalyze(e)}>
-                        <input
-                          type="tel"
-                          inputMode="tel"
-                          value={analyzePhone}
-                          onChange={(e) => setAnalyzePhone(e.target.value)}
-                          placeholder="+92 3xx xxxxxxx"
-                          autoFocus
-                        />
-                        <button className="btn btn-primary btn-sm" disabled={featureBusy || !analyzePhone.trim()}>
-                          Analyze
-                        </button>
-                      </form>
-                    )}
+              <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5">
+                {loading && (
+                  <div className="flex flex-col gap-3" aria-hidden="true">
+                    <div className="h-16 w-3/5 animate-pulse rounded-[16px] bg-muted" />
+                    <div className="h-24 w-4/5 animate-pulse rounded-[16px] bg-muted" />
                   </div>
                 )}
-                <div className="composer-input-wrap">
-                  <textarea
-                    ref={textareaRef}
-                    value={composing}
-                    onChange={handleComposeChange}
-                    onKeyDown={handleComposeKey}
-                    placeholder="Ask Verafo - type @ for a buyer, # for a store"
-                    rows={2}
-                  />
-                  {mention && (
-                    <div className="mention-pop">
-                      {mention.kind === 'store' ? (
-                        storeMentionResults.length === 0 ? (
-                          <div className="mention-empty">No stores match "{mention.query}"</div>
-                        ) : (
-                          storeMentionResults.map((s) => (
-                            <button
-                              key={s.id}
-                              className="mention-row"
-                              onMouseDown={(e) => {
-                                e.preventDefault()
-                                pickMention(s.name)
-                              }}
-                            >
-                              <Avatar name={s.name} size={26} />
-                              <span className="mention-phone">{s.name}</span>
-                              <Icon name="at-outline" size={13} className="mention-at" />
-                            </button>
-                          ))
-                        )
-                      ) : mentionResults.length === 0 ? (
-                        <div className="mention-empty">No buyers match "{mention.query}"</div>
-                      ) : (
-                        mentionResults.map((b) => (
-                          <button
-                            key={b.phone}
-                            className="mention-row"
-                            onMouseDown={(e) => {
-                              e.preventDefault()
-                              pickMention(b.phone)
-                            }}
-                          >
-                            <Avatar phone={b.phone} size={26} />
-                            <span className="mention-phone">{b.phone}</span>
-                            <Icon name="at-outline" size={13} className="mention-at" />
-                          </button>
-                        ))
+
+                {!loading && messages.length === 0 && (
+                  <div className="m-auto">
+                    <EmptyHint
+                      large
+                      title="Say hello to Verafo"
+                      detail="Mention a buyer with @ or a store with #, or use the shortcuts under the composer."
+                    />
+                  </div>
+                )}
+
+                {messages.map((m) => (
+                  <ChatMessageBubble key={m.id} msg={m} />
+                ))}
+
+                {working && (
+                  <div className="flex max-w-[min(52rem,94%)] flex-col gap-2 self-start">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] text-primary-text uppercase">
+                      <Sparkles className="size-3.5" aria-hidden="true" /> Verafo
+                    </span>
+                    <div
+                      className="flex flex-col gap-3 rounded-[16px] rounded-es-[4px] border border-s-[3px] border-border bg-card px-4 py-3.5"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <p className="flex items-center gap-2 text-[13.5px] font-medium text-foreground">
+                        <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+                        {working.label}
+                      </p>
+
+                      {working.tools.length > 0 && (
+                        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                          {working.tools.map((t) => (
+                            <li key={t.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12.5px]">
+                              <span
+                                className={cn(
+                                  'inline-grid size-4 shrink-0 place-items-center rounded-full',
+                                  t.status === 'error'
+                                    ? 'bg-risk-high-soft text-risk-high-strong'
+                                    : t.status === 'done'
+                                      ? 'bg-risk-safe-soft text-risk-safe-strong'
+                                      : 'text-muted-foreground',
+                                )}
+                                aria-hidden="true"
+                              >
+                                {t.status === 'running' ? (
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : t.status === 'done' ? (
+                                  <Check className="size-3" />
+                                ) : (
+                                  <X className="size-3" />
+                                )}
+                              </span>
+                              <span className="text-foreground">{t.label}</span>
+                              {t.args && <span className="font-mono text-[11.5px] text-muted-foreground">({t.args})</span>}
+                              {t.summary && <span className="text-muted-foreground">{t.summary}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {liveFiles.map((f, i) => (
+                        <FileCard key={`live-${i}`} spec={f} />
+                      ))}
+
+                      {streamText && (
+                        <div className="text-[14px] leading-relaxed whitespace-pre-wrap text-foreground">
+                          {streamText}
+                          <span className="ms-0.5 inline-block h-4 w-[2px] animate-pulse bg-primary align-text-bottom" />
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-                <button
-                  className="btn btn-primary composer-send"
-                  disabled={busy || !composing.trim()}
-                  onClick={() => void send()}
-                  title="Send"
-                >
-                  {busy ? (
-                    <Icon name="refresh-outline" size={18} className="spin" />
-                  ) : (
-                    <Icon name="send" size={17} />
-                  )}
-                </button>
-              </div>
-            </footer>
-          </>
-        )}
-      </section>
+                  </div>
+                )}
 
-      {pasteOpen && (
-        <div className="modal-backdrop" onClick={() => setPasteOpen(false)}>
-          <div className="modal paste-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">Paste orders</h3>
-              <span className="verdict-conf">bulk log-in</span>
-            </div>
-            <p className="muted" style={{ marginTop: 0 }}>
-              Paste order lines below — Verafo will read them and check the buyers before logging.
-            </p>
-            <form onSubmit={(e) => void submitPaste(e)}>
+                {lastIsAssistant && !busy && !working && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                      <Sparkles className="size-3.5" aria-hidden="true" /> Follow up
+                    </span>
+                    {suggestions.slice(0, 3).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className="h-11 max-w-full truncate rounded-full border border-border bg-card px-3 text-[12.5px] text-foreground transition-colors hover:bg-muted md:h-8"
+                        onClick={() => {
+                          setComposing(s)
+                          window.setTimeout(() => textareaRef.current?.focus(), 0)
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <footer className="border-t border-border px-4 pt-3 pb-4">
+                {messages.length === 0 && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+                      <Sparkles className="size-3.5" aria-hidden="true" /> Try asking
+                    </span>
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className="h-11 max-w-full truncate rounded-full border border-border bg-card px-3 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50 md:h-8"
+                        disabled={busy}
+                        onClick={() => {
+                          setComposing(s)
+                          window.setTimeout(() => textareaRef.current?.focus(), 0)
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div ref={composerRef} className="relative flex items-end gap-2">
+                  <div className="relative shrink-0">
+                    <Button
+                      variant={quickOpen ? 'secondary' : 'outline'}
+                      size="icon"
+                      className="size-11"
+                      title="Quick options"
+                      aria-label="Quick options"
+                      aria-expanded={quickOpen}
+                      onClick={() => setQuickOpen((v) => !v)}
+                    >
+                      <Plus className="size-5" />
+                    </Button>
+
+                    {quickOpen && (
+                      <div className="absolute bottom-[3.25rem] start-0 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-[16px] border border-border bg-popover p-3 shadow-3">
+                        <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                          Instant reports
+                        </p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {QUICK_ACTIONS.map((a) => (
+                            <button
+                              key={a.key}
+                              type="button"
+                              className="flex h-11 items-center gap-2 rounded-[10px] px-2.5 text-start text-[13px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                              disabled={busy || featureBusy}
+                              onClick={() => handleQuickAction(a.key)}
+                            >
+                              <a.icon className="size-4 shrink-0 text-primary-text" aria-hidden="true" />
+                              {a.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <p className="mt-3 mb-2 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                          Add to your question
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {FILTERS.map((f) => (
+                            <button
+                              key={f.label}
+                              type="button"
+                              className="h-11 rounded-full border border-border px-3 text-[12.5px] text-foreground transition-colors hover:bg-muted md:h-8"
+                              onClick={() => applyFilter(f.token)}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {analyzeOpen && (
+                          <form className="mt-3 flex items-end gap-2 border-t border-border pt-3" onSubmit={(e) => void runAnalyze(e)}>
+                            <div className="min-w-0 flex-1">
+                              <label
+                                htmlFor="analyze-phone"
+                                className="mb-1 block text-[11.5px] font-medium text-muted-foreground"
+                              >
+                                Buyer phone number
+                              </label>
+                              <input
+                                id="analyze-phone"
+                                type="tel"
+                                inputMode="tel"
+                                value={analyzePhone}
+                                onChange={(e) => setAnalyzePhone(e.target.value)}
+                                placeholder="+92 3xx xxxxxxx"
+                                className="h-11 w-full rounded-[10px] border border-input bg-card px-3 font-mono text-[13px] text-foreground placeholder:text-muted-foreground"
+                                autoFocus
+                              />
+                            </div>
+                            <Button size="sm" className="h-11" disabled={featureBusy || !analyzePhone.trim()} type="submit">
+                              Analyze
+                            </Button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <textarea
+                      ref={textareaRef}
+                      value={composing}
+                      onChange={handleComposeChange}
+                      onKeyDown={handleComposeKey}
+                      placeholder="Ask about a buyer, a city or a product…"
+                      rows={2}
+                      aria-label="Message Verafo"
+                      role="combobox"
+                      aria-expanded={mention != null && mentionRows.length > 0}
+                      aria-controls="mention-listbox"
+                      aria-autocomplete="list"
+                      className="max-h-40 min-h-11 w-full resize-y rounded-[10px] border border-input bg-card px-3 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)]"
+                    />
+
+                    {mention && (
+                      <div
+                        id="mention-listbox"
+                        role="listbox"
+                        aria-label={mention.kind === 'store' ? 'Matching stores' : 'Matching buyers'}
+                        className="absolute bottom-16 start-14 z-40 max-h-64 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-[16px] border border-border bg-popover p-1 shadow-3"
+                      >
+                        {mentionRows.length === 0 ? (
+                          <p className="px-3 py-2.5 text-[13px] text-muted-foreground">
+                            {mention.kind === 'store'
+                              ? `No stores match “${mention.query}”`
+                              : mention.query.replace(/\D/g, '').length < 6
+                                ? 'Type at least 6 digits of a phone number.'
+                                : `No buyer matches “${mention.query}”`}
+                          </p>
+                        ) : (
+                          mentionRows.map((r, i) => (
+                            <button
+                              key={r.key}
+                              type="button"
+                              role="option"
+                              aria-selected={i === mentionIndex}
+                              className={cn(
+                                'flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-start',
+                                i === mentionIndex ? 'bg-muted' : 'hover:bg-muted/60',
+                              )}
+                              onMouseEnter={() => setMentionIndex(i)}
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                pickMention(r.value)
+                              }}
+                            >
+                              <Avatar phone={r.phone} name={r.name} size={26} />
+                              <span className={cn('truncate text-[13.5px]', r.phone && 'font-mono')}>{r.label}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    className="size-11 shrink-0 rounded-full"
+                    size="icon"
+                    disabled={!canSend}
+                    onClick={() => void send()}
+                    aria-label="Send message"
+                    title="Send"
+                  >
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                  </Button>
+                </div>
+
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted-foreground">
+                  <span>{COMPOSER_HINT}</span>
+                  {busy && (
+                    <span className="inline-flex items-center gap-1 text-primary-text">
+                      <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Verafo is answering…
+                    </span>
+                  )}
+                </p>
+              </footer>
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* Phones: the rail is an overlay drawer rather than a second column. */}
+      {!railOpen && (
+        <button
+          type="button"
+          className="fixed end-4 bottom-20 z-40 inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-teal lg:hidden"
+          onClick={() => setRailOpen(true)}
+        >
+          <MessageSquare className="size-4" /> Chats
+        </button>
+      )}
+
+      <Dialog open={pasteOpen} onOpenChange={setPasteOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Paste orders</DialogTitle>
+            <DialogDescription>
+              Paste order lines below — Verafo reads them and checks the buyers before logging anything.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => void submitPaste(e)} className="flex flex-col gap-4">
+            <label className="flex flex-col gap-2">
+              <span className="text-[13px] font-medium text-foreground">One order per line</span>
               <textarea
-                className="paste-textarea"
+                className="min-h-32 w-full resize-y rounded-[10px] border border-input bg-card px-3 py-2 font-mono text-[13px] text-foreground placeholder:text-muted-foreground"
                 rows={6}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder="e.g. 0301 234 5678 | Footwear | PKR 4,500 | Lahore&#10;0303 999 8888 | Winter jacket | PKR 6,200 | Karachi"
+                placeholder={
+                  'e.g. 0301 234 5678 | Footwear | PKR 4,500 | Lahore\n0303 999 8888 | Winter jacket | PKR 6,200 | Karachi'
+                }
                 autoFocus
               />
-              <div className="paste-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setPasteOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={!pasteText.trim() || busy}>
-                  Ask Verafo to log these
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {!railOpen && (
-        <button className="rail-tab" onClick={() => setRailOpen(true)} title="Show chat history">
-          <Icon name="chatbubbles-outline" size={16} />
-        </button>
-      )}
-    </div>
+            </label>
+            <DialogFooter>
+              <Button type="button" variant="outline" className="h-11" onClick={() => setPasteOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="h-11" disabled={!pasteText.trim() || busy}>
+                Ask Verafo to log these
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

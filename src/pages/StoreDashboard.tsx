@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Icon } from '../components/Icon'
+import { ArrowRight, ClipboardList, Plus } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
-import { RangeFilter, type RangeDays } from '../components/RangeFilter'
-import { Badge } from '../components/primitives/Badge'
-import { Card } from '../components/primitives/Card'
-import { Skeleton } from '../components/primitives/Skeleton'
-import { Table, type Column } from '../components/primitives/Table'
+import { PageShell } from '../components/app/page-shell'
+import { Segmented } from '../components/app/segmented'
+import { StatStrip, type StatItem } from '../components/app/stat-strip'
+import { StatusBadge } from '../components/app/status-badge'
+import { CardState } from '../components/app/card-state'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { GeoMap } from '../components/charts/GeoMap'
 import { CityStatsList } from '../components/charts/CityStatsList'
 import { TopProductsList } from '../components/charts/TopProductsList'
 import { LineChart } from '../components/charts/LineChart'
 import { CountUpNumber } from '../components/CountUpNumber'
 import { Avatar } from '../components/Avatar'
-import { Sparkline } from '../components/Sparkline'
-import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { dateTime, money, phone } from '../lib/format'
@@ -22,7 +23,8 @@ import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts } from '../lib/storeStats'
 import { useToast } from '../lib/toast'
-import type { DailySalesRow, OrderRow, StoreOverview } from '../lib/types'
+import type { DailySalesRow, OrderRow, OutcomeStatus, StoreOverview } from '../lib/types'
+import type { RangeDays } from '../components/RangeFilter'
 
 function keyOf(d: Date): string {
   return d.toDateString()
@@ -113,54 +115,48 @@ export function StoreDashboard() {
     a: s.revenue,
   }))
 
-  const columns: Column<OrderRow>[] = [
-    {
-      key: 'buyer',
-      label: 'Buyer',
-      id: true,
-      render: (o) => (
-        <span className="cell-avatar">
-          <Avatar phone={o.buyer_phone} size={26} />
-          <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-            {phone(o.buyer_phone)}
-          </Link>
-        </span>
-      ),
-    },
-    {
-      key: 'product',
-      label: 'Product',
-      render: (o) => (
-        <span>
-          {o.product_name || o.product_category || 'Untitled product'}
-          {o.product_category && <span className="chip">{o.product_category}</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'total',
-      label: 'Total',
-      num: true,
-      render: (o) =>
-        `${money(o.price)}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (o) => <Badge status={(o.outcomes?.status ?? 'pending') as 'accepted' | 'refused' | 'pending'} />,
-    },
-    {
-      key: 'when',
-      label: 'When',
-      render: (o) => <span className="muted">{dateTime(o.ordered_at)}</span>,
-    },
-  ]
-
   const m = overview
   const missing = !loading && !m
 
+  const kpis: StatItem[] = [
+    {
+      label: 'Sales today',
+      value: <CountUpNumber prefix="PKR " value={todayRevenue} />,
+      hint: `Gross order value over the last ${range} days`,
+    },
+    {
+      label: 'Orders today',
+      value: <CountUpNumber value={todayOrders} />,
+      hint: 'Placed at this store',
+    },
+    {
+      label: 'Accepted / refused',
+      value: (
+        <span>
+          <CountUpNumber value={m?.accepted ?? 0} /> / <CountUpNumber value={m?.refused ?? 0} />
+        </span>
+      ),
+      hint: m ? `${((m.refused / Math.max(1, m.refused + m.accepted)) * 100).toFixed(0)}% refused` : undefined,
+    },
+    {
+      label: 'Avg order value',
+      value: <CountUpNumber prefix="PKR " value={m?.avg_order_value ?? 0} />,
+      hint:
+        pendingCount > 0 ? (
+          <>
+            <CountUpNumber value={pendingCount} /> pending —{' '}
+            <Link className="font-medium text-primary-text underline-offset-4 hover:underline" to="/orders/pending">
+              resolve
+            </Link>
+          </>
+        ) : (
+          'No pending orders'
+        ),
+    },
+  ]
+
   return (
-    <div className="stack">
+    <PageShell>
       <PageHeader
         title={m ? m.name : 'Store dashboard'}
         description={
@@ -170,176 +166,183 @@ export function StoreDashboard() {
         }
         actions={
           m ? (
-            <div className="cluster">
-              <RangeFilter range={range} onChange={setRange} />
-              <Link className="btn btn-secondary btn-sm" to="/orders/pending">
-                <Icon name="clipboard" size={14} /> Mark outcomes
-              </Link>
-              <Link className="btn btn-primary btn-sm" to="/orders/new">
-                <Icon name="add" size={14} /> New order
-              </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Segmented
+                ariaLabel="Date range"
+                value={range}
+                onChange={setRange}
+                options={[
+                  { value: 7, label: '7 days' },
+                  { value: 30, label: '30 days' },
+                ]}
+              />
+              <Button asChild variant="outline" size="sm" className="h-11 gap-1.5 px-3 md:h-9">
+                <Link to="/orders/pending">
+                  <ClipboardList className="size-4" /> Mark outcomes
+                </Link>
+              </Button>
+              <Button asChild size="sm" className="h-11 gap-1.5 px-3 md:h-9">
+                <Link to="/orders/new">
+                  <Plus className="size-4" /> New order
+                </Link>
+              </Button>
             </div>
           ) : undefined
         }
       />
 
       {!checking && !admin ? (
-        <div className="card">
+        <Card className="gap-0 p-6">
           <EmptyState
+            icon="shield-checkmark"
             title="Restricted to admins"
             detail="Only administrators can view store dashboards."
+            action={
+              <Button asChild className="h-11 gap-2 rounded-full px-5">
+                <Link to="/">
+                  <ArrowRight className="size-4" /> Back to dashboard
+                </Link>
+              </Button>
+            }
           />
-          <div className="store-restricted-cta">
-            <Link className="btn btn-primary" to="/">
-              <Icon name="arrow-forward" size={14} /> Back to dashboard
-            </Link>
-          </div>
-        </div>
+        </Card>
       ) : missing ? (
-        <div className="card">
+        <Card className="gap-0 p-6">
           <EmptyState icon="storefront" title="Store not found" detail="This store may have been removed." />
-        </div>
+        </Card>
       ) : (
         <>
-          {loading ? (
-            <div className="kpi-grid">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i}>
-                  <Skeleton width="50%" height={12} />
-                  <Skeleton width="70%" height={22} />
-                  <Skeleton width="100%" height={28} />
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Reveal stagger className="kpi-grid">
-              <Card>
-                <span className="kpi-label">Sales today</span>
-                <strong className="kpi-value">
-                  <CountUpNumber prefix="PKR " value={todayRevenue} />
-                </strong>
-                <span className="kpi-delta">gross order value</span>
-                <div className="kpi-spark">
-                  <Sparkline data={salesData.map((s) => s.a)} height={28} />
-                </div>
-              </Card>
-              <Card>
-                <span className="kpi-label">Orders today</span>
-                <strong className="kpi-value">
-                  <CountUpNumber value={todayOrders} />
-                </strong>
-                <span className="kpi-delta">across this store</span>
-                <div className="kpi-spark">
-                  <Sparkline data={sales.map((s) => s.orders)} height={28} />
-                </div>
-              </Card>
-              <Card>
-                <span className="kpi-label">Accepted / Refused</span>
-                <strong className="kpi-value">
-                  <CountUpNumber value={m?.accepted ?? 0} /> / <CountUpNumber value={m?.refused ?? 0} />
-                </strong>
-                <span className="kpi-delta">{m ? `${((m.refused / Math.max(1, m.refused + m.accepted)) * 100).toFixed(0)}% refused` : ''}</span>
-              </Card>
-              <Card>
-                <span className="kpi-label">Avg order value</span>
-                <strong className="kpi-value">
-                  <CountUpNumber prefix="PKR " value={m?.avg_order_value ?? 0} />
-                </strong>
-                <span className="kpi-delta">
-                  {pendingCount > 0 ? (
-                    <>
-                      <CountUpNumber value={pendingCount} /> pending — <Link className="link" to="/orders/pending">resolve</Link>
-                    </>
-                  ) : (
-                    'no pending orders'
-                  )}
-                </span>
-              </Card>
-            </Reveal>
-          )}
+          <StatStrip items={kpis} loading={loading} />
 
-          <section className="chart-section">
-            <Reveal stagger>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">Sales — last {range} days</h3>
-              <span className="verdict-conf">gross order value · PKR</span>
-            </div>
-            <Card>
+          <Card className="gap-0">
+            <CardHeader>
+              <CardTitle>Sales — last {range} days</CardTitle>
+              <CardDescription>Gross order value per day, in PKR.</CardDescription>
+            </CardHeader>
+            <CardContent>
               {loading ? (
-                <Skeleton height={220} />
+                <CardState loading skeletonHeight={220}>
+                  {null}
+                </CardState>
               ) : (
                 <LineChart data={salesData} series={[{ key: 'a', name: 'Sales' }]} height={220} begin={140} />
               )}
-            </Card>
-          </Reveal>
-          </section>
+            </CardContent>
+          </Card>
 
-          {/* Same two-column grid the main Dashboard uses: Tailwind's
-              grid-cols-* sizes tracks with minmax(0, 1fr), so a wide map or a
-              long product name can no longer squeeze the other card into a
-              narrow column. min-w-0 on each column keeps that promise. */}
-          <Reveal stagger className="chart-section grid gap-6 lg:grid-cols-2">
-            <section className="flex min-w-0 flex-col">
-              <div className="verdict-panel-head">
-                <h3 className="card-title">Sales by city</h3>
-                <span className="verdict-conf">orders for this store · last {range} days</span>
-              </div>
-              <Card className="flex-1">
-                {loading ? (
-                  <Skeleton height={240} />
-                ) : cityStats.length === 0 ? (
-                  <span className="muted">No city data for this store yet.</span>
-                ) : (
-                  <>
-                    <GeoMap cities={cityStats} />
-                    <CityStatsList cities={cityStats} />
-                  </>
-                )}
-              </Card>
-            </section>
-            <section className="flex min-w-0 flex-col">
-              <div className="verdict-panel-head">
-                <h3 className="card-title">Top products</h3>
-                <span className="verdict-conf">by revenue</span>
-              </div>
-              <Card className="flex-1">
-                {loading ? (
-                  <Skeleton height={240} />
-                ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="gap-0">
+              <CardHeader>
+                <CardTitle>Sales by city</CardTitle>
+                <CardDescription>Orders for this store, last {range} days.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <CardState
+                  loading={loading}
+                  empty={cityStats.length === 0}
+                  emptyText="No city data for this store yet."
+                  skeletonHeight={240}
+                >
+                  {cityStats.length > 0 && (
+                    <>
+                      <div className="overflow-hidden rounded-[10px] border border-border">
+                        <GeoMap cities={cityStats} />
+                      </div>
+                      <CityStatsList cities={cityStats} />
+                    </>
+                  )}
+                </CardState>
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0">
+              <CardHeader>
+                <CardTitle>Top products</CardTitle>
+                <CardDescription>By revenue for this store.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CardState
+                  loading={loading}
+                  empty={topProducts.length === 0}
+                  emptyText="No products logged yet."
+                  skeletonHeight={240}
+                >
                   <TopProductsList products={topProducts} />
-                )}
-              </Card>
-            </section>
-          </Reveal>
-
-          <section className="chart-section">
-            <Reveal stagger>
-            <div className="verdict-panel-head">
-              <h3 className="card-title">Recent orders</h3>
-              <Link className="link" to="/orders/pending">
-                <Icon name="arrow-forward" size={14} /> View outcomes
-              </Link>
-            </div>
-            <Card className="card--flush">
-              {loading ? (
-                <div className="stack" style={{ padding: 'var(--s-5)' }}>
-                  <Skeleton height={16} />
-                  <Skeleton height={16} />
-                  <Skeleton height={16} />
-                </div>
-              ) : (
-                <Table
-                  columns={columns}
-                  rows={orders.slice(0, 8)}
-                  rowKey={(o) => o.id}
-                  empty={<span className="muted">No orders for this store yet.</span>}
-                />
-              )}
+                </CardState>
+              </CardContent>
             </Card>
-          </Reveal>
-          </section>
+          </div>
+
+          <Card className="gap-0 overflow-hidden py-0">
+            <CardHeader className="border-b py-5">
+              <CardTitle>Recent orders</CardTitle>
+              <CardDescription>The last {Math.min(8, orders.length)} orders at this store.</CardDescription>
+              <div data-slot="card-action" className="col-start-2 row-span-2 row-start-1 self-start justify-self-end">
+                <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3 md:h-9">
+                  <Link to="/orders/pending">
+                    View outcomes <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardState
+              loading={loading}
+              empty={orders.length === 0}
+              emptyText="No orders for this store yet."
+              skeletonHeight={180}
+            >
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="ps-6">Buyer</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-end">Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="pe-6">When</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orders.slice(0, 8).map((o) => (
+                      <TableRow key={o.id}>
+                        <TableCell className="ps-6">
+                          <span className="flex items-center gap-2.5">
+                            <Avatar phone={o.buyer_phone} size={26} />
+                            <Link
+                              to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+                              className="font-mono text-[13px] font-medium text-primary-text hover:underline"
+                            >
+                              {phone(o.buyer_phone)}
+                            </Link>
+                          </span>
+                        </TableCell>
+                        <TableCell className="max-w-56">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="truncate">{o.product_name || o.product_category || 'Untitled product'}</span>
+                            {o.product_category && (
+                              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11.5px] text-muted-foreground">
+                                {o.product_category}
+                              </span>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-end tabular-nums">
+                          {money(o.price)}
+                          {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={(o.outcomes?.status ?? 'pending') as OutcomeStatus} />
+                        </TableCell>
+                        <TableCell className="pe-6 text-muted-foreground">{dateTime(o.ordered_at)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardState>
+          </Card>
         </>
       )}
-    </div>
+    </PageShell>
   )
 }

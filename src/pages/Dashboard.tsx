@@ -353,6 +353,19 @@ export function Dashboard() {
   const ui = TONE_UI[verdict]
   const heroSentence = ui.sentence(attentionCount)
 
+  /**
+   * The number the hero shows. It must be the score behind the WORDS.
+   *
+   * The verdict word comes from the riskiest order waiting on a decision, so
+   * pairing it with the all-buyers average made the card argue with itself: a
+   * HIGH RISK headline sat next to 0.49, which this app's own thresholds call
+   * MEDIUM. The riskiest waiting order's score is what actually produced the
+   * word, so it is what the ring shows. The book average keeps its own honest
+   * home in the "Average risk" KPI, where its band word is shown beside it.
+   */
+  const ringScore = riskiest != null ? Number(riskiest.buyer!.risk_score) : null
+  const ringCaption = riskiest != null ? 'riskiest waiting' : 'risk score'
+
   /** The band the average score falls in. Shown as a word next to the number,
    *  and only when buyers have enough resolved orders to be scored. */
   const averageBand: VerdictTone =
@@ -464,7 +477,8 @@ export function Dashboard() {
 
       <VerdictCard
         tone={verdict}
-        score={verdict === 'unknown' ? null : stats.avg}
+        score={verdict === 'unknown' ? null : ringScore}
+        ringCaption={ringCaption}
         sentence={heroSentence}
         footnote={`Based on your latest ${orders.length.toLocaleString('en-PK')} orders.`}
       >
@@ -598,6 +612,10 @@ export function Dashboard() {
                   <div key={b.tone} className={TONE_UI[b.tone].bar} style={{ width: `${(b.n / distTotal) * 100}%` }} />
                 ))}
               </div>
+              {/* The bar is decorative; this is what a screen reader reads. */}
+              <p className="sr-only">
+                {buckets.map((b) => `${b.label}: ${b.n}`).join('. ')}
+              </p>
               <ul className="m-0 list-none space-y-3 p-0">
                 {buckets.map((b) => (
                   <li key={b.tone} className="flex items-center justify-between text-sm">
@@ -633,7 +651,11 @@ export function Dashboard() {
               emptyText={trendEmptyText('sales')}
               skeletonHeight={240}
             >
-              <TrendArea data={salesData.map((s) => ({ label: s.label, value: s.a }))} format={(n) => money(n)} />
+              <TrendArea
+                data={salesData.map((s) => ({ label: s.label, value: s.a }))}
+                format={(n) => money(n)}
+                label={`Gross order value per day over the last ${range} days`}
+              />
             </CardState>
           </CardContent>
         </Card>
@@ -652,7 +674,11 @@ export function Dashboard() {
               emptyText={trendEmptyText('orders')}
               skeletonHeight={240}
             >
-              <TrendBars data={stats.days} emptyText={trendEmptyText('orders')} />
+              <TrendBars
+                data={stats.days}
+                emptyText={trendEmptyText('orders')}
+                label={`Orders placed per day over the last ${range} days`}
+              />
             </CardState>
           </CardContent>
         </Card>

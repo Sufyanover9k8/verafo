@@ -50,19 +50,24 @@ function renderParts(text: string): (string | { type: 'buyer'; value: string } |
   return parts
 }
 
-export function renderMentions(text: string): ReactNode[] {
+/**
+ * Mentions, styled as tokens rather than raw class names so they stay legible
+ * on both a card and the teal user bubble. `onAccent` is for the latter: the
+ * brand teal on a teal fill would disappear, so it uses ink instead.
+ */
+export function renderMentions(text: string, onAccent = false): ReactNode[] {
+  const buyerClass = onAccent
+    ? 'font-semibold text-primary-foreground'
+    : 'font-semibold text-primary-text'
+  const storeClass = onAccent
+    ? 'font-semibold text-primary-foreground/90'
+    : 'font-semibold text-risk-unknown-strong'
   return renderParts(text).map((p, i) => {
     if (typeof p === 'string') return p
-    if (p.type === 'buyer') {
-      return (
-        <span key={i} className="mention">
-          @{p.value}
-        </span>
-      )
-    }
     return (
-      <span key={i} className="mention mention-store">
-        #{p.value}
+      <span key={i} className={p.type === 'buyer' ? buyerClass : storeClass}>
+        {p.type === 'buyer' ? '@' : '#'}
+        {p.value}
       </span>
     )
   })

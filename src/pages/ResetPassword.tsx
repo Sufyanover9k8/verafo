@@ -1,8 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { Icon } from '../components/Icon'
+import { ArrowRight, CheckCheck, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useToast } from '../lib/toast'
+
+const inputClass =
+  'h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[16px] text-foreground placeholder:text-muted-foreground md:h-10 md:text-[15px]'
 
 /**
  * Shown instead of the normal app when the user arrives via a "reset your
@@ -44,42 +49,49 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="auth-split">
-      <aside className="auth-left">
-        <div className="auth-wordmark">
+    /* Same two-panel shape as the sign-in screen: pitch on the left, the one
+       task that matters on the right. Stacked below lg. */
+    <div className="grid min-h-screen lg:grid-cols-[48fr_52fr]">
+      <aside className="flex flex-col gap-10 bg-muted bg-[radial-gradient(70%_50%_at_100%_0%,color-mix(in_srgb,var(--teal)_18%,transparent),transparent_62%),radial-gradient(50%_45%_at_0%_100%,color-mix(in_srgb,var(--teal)_10%,transparent),transparent_62%)] p-6 sm:p-10 lg:p-12">
+        <div className="flex items-center gap-3">
           <img src="/verafo-logo.png" alt="Verafo" className="size-8 shrink-0 object-contain" />
-          <span className="sidebar-brand-name">Verafo</span>
+          <span className="text-[15px] font-semibold text-foreground">Verafo</span>
         </div>
-        <h1 className="auth-left-title">
-          Know who you're shipping to. <em>Before</em> you ship.
+        <h1 className="max-w-[17ch] text-[28px] leading-[1.14] font-extrabold tracking-[-0.038em] text-foreground sm:text-[34px] lg:text-[40px]">
+          Know who you&rsquo;re shipping to. <em className="text-primary-text italic">Before</em> you ship.
         </h1>
-        <p className="auth-left-foot">
+        <p className="text-[12.5px] text-muted-foreground">
           Verafo — cash-on-delivery risk intelligence across your connected stores.
         </p>
       </aside>
 
-      <main className="auth-right">
-        <div className="auth-form-wrap">
-          <h2>Set a new password</h2>
-          <p>
+      <main className="flex items-center justify-center bg-background p-4 sm:p-8">
+        <div className="w-full max-w-[400px] rounded-[16px] border border-border bg-card p-6 shadow-3 sm:p-10">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">Set a new password</h2>
+          <p className="mt-2 text-[13px] text-muted-foreground">
             {done
               ? "All set — you're signed in."
               : "You're verified via your reset link. Choose a new password to finish."}
           </p>
 
           {done ? (
-            <button
+            <Button
               type="button"
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              size="lg"
+              className="mt-8 h-12 w-full gap-2 rounded-full text-[15px] font-semibold"
               onClick={clearPasswordRecovery}
             >
-              <Icon name="arrow-forward" size={17} /> Continue to Verafo
-            </button>
+              <ArrowRight className="size-4" aria-hidden="true" /> Continue to Verafo
+            </Button>
           ) : (
-            <form className="auth-form" onSubmit={submit}>
-              <label className="field">
-                <span className="field-label">New password</span>
+            <form className="mt-8 flex flex-col gap-4" onSubmit={submit}>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="reset-password" className="text-[13px] font-medium text-muted-foreground">
+                  New password
+                </Label>
                 <input
+                  id="reset-password"
+                  className={inputClass}
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -87,10 +99,14 @@ export function ResetPassword() {
                   autoComplete="new-password"
                   required
                 />
-              </label>
-              <label className="field">
-                <span className="field-label">Confirm password</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="reset-confirm" className="text-[13px] font-medium text-muted-foreground">
+                  Confirm password
+                </Label>
                 <input
+                  id="reset-confirm"
+                  className={inputClass}
                   type="password"
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
@@ -98,21 +114,35 @@ export function ResetPassword() {
                   autoComplete="new-password"
                   required
                 />
-              </label>
+              </div>
 
-              {error && <span className="field-error">{error}</span>}
+              {error && (
+                <p
+                  id="reset-error"
+                  role="alert"
+                  className="rounded-[10px] border border-destructive/40 bg-destructive/10 px-3 py-2 text-[13px] text-destructive-strong"
+                >
+                  {error}
+                </p>
+              )}
 
-              <button type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={busy}>
+              <Button
+                type="submit"
+                size="lg"
+                className="h-12 w-full gap-2 rounded-full text-[15px] font-semibold"
+                disabled={busy}
+                aria-describedby={error ? 'reset-error' : undefined}
+              >
                 {busy ? (
                   <>
-                    <Icon name="refresh" size={17} className="spin" /> Working…
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Working…
                   </>
                 ) : (
                   <>
-                    <Icon name="checkmark-done" size={17} /> Set new password
+                    <CheckCheck className="size-4" aria-hidden="true" /> Set new password
                   </>
                 )}
-              </button>
+              </Button>
             </form>
           )}
         </div>

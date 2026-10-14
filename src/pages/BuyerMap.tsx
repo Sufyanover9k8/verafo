@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, RotateCcw, Sparkles } from 'lucide-react'
 import {
   CartesianGrid,
   Cell,
@@ -10,13 +11,31 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Icon } from '../components/Icon'
 import type { MapPoint3D } from '../components/Map3D'
 import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { Segmented } from '../components/app/segmented'
+import { StatStrip, type StatItem } from '../components/app/stat-strip'
+import { CardState } from '../components/app/card-state'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Reveal } from '../components/Reveal'
-import { EmptyState, NeedsSetup } from '../components/States'
+import { NeedsSetup } from '../components/States'
+import { cn } from '@/lib/utils'
 import { money } from '../lib/format'
-import { RISK, formatScore, riskLevel } from '../lib/score'
+import { RISK, formatScore, riskLevel } from '../lib/risk'
+import {
+  cityRefusalRates,
+  formatRate,
+  MIN_SAMPLE,
+  productRefusalRates,
+  rateOf,
+  refusalTrend,
+  refusalTrendSentence,
+  sampleLabel,
+  type NamedRate,
+  type ScoredOrder,
+} from '../lib/ui/analytics'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -50,8 +69,11 @@ const DIMS: DimDef[] = [
   { key: 'avg_order_value', label: 'Avg order value', format: 'money' },
 ]
 
-/** Plain axis titles, drawn inside the plot so they can never be clipped. */
+/* Axis titles are drawn inside the plot, so they can never be clipped. */
 const AXIS_LABEL = { fill: 'var(--ink-3)', fontSize: 11 }
+const TICK_STYLE = { fill: 'var(--ink-3)', fontSize: 11 }
+const GRID_STROKE = 'var(--line-2)'
+const CURSOR_STROKE = 'color-mix(in srgb, var(--teal) 40%, transparent)'
 
 interface BuyerRow {
   phone: string
@@ -59,6 +81,17 @@ interface BuyerRow {
   total_orders: number
   total_accepted: number
   total_refused: number
+}
+
+interface OrderLite {
+  buyer_phone: string
+  price: number | null
+  quantity: number | null
+  city: string | null
+  product_name: string | null
+  product_category: string | null
+  ordered_at: string | null
+  outcomes: { status: string | null } | null
 }
 
 interface MapPoint {
@@ -77,10 +110,6 @@ interface MapPoint {
   radius: number
 }
 
-const TICK_STYLE = { fill: 'var(--ink-3)', fontSize: 11 }
-const GRID_STROKE = 'var(--line-2)'
-const CURSOR_STROKE = 'color-mix(in srgb, var(--teal) 40%, transparent)'
-
 function fmtTick(format: DimDef['format'], v: number): string {
   if (format === 'money') return v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v))
   if (format === 'rate') return `${Math.round(v)}%`
@@ -98,17 +127,93 @@ function MapTooltip({ active, payload }: { active?: boolean; payload?: { payload
   if (!active || !payload?.length) return null
   const p = payload[0].payload
   return (
-    <div className="map-tip">
-      <div className="map-tip-phone">{p.phone}</div>
-      <div className="map-tip-row">
-        <span className="map-tip-dot" style={{ background: RISK[p.bucket].color }} />
+    <div className="rounded-[10px] border border-border bg-popover px-3 py-2 shadow-2">
+      <div className="font-mono text-[12.5px] font-medium text-foreground">{p.phone}</div>
+      <div className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        <span className="size-2 rounded-full" style={{ background: RISK[p.bucket].color }} aria-hidden="true" />
         {RISK[p.bucket].label} · risk {formatScore(p.risk)}
       </div>
-      <div className="map-tip-row">
+      <div className="text-[12px] text-muted-foreground">
         {p.orders} order{p.orders === 1 ? '' : 's'} · {p.refused} refused
       </div>
-      <div className="map-tip-row">Spend {money(p.spend)} · avg {money(p.avgOrderValue)}</div>
+      <div className="text-[12px] text-muted-foreground">
+        Spend {money(p.spend)} · avg {money(p.avgOrderValue)}
+      </div>
     </div>
+  )
+}
+
+/** A plain labelled select, used for the axis pickers. */
+function AxisSelect({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: DimKey
+  onChange: (v: DimKey) => void
+}) {
+  return (
+    <label className="flex min-w-40 flex-col gap-1.5" htmlFor={id}>
+      <span className="text-[12.5px] font-medium text-muted-foreground">{label}</span>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value as DimKey)}
+        className="h-11 rounded-[10px] border border-input bg-card px-3 text-[14px] text-foreground transition-colors hover:border-line-2 focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-9"
+      >
+        {DIMS.map((d) => (
+          <option key={d.key} value={d.key}>
+            {d.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/** The risk legend, so the colour on every dot always has its word beside it. */
+function RiskLegend() {
+  const tones: (keyof typeof RISK)[] = ['safe', 'watch', 'high', 'unknown']
+  return (
+    <ul className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 p-0">
+      {tones.map((k) => (
+        <li key={k} className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+          <span className="size-2.5 rounded-full" style={{ background: RISK[k].color }} aria-hidden="true" />
+          {RISK[k].label}
+        </li>
+      ))}
+      <li className="text-[12.5px] text-muted-foreground">dot size = order volume</li>
+    </ul>
+  )
+}
+
+/** One refusal-rate row: name, rate, and the sample it came from. */
+function RateRow({ g, what }: { g: NamedRate; what: 'city' | 'product' }) {
+  return (
+    <li className="flex flex-col gap-1.5 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="truncate text-[14px] font-medium text-foreground">{g.name}</span>
+        <span className="shrink-0 font-mono text-[14px] font-semibold tabular-nums text-foreground">
+          {formatRate(g.rate)}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div
+          className={cn(
+            'h-full rounded-full',
+            (g.rate ?? 0) >= 0.5 ? 'bg-risk-high' : (g.rate ?? 0) >= 0.3 ? 'bg-risk-watch' : 'bg-risk-safe',
+          )}
+          style={{ width: `${Math.max(2, Math.round((g.rate ?? 0) * 100))}%` }}
+        />
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        {g.refused} refused of {sampleLabel(g)} · {money(g.value ?? 0)} ordered
+        {what === 'city' ? ' from this city' : ' of this product'}
+      </p>
+    </li>
   )
 }
 
@@ -117,8 +222,9 @@ export function BuyerMap() {
   const toast = useToast()
   const { store: scope } = useStoreScope()
   const [buyers, setBuyers] = useState<BuyerRow[]>([])
-  const [spendMap, setSpendMap] = useState<Map<string, number>>(new Map())
+  const [orders, setOrders] = useState<OrderLite[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [mode, setMode] = useState<ViewMode>('2d')
   const [xKey, setXKey] = useState<DimKey>('total_orders')
   const [yKey, setYKey] = useState<DimKey>('risk_score')
@@ -132,39 +238,52 @@ export function BuyerMap() {
   const load = useCallback(async () => {
     if (!supabase) return
     setLoading(true)
-    let ordersQuery = supabase.from('orders').select('buyer_phone, price')
+    setLoadError(false)
+
+    // One read of the orders in scope feeds both the map (spend per buyer) and
+    // the refusal insights below it. Only the columns those two need.
+    let ordersQuery = supabase
+      .from('orders')
+      .select('buyer_phone, price, quantity, city, product_name, product_category, ordered_at, outcomes(status)')
+      .order('ordered_at', { ascending: false })
+      .limit(2000)
     if (scope) ordersQuery = ordersQuery.eq('store_id', scope.id)
     const ordersRes = await ordersQuery
 
-    const scopedPhones = new Set<string>()
-    const spend = new Map<string, number>()
-    for (const o of ordersRes.data ?? []) {
-      const p = String(o.buyer_phone)
-      scopedPhones.add(p)
-      if (o.price != null) {
-        spend.set(p, (spend.get(p) ?? 0) + Number(o.price))
-      }
+    if (ordersRes.error) {
+      setLoadError(true)
+      setOrders([])
+      setBuyers([])
+      setLoading(false)
+      return
     }
-    setSpendMap(spend)
+
+    const rows = (ordersRes.data ?? []) as unknown as OrderLite[]
+    setOrders(rows)
+
+    const scopedPhones = new Set<string>()
+    for (const o of rows) scopedPhones.add(String(o.buyer_phone))
 
     // PRIVACY: this used to fetch EVERY buyer row on the network and filter
     // them in the browser. The filter is now in the query, so the network's
     // buyer list never leaves the database. Under the buyers policy this read
     // is also confined to the merchant's own buyers.
-    let buyers: BuyerRow[] = []
+    let nextBuyers: BuyerRow[] = []
     if (!scope) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('buyers')
         .select('phone, risk_score, total_orders, total_accepted, total_refused')
-      buyers = (data ?? []) as unknown as BuyerRow[]
+      if (error) setLoadError(true)
+      nextBuyers = (data ?? []) as unknown as BuyerRow[]
     } else if (scopedPhones.size > 0) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('buyers')
         .select('phone, risk_score, total_orders, total_accepted, total_refused')
         .in('phone', [...scopedPhones].slice(0, 1000))
-      buyers = (data ?? []) as unknown as BuyerRow[]
+      if (error) setLoadError(true)
+      nextBuyers = (data ?? []) as unknown as BuyerRow[]
     }
-    setBuyers(buyers)
+    setBuyers(nextBuyers)
     setLoading(false)
   }, [scope])
 
@@ -220,28 +339,39 @@ export function BuyerMap() {
   const yDim = DIMS.find((d) => d.key === yKey) ?? DIMS[1]
   const zDim = DIMS.find((d) => d.key === zKey) ?? DIMS[2]
 
+  /** Spend per buyer, from the orders already loaded. */
+  const spendMap = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const o of orders) {
+      if (o.price == null) continue
+      const p = String(o.buyer_phone)
+      m.set(p, (m.get(p) ?? 0) + Number(o.price) * (o.quantity ?? 1))
+    }
+    return m
+  }, [orders])
+
   const points = useMemo<MapPoint[]>(() => {
     return buyers
       .map((b) => {
-        const orders = Number(b.total_orders) || 0
+        const ordersCount = Number(b.total_orders) || 0
         const accepted = Number(b.total_accepted) || 0
         const refused = Number(b.total_refused) || 0
         const spend = spendMap.get(b.phone) ?? 0
         const risk = Number(b.risk_score)
         const v: Record<DimKey, number> = {
           risk_score: risk,
-          total_orders: orders,
+          total_orders: ordersCount,
           total_accepted: accepted,
           total_refused: refused,
-          refusal_rate: orders > 0 ? (refused / orders) * 100 : 0,
+          refusal_rate: ordersCount > 0 ? (refused / ordersCount) * 100 : 0,
           spend,
-          avg_order_value: orders > 0 ? spend / orders : 0,
+          avg_order_value: ordersCount > 0 ? spend / ordersCount : 0,
         }
         return {
           phone: b.phone,
           risk,
           bucket: riskLevel(risk),
-          orders,
+          orders: ordersCount,
           accepted,
           refused,
           refusalRate: v.refusal_rate,
@@ -250,7 +380,7 @@ export function BuyerMap() {
           x: v[xKey],
           y: v[yKey],
           z: v[zKey],
-          radius: 5 + Math.min(18, Math.round(Math.sqrt(orders) * 2.6)),
+          radius: 5 + Math.min(18, Math.round(Math.sqrt(ordersCount) * 2.6)),
         }
       })
       .sort((a, b) => b.orders - a.orders)
@@ -282,185 +412,230 @@ export function BuyerMap() {
 
   const withOrders = points.filter((p) => p.orders > 0).length
 
+  /* ── RTO / refusal insights, from the same orders the map is drawn from ── */
+  const scored = useMemo<ScoredOrder[]>(
+    () =>
+      orders.map((o, i) => {
+        const raw = o.outcomes?.status
+        return {
+          id: String(i),
+          city: o.city,
+          product_name: o.product_name,
+          product_category: o.product_category,
+          price: o.price,
+          quantity: o.quantity,
+          ordered_at: o.ordered_at,
+          outcome: raw === 'accepted' || raw === 'refused' ? raw : 'pending',
+        }
+      }),
+    [orders],
+  )
+
+  const overall = useMemo(() => rateOf(scored), [scored])
+  const cities = useMemo(() => cityRefusalRates(scored, 5), [scored])
+  const products = useMemo(() => productRefusalRates(scored, 5), [scored])
+  const trend = useMemo(() => refusalTrend(scored, 30), [scored])
+  const trendSentence = refusalTrendSentence(trend)
+
+  const lostToRefusals = useMemo(() => {
+    let sum = 0
+    let any = false
+    for (const o of scored) {
+      if (o.outcome !== 'refused' || o.price == null) continue
+      any = true
+      sum += Number(o.price) * (o.quantity ?? 1)
+    }
+    return any ? sum : null
+  }, [scored])
+
   if (!isConfigured || !supabase) return <NeedsSetup />
 
+  const modeOptions: { value: ViewMode; label: string }[] = [
+    { value: '2d', label: '2D scatter' },
+    { value: '3d', label: '3D cloud' },
+    { value: 'sim', label: 'AI similarity' },
+  ]
+
+  const rtoStats: StatItem[] = [
+    {
+      label: 'Refusal rate',
+      value: formatRate(overall.rate),
+      hint:
+        overall.resolved === 0
+          ? 'Nothing resolved yet'
+          : `${overall.refused} refused of ${overall.resolved} resolved`,
+    },
+    { label: 'Resolved orders', value: overall.resolved.toLocaleString('en-PK') },
+    { label: 'Still unresolved', value: overall.unknown.toLocaleString('en-PK') },
+    {
+      label: 'Value refused',
+      value: lostToRefusals == null ? '—' : money(lostToRefusals),
+      hint: lostToRefusals == null ? 'No priced refusals recorded' : 'Order value with a refusal recorded',
+    },
+  ]
+
   return (
-    <div className="page map-page">
+    <PageShell>
       <PageHeader
-        title="Buyer Map"
-        description="Scatter every buyer across any two dimensions and spot risk clusters."
+        title="RTO insights"
+        description={
+          scope
+            ? `Who refuses, where and on what — for ${scope.name}. Every rate shows its sample size.`
+            : 'Who refuses, where and on what — across your stores. Every rate shows its sample size.'
+        }
+        actions={
+          <Segmented ariaLabel="Map view" value={mode} onChange={setMode} options={modeOptions} />
+        }
       />
 
-      <div className="map-toolbar">
-        <div className="mode-switch" role="group" aria-label="View mode">
-          <button
-            className={mode === '2d' ? 'active' : ''}
-            onClick={() => setMode('2d')}
-            title="2D scatter"
-          >
-            2D
-          </button>
-          <button
-            className={mode === '3d' ? 'active' : ''}
-            onClick={() => setMode('3d')}
-            title="3D scatter — drag to rotate, scroll to zoom"
-          >
-            3D
-          </button>
-          <button
-            className={mode === 'sim' ? 'active' : ''}
-            onClick={() => setMode('sim')}
-            title="AI similarity — buyers positioned by their embedding vectors"
-          >
-            <Icon name="sparkles-outline" size={13} /> Similarity
-          </button>
-        </div>
-      </div>
+      {/* ── How the score is decided. Verafo has no user-authored rules; the
+             scoring rule is fixed and lives in the database, so this states it
+             rather than offering controls that would not change anything. */}
+      <Card className="gap-0 p-5">
+        <h2 className="text-[15px] font-semibold text-foreground">How a buyer is scored</h2>
+        <p className="mt-1.5 max-w-3xl text-[13.5px] text-muted-foreground">
+          Verafo scores buyers with a fixed rule evaluated in the database — there is nothing to configure here.
+          Below {MIN_SAMPLE} resolved orders a group is not shown as a rate at all, and an unscored buyer is always
+          UNKNOWN, never safe.
+        </p>
+        <ul className="mt-3 flex flex-col gap-2 text-[13.5px] text-foreground">
+          <li className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-semibold">Thresholds</span>
+            <span className="text-muted-foreground">
+              below 0.45 LOW RISK · 0.45–0.65 MEDIUM RISK · above 0.65 HIGH RISK
+            </span>
+          </li>
+          <li className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-semibold">Signals</span>
+            <span className="text-muted-foreground">
+              refusal rate pulled toward 0.50 until 3+ resolved orders · new address +0.05 · phone first seen today
+              +0.05 · 5+ accepted across 2+ stores −0.20
+            </span>
+          </li>
+        </ul>
+      </Card>
 
-      {mode === 'sim' ? (
-        <div className="map-controls map-controls-sim">
-          <span className="sim-hint">
-            <Icon name="sparkles-outline" size={13} />
-            Buyers are positioned by their AI embedding vectors (PCA of the 1536-d fingerprint).
-            Closer dots are more similar buyers.
-          </span>
-        </div>
-      ) : (
-        <div className={mode === '3d' ? 'map-controls map-controls-3d' : 'map-controls'}>
-        <label className="field">
-          <span className="field-label">
-            <Icon name="trending-up-outline" size={13} /> X axis
-          </span>
-          <select value={xKey} onChange={(e) => setXKey(e.target.value as DimKey)}>
-            {DIMS.map((d) => (
-              <option key={d.key} value={d.key}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      {/* ── The map ── */}
+      <Card className="gap-0 overflow-hidden">
+        <CardHeader className="border-b">
+          <CardTitle>
+            {mode === 'sim' ? 'Similarity cloud' : mode === '3d' ? 'Buyers in three dimensions' : 'Buyers in two dimensions'}
+          </CardTitle>
+          <CardDescription>
+            {mode === 'sim'
+              ? 'Buyers positioned by their AI embedding vectors (PCA of the 1536-d fingerprint). Closer dots are more similar buyers.'
+              : 'Every buyer plotted across the dimensions you choose. Click a dot to open that buyer’s profile.'}
+          </CardDescription>
+        </CardHeader>
 
-        <button
-          className="btn ghost map-swap"
-          title="Swap axes"
-          onClick={() => {
-            setXKey(yKey)
-            setYKey(xKey)
-          }}
-        >
-          <Icon name="sync-outline" size={16} />
-        </button>
+        <div className="flex flex-col gap-4 border-b border-border p-5">
+          {mode === 'sim' ? (
+            <p className="text-[13px] text-muted-foreground">
+              Resemblance is not a risk verdict, and it is never evidence of fraud.
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-end gap-3">
+              <AxisSelect id="map-x-axis" label="X axis" value={xKey} onChange={setXKey} />
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-11 md:size-9"
+                title="Swap X and Y"
+                aria-label="Swap X and Y axes"
+                onClick={() => {
+                  setXKey(yKey)
+                  setYKey(xKey)
+                }}
+              >
+                <RotateCcw className="size-4" />
+              </Button>
+              <AxisSelect id="map-y-axis" label="Y axis" value={yKey} onChange={setYKey} />
+              {mode === '3d' && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-11 md:size-9"
+                    title="Swap X and Z"
+                    aria-label="Swap X and Z axes"
+                    onClick={() => {
+                      setXKey(zKey)
+                      setZKey(xKey)
+                    }}
+                  >
+                    <RotateCcw className="size-4" />
+                  </Button>
+                  <AxisSelect id="map-z-axis" label="Z axis" value={zKey} onChange={setZKey} />
+                </>
+              )}
+            </div>
+          )}
 
-        <label className="field">
-          <span className="field-label">
-            <Icon name="stats-chart-outline" size={13} /> Y axis
-          </span>
-          <select value={yKey} onChange={(e) => setYKey(e.target.value as DimKey)}>
-            {DIMS.map((d) => (
-              <option key={d.key} value={d.key}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {mode === '3d' && (
-          <>
-            <button
-              className="btn ghost map-swap"
-              title="Swap X and Z"
-              onClick={() => {
-                setXKey(zKey)
-                setZKey(xKey)
-              }}
-            >
-              <Icon name="sync-outline" size={16} />
-            </button>
-
-            <label className="field">
-              <span className="field-label">
-                <Icon name="layers-outline" size={13} /> Z axis
-              </span>
-              <select value={zKey} onChange={(e) => setZKey(e.target.value as DimKey)}>
-                {DIMS.map((d) => (
-                  <option key={d.key} value={d.key}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
-        </div>
-      )}
-
-      <Reveal className="map-stats">
-        <span>
-          <strong>{points.length}</strong> buyers
-        </span>
-        <span>
-          <strong>{withOrders}</strong> with orders
-        </span>
-        {mode === 'sim' ? (
-          <span className="map-axes-hint">
-            <strong>{simMeta ? `${simMeta.embedded} of ${simMeta.total}` : '…'}</strong> embedded
-            {simMeta && simMeta.embedded < simMeta.total && ' · rerun to finish'}
-          </span>
-        ) : (
-          <span className="map-axes-hint">
-            X: {xDim.label} · Y: {yDim.label}
-            {mode === '3d' && <> · Z: {zDim.label}</>}
-          </span>
-        )}
-      </Reveal>
-
-      {loading ? (
-        <EmptyState icon="hourglass-outline" title="Loading buyers…" />
-      ) : points.length === 0 ? (
-        <EmptyState icon="person-outline" title="No buyers yet" detail="Log some orders first — buyers appear here automatically." />
-      ) : (
-        <Reveal className="map-card spotlight">
-          <div className="map-legend">
-            {(Object.keys(RISK) as (keyof typeof RISK)[]).map((k) => (
-              <span key={k} className="map-legend-item">
-                <span className="map-legend-dot" style={{ background: RISK[k].color }} />
-                {RISK[k].label}
-              </span>
-            ))}
-            <span className="map-legend-item map-legend-note">dot size = order volume</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <RiskLegend />
             {(mode === '3d' || mode === 'sim') && (
-              <span className="map-legend-item map-legend-actions">
-                <button
-                  className={`btn ghost small ${autoRotate ? 'active' : ''}`}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-11 px-3 md:h-9"
+                  aria-pressed={autoRotate}
                   onClick={() => setAutoRotate((a) => !a)}
                 >
-                  <Icon name="refresh-outline" size={13} /> auto-rotate
-                </button>
-                <button className="btn ghost small" onClick={() => setResetKey((k) => k + 1)}>
-                  <Icon name="compass-outline" size={13} /> reset view
-                </button>
+                  <RotateCcw className={cn('size-3.5', autoRotate && 'text-primary-text')} /> Auto-rotate
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-11 px-3 md:h-9"
+                  onClick={() => setResetKey((k) => k + 1)}
+                >
+                  Reset view
+                </Button>
                 {mode === 'sim' && (
-                  <button className="btn ghost small" onClick={() => { setSimPoints(null); void loadSim() }}>
-                    <Icon name="sync-outline" size={13} /> rebuild vectors
-                  </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-11 px-3 md:h-9"
+                    disabled={simLoading}
+                    onClick={() => {
+                      setSimPoints(null)
+                      void loadSim()
+                    }}
+                  >
+                    <Sparkles className="size-3.5" /> Rebuild vectors
+                  </Button>
                 )}
-              </span>
+              </div>
             )}
           </div>
+        </div>
 
+        <CardState
+          loading={loading}
+          error={loadError}
+          onRetry={() => void load()}
+          empty={!loading && !loadError && points.length === 0}
+          emptyText="No buyers to plot yet. Buyers appear here once their first order is logged."
+          skeletonHeight={420}
+        >
           {mode === 'sim' ? (
             simLoading ? (
-              <EmptyState
-                title="Computing AI vectors…"
-                detail="First run embeds every buyer with an AI fingerprint (~30s), then this is instant."
-              />
+              <div className="p-10 text-center text-[13.5px] text-muted-foreground">
+                Computing AI vectors… the first run embeds every buyer, then this is instant.
+              </div>
             ) : simPoints === null || simPoints.length === 0 ? (
-              <EmptyState
-                title="No vectors to show"
-                detail="Buyers could not be embedded. Try 'rebuild vectors' or check the edge function."
-              />
+              <div className="flex flex-col items-center gap-3 p-10 text-center">
+                <p className="text-[14px] font-semibold text-foreground">No vectors to show</p>
+                <p className="max-w-md text-[13.5px] text-muted-foreground">
+                  Buyers could not be embedded. Try “Rebuild vectors”, or check that the verafo-ai edge function is
+                  deployed.
+                </p>
+              </div>
             ) : (
-              <Suspense fallback={<div className="map3d-loading">Loading similarity cloud…</div>}>
+              <Suspense
+                fallback={<div className="p-10 text-center text-[13.5px] text-muted-foreground">Loading similarity cloud…</div>}
+              >
                 <Map3D
                   points={simPoints}
                   xLabel="Similarity"
@@ -473,7 +648,7 @@ export function BuyerMap() {
               </Suspense>
             )
           ) : mode === '2d' ? (
-            <div className="map-chart">
+            <div className="p-3">
               <ResponsiveContainer width="100%" height={480}>
                 <ScatterChart margin={{ top: 12, right: 18, left: 6, bottom: 8 }}>
                   <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" />
@@ -496,33 +671,27 @@ export function BuyerMap() {
                     tickFormatter={(v) => fmtTick(yDim.format, Number(v))}
                     label={{ value: yDim.label, angle: -90, position: 'insideLeft', ...AXIS_LABEL }}
                   />
-                  <Tooltip
-                    content={<MapTooltip />}
-                    cursor={{ stroke: CURSOR_STROKE, strokeDasharray: '4 4' }}
-                  />
+                  <Tooltip content={<MapTooltip />} cursor={{ stroke: CURSOR_STROKE, strokeDasharray: '4 4' }} />
                   <Scatter
                     data={points}
                     onClick={(data) => {
                       const raw = data as unknown as { payload?: { phone?: string } } | { phone?: string }
                       const phone =
-                        'payload' in raw ? (raw as { payload?: { phone?: string } }).payload?.phone : (raw as { phone?: string }).phone
+                        'payload' in raw
+                          ? (raw as { payload?: { phone?: string } }).payload?.phone
+                          : (raw as { phone?: string }).phone
                       if (phone) navigate(`/lookup?phone=${encodeURIComponent(phone)}`)
                     }}
                   >
                     {points.map((p, i) => (
-                      <Cell
-                        key={i}
-                        fill={RISK[p.bucket].color}
-                        fillOpacity={0.75}
-                        style={{ cursor: 'pointer' }}
-                      />
+                      <Cell key={i} fill={RISK[p.bucket].color} fillOpacity={0.75} style={{ cursor: 'pointer' }} />
                     ))}
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <Suspense fallback={<div className="map3d-loading">Loading 3D view…</div>}>
+            <Suspense fallback={<div className="p-10 text-center text-[13.5px] text-muted-foreground">Loading 3D view…</div>}>
               <Map3D
                 points={points3d}
                 xLabel={xDim.label}
@@ -533,16 +702,111 @@ export function BuyerMap() {
               />
             </Suspense>
           )}
+        </CardState>
 
-          <div className="map-foot">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3">
+          <p className="text-[12.5px] text-muted-foreground">
+            {points.length.toLocaleString('en-PK')} buyers · {withOrders.toLocaleString('en-PK')} with orders
+            {mode === 'sim'
+              ? simMeta
+                ? ` · ${simMeta.embedded} of ${simMeta.total} embedded`
+                : ''
+              : ` · X: ${xDim.label} · Y: ${yDim.label}${mode === '3d' ? ` · Z: ${zDim.label}` : ''}`}
+          </p>
+          <p className="text-[12.5px] text-muted-foreground">
             {mode === '2d'
-              ? 'Click any dot to open the buyer\u2019s full profile.'
-              : mode === 'sim'
-                ? 'AI similarity cloud. Drag to rotate, scroll to zoom. Closer dots = more similar buyers.'
-                : 'Drag to rotate, scroll to zoom. Hover a dot for details, click\u2026'}
-          </div>
+              ? 'Click any dot to open the buyer’s full profile.'
+              : 'Drag to rotate, scroll to zoom.'}
+          </p>
+        </div>
+      </Card>
+
+      {/* ── Refusal insights ── */}
+      <section aria-label="Refusal insights" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-[17px] font-semibold text-foreground">Where returns come from</h2>
+          <p className="text-[12px] text-muted-foreground">
+            From your latest {scored.length.toLocaleString('en-PK')} orders. A rate is published only from{' '}
+            {MIN_SAMPLE} or more resolved orders.
+          </p>
+        </div>
+
+        <StatStrip items={rtoStats} loading={loading} />
+
+        {trendSentence && (
+          <Card className="gap-0 p-5">
+            <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+              Refusal rate, last 30 days
+            </p>
+            <p className="mt-2 font-mono text-[26px] leading-none font-semibold tabular-nums text-foreground">
+              {formatRate(trend?.current.rate ?? null)}
+            </p>
+            <p className="mt-1.5 text-[12.5px] text-muted-foreground">
+              {trend ? `${trend.current.resolved} resolved · ${trend.current.unknown} still unknown` : ''}
+            </p>
+            <p className="mt-3 text-[13.5px] text-foreground">{trendSentence}</p>
+          </Card>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="gap-0">
+            <CardHeader>
+              <CardTitle>Cities that refuse most</CardTitle>
+              <CardDescription>Ranked by refusal rate, worst first.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CardState
+                loading={loading}
+                error={loadError}
+                onRetry={() => void load()}
+                empty={cities.length === 0}
+                emptyText={`No city has ${MIN_SAMPLE} resolved orders yet, so no rate is published.`}
+                skeletonHeight={220}
+              >
+                <ul className="m-0 list-none divide-y divide-border p-0">
+                  {cities.map((c) => (
+                    <RateRow key={c.name} g={c} what="city" />
+                  ))}
+                </ul>
+              </CardState>
+            </CardContent>
+          </Card>
+
+          <Card className="gap-0">
+            <CardHeader>
+              <CardTitle>Products that refuse most</CardTitle>
+              <CardDescription>Ranked by refusal rate, worst first.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CardState
+                loading={loading}
+                error={loadError}
+                onRetry={() => void load()}
+                empty={products.length === 0}
+                emptyText={`No product has ${MIN_SAMPLE} resolved orders yet, so no rate is published.`}
+                skeletonHeight={220}
+              >
+                <ul className="m-0 list-none divide-y divide-border p-0">
+                  {products.map((p) => (
+                    <RateRow key={p.name} g={p} what="product" />
+                  ))}
+                </ul>
+              </CardState>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Reveal className="flex flex-wrap items-center gap-3">
+          <Button asChild variant="outline" className="h-11">
+            <Link to="/orders">
+              Review every order <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+          <p className="text-[12.5px] text-muted-foreground">
+            Refusal rates describe what already happened. Verafo does not predict what a buyer will do.
+          </p>
         </Reveal>
-      )}
-    </div>
+      </section>
+    </PageShell>
   )
 }

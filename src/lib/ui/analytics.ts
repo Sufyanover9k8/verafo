@@ -140,7 +140,7 @@ export function productRefusalRates(orders: ScoredOrder[], limit = 8): NamedRate
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-export interface DayRate extends NamedRate {}
+export type DayRate = NamedRate
 
 /** Weekdays ranked by refusal rate. Needs a real date on the order. */
 export function weekdayRefusalRates(orders: ScoredOrder[], limit = 7): DayRate[] {

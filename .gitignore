@@ -9,3 +9,6 @@ dist
 dev-*.log
 dev-*.txt
 supabase/.temp/
+
+# Local QA artefacts (browser screenshots and probes). Never shipped.
+_qa/

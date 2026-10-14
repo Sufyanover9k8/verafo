@@ -72,7 +72,7 @@ export default function Map3D({ points, xLabel, yLabel, zLabel, autoRotate, rese
   const axisKeys = dark ? AXIS_KEYS_DARK : AXIS_KEYS_LIGHT
 
   return (
-    <div className="map3d-wrap">
+    <div className="relative h-[420px] w-full sm:h-[500px]">
       <Canvas
         key={resetKey}
         camera={{ position: [2.5, 1.8, 2.9], fov: 45 }}
@@ -98,14 +98,18 @@ export default function Map3D({ points, xLabel, yLabel, zLabel, autoRotate, rese
             <group key={a.letter}>
               <Line points={[[0, 0, 0], a.end]} color={a.color} lineWidth={1.4} />
               <Html position={a.labelPos} center>
-                <span className="map3d-axis">{a.letter}</span>
+                <span className="font-mono text-[11px] font-semibold" style={{ color: a.color }}>
+                  {a.letter}
+                </span>
               </Html>
             </group>
           ))}
 
         {axes && (
           <Html position={[0.62, 1.06, 0.62]} center>
-            <span className="map3d-axes">{xLabel} · {yLabel} · {zLabel}</span>
+            <span className="rounded-full border border-border bg-card/90 px-2 py-0.5 text-[11px] whitespace-nowrap text-muted-foreground">
+              {xLabel} · {yLabel} · {zLabel}
+            </span>
           </Html>
         )}
 
@@ -126,16 +130,22 @@ export default function Map3D({ points, xLabel, yLabel, zLabel, autoRotate, rese
       </Canvas>
 
       {hover && (
-        <div className="map-tip map3d-tip">
-          <div className="map-tip-phone">{hover.phone}</div>
-          <div className="map-tip-row">
-            <span className="map-tip-dot" style={{ background: RISK[riskLevel(hover.risk)].color }} />
+        <div className="pointer-events-none absolute start-3 top-3 rounded-[10px] border border-border bg-popover/95 px-3 py-2 shadow-2">
+          <div className="font-mono text-[12.5px] font-medium text-foreground">{hover.phone}</div>
+          <div className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <span
+              className="size-2 rounded-full"
+              style={{ background: RISK[riskLevel(hover.risk)].color }}
+              aria-hidden="true"
+            />
             {RISK[riskLevel(hover.risk)].label} · risk {formatScore(hover.risk)}
           </div>
-          <div className="map-tip-row">
+          <div className="text-[12px] text-muted-foreground">
             {hover.orders} order{hover.orders === 1 ? '' : 's'} · {hover.refused} refused
           </div>
-          <div className="map-tip-row">Spend {money(hover.spend)} · avg {money(hover.avgOrderValue)}</div>
+          <div className="text-[12px] text-muted-foreground">
+            Spend {money(hover.spend)} · avg {money(hover.avgOrderValue)}
+          </div>
         </div>
       )}
     </div>

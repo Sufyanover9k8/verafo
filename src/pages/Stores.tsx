@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Icon } from '../components/Icon'
+import { ArrowRight, Clock, Loader2, Mail, Phone, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { CountUpNumber } from '../components/CountUpNumber'
@@ -22,6 +32,7 @@ export function Stores() {
   const [stores, setStores] = useState<StoreOverview[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<StoreOverview | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -60,15 +71,13 @@ export function Stores() {
 
   async function handleDelete(store: StoreOverview) {
     if (!supabase) return
-    if (!window.confirm(`Delete "${store.name}" from the network? Linked orders will be kept but detached.`)) {
-      return
-    }
     setDeletingId(store.id)
     const detach = await supabase.from('orders').update({ store_id: null }).eq('store_id', store.id)
     if (!detach.error) {
       await supabase.from('stores').delete().eq('id', store.id)
     }
     setDeletingId(null)
+    setPendingDelete(null)
     if (detach.error) {
       toast.push({ kind: 'error', title: 'Could not delete store', detail: detach.error.message })
       return
@@ -96,63 +105,76 @@ export function Stores() {
         title="Stores"
         description="Manage connected ecommerce brands."
         actions={
-          <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/stores/add">
-            <Icon name="add" size={15} /> Add store
-          </Link>
+          <Button asChild className="h-11 gap-2 rounded-full px-5">
+            <Link to="/stores/add">
+              <Plus className="size-4" /> Add store
+            </Link>
+          </Button>
         }
       />
 
       {checking ? (
-        <Card className="gap-0 p-6">
-          <Skeleton height={16} />
-          <Skeleton height={16} />
+        <Card className="gap-3 p-6" aria-busy="true">
+          <Skeleton height={16} width="40%" />
+          <Skeleton height={16} width="65%" />
         </Card>
       ) : !admin ? (
         <Card className="gap-0 p-6">
-          <EmptyState icon="shield-checkmark"
+          <EmptyState
+            icon="shield-checkmark"
             title="Restricted to admins"
             detail="Only administrators can view and manage stores. Head back to the dashboard to continue."
+            action={
+              <Button asChild className="h-11 gap-2 rounded-full px-5">
+                <Link to="/">
+                  <ArrowRight className="size-4" /> Back to dashboard
+                </Link>
+              </Button>
+            }
           />
-          <div className="store-restricted-cta">
-            <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/">
-              <Icon name="arrow-forward" size={14} /> Back to dashboard
-            </Link>
-          </div>
         </Card>
       ) : (
-        <section className="chart-section">
-          <div className="verdict-panel-head">
-            <h3 className="card-title">All stores</h3>
-            <span className="verdict-conf">
-              {stores.length} {stores.length === 1 ? 'brand' : 'brands'} · search by name
-            </span>
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-[17px] font-semibold text-foreground">All stores</h2>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                {stores.length} {stores.length === 1 ? 'brand' : 'brands'} in the network
+              </p>
+            </div>
+            <div className="relative w-full sm:w-80">
+              <Search
+                className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, domain or category"
+                aria-label="Search stores"
+                className="h-11 ps-8 md:h-10"
+              />
+            </div>
           </div>
-          <div className="store-search">
-            <Icon name="search" size={16} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search stores by name, domain or category…"
-              aria-label="Search stores"
-            />
-          </div>
+
           <Card className="gap-0 overflow-hidden p-0">
             {loading ? (
-              <div className="store-list">
+              <div className="flex flex-col divide-y divide-border">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div className="store-row" key={i}>
-                    <span className="store-row-avatar-skeleton">
-                      <Skeleton width={38} height={38} />
-                    </span>
-                    <div className="store-row-main">
+                  <div key={i} className="flex items-center gap-4 p-5">
+                    <Skeleton width={38} height={38} className="rounded-full" />
+                    <div className="flex-1">
                       <Skeleton width="60%" height={14} />
-                      <Skeleton width="40%" height={12} />
+                      <div className="mt-2">
+                        <Skeleton width="40%" height={12} />
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <EmptyState icon="storefront"
+              <EmptyState
+                icon="storefront"
                 title={stores.length === 0 ? 'No stores yet' : 'No matches'}
                 detail={
                   stores.length === 0
@@ -161,66 +183,124 @@ export function Stores() {
                 }
               />
             ) : (
-              <Reveal stagger className="store-list">
+              <Reveal stagger className="flex flex-col divide-y divide-border">
                 {filtered.map((s) => (
-                  <div
-                    className="store-row"
-                    key={s.id}
-                  >
-                    <Avatar name={s.name} size={38} className="store-row-avatar" />
-                    <div className="store-row-main">
-                      <div className="store-row-name">
-                        {s.name}
-                        {s.category && <span className="chip chip-cyan">{s.category}</span>}
-                        {s.shopify_domain && <span className="chip">{s.shopify_domain}</span>}
+                  <div key={s.id} className="flex flex-wrap items-center gap-4 p-5">
+                    <Avatar name={s.name} size={38} />
+                    <div className="min-w-[12rem] flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[14.5px] font-semibold text-foreground">{s.name}</span>
+                        {s.category && (
+                          <span className="rounded-full border border-risk-unknown/40 bg-risk-unknown-soft px-2 py-0.5 text-[11.5px] font-medium text-risk-unknown-strong">
+                            {s.category}
+                          </span>
+                        )}
+                        {s.shopify_domain && (
+                          <span className="rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[11.5px] text-muted-foreground">
+                            {s.shopify_domain}
+                          </span>
+                        )}
                       </div>
-                      <div className="store-row-meta">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
                         {s.owner_email && (
-                          <span>
-                            <Icon name="person" size={13} /> {s.owner_email}
+                          <span className="inline-flex items-center gap-1.5">
+                            <Mail className="size-3.5" aria-hidden="true" /> {s.owner_email}
                           </span>
                         )}
                         {s.contact_phone && (
-                          <span>
-                            <Icon name="phone-portrait" size={13} /> {phone(s.contact_phone)}
+                          <span className="inline-flex items-center gap-1.5 font-mono">
+                            <Phone className="size-3.5" aria-hidden="true" /> {phone(s.contact_phone)}
                           </span>
                         )}
-                        <span>
-                          <Icon name="time" size={13} /> added {dateOnly(s.created_at)}
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="size-3.5" aria-hidden="true" /> added {dateOnly(s.created_at)}
                         </span>
                       </div>
                     </div>
-                    <div className="store-row-stats">
-                      <span>
-                        <CountUpNumber value={s.orders} /> orders
-                      </span>
-                      <span>
-                        <CountUpNumber prefix="PKR " value={s.revenue} /> sales
-                      </span>
-                      <span>
-                        <CountUpNumber value={s.buyers} /> buyers
-                      </span>
-                    </div>
-                    <div className="store-row-actions">
-                      <Link className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" to={`/stores/${s.id}`}>
-                        <Icon name="arrow-forward" size={13} /> View
-                      </Link>
-                      <button
-                        className="icon-btn danger"
-                        title="Delete store"
+
+                    <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-muted-foreground">
+                      <div>
+                        <dd className="font-mono text-[14px] font-semibold tabular-nums text-foreground">
+                          <CountUpNumber value={s.orders} />
+                        </dd>
+                        <dt>orders</dt>
+                      </div>
+                      <div>
+                        <dd className="font-mono text-[14px] font-semibold tabular-nums text-foreground">
+                          <CountUpNumber prefix="PKR " value={s.revenue} />
+                        </dd>
+                        <dt>sales</dt>
+                      </div>
+                      <div>
+                        <dd className="font-mono text-[14px] font-semibold tabular-nums text-foreground">
+                          <CountUpNumber value={s.buyers} />
+                        </dd>
+                        <dt>buyers</dt>
+                      </div>
+                    </dl>
+
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="outline" size="sm" className="h-11 gap-1.5 px-3 md:h-9">
+                        <Link to={`/stores/${s.id}`}>
+                          <ArrowRight className="size-3.5" /> View
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-11 text-muted-foreground hover:bg-risk-high-soft hover:text-risk-high-strong md:size-9"
+                        title={`Delete ${s.name}`}
+                        aria-label={`Delete ${s.name}`}
                         disabled={deletingId === s.id}
-                        onClick={() => void handleDelete(s)}
+                        onClick={() => setPendingDelete(s)}
                       >
-                        <Icon name="trash" size={15} />
-                      </button>
+                        {deletingId === s.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-4" />
+                        )}
+                      </Button>
                     </div>
                   </div>
                 ))}
               </Reveal>
             )}
           </Card>
-        </section>
+        </>
       )}
+
+      {/* Deleting a store detaches its orders, so it is spelled out and confirmed. */}
+      <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete “{pendingDelete?.name}”?</DialogTitle>
+            <DialogDescription>
+              The store is removed from the network. Orders that belong to it are kept but detached, so they will no
+              longer appear under any store. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-2.5 rounded-[10px] border border-risk-high/40 bg-risk-high-soft p-3 text-[12.5px] text-risk-high-strong">
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>
+              {pendingDelete?.orders ?? 0} order{pendingDelete?.orders === 1 ? '' : 's'} will be detached from this
+              store.
+            </span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="h-11"
+              disabled={deletingId !== null}
+              onClick={() => pendingDelete && void handleDelete(pendingDelete)}
+            >
+              {deletingId ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Delete store
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   )
 }

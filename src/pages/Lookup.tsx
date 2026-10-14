@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Icon } from '../components/Icon'
+import { Fingerprint, Loader2, ScanSearch, Sparkles, Trash2 } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { VerdictBadge } from '../components/app/verdict-badge'
 import { StatusBadge } from '../components/app/status-badge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Avatar } from '../components/Avatar'
@@ -56,10 +57,7 @@ const VERDICT_DOT: Record<VerdictTone, string> = {
 }
 
 const inputClass =
-  'h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[16px] text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-10 md:text-[15px]'
-
-const buttonClass =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+  'h-11 w-full rounded-[10px] border border-input bg-card px-3 font-mono text-[16px] text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:text-[15px]'
 
 export function Lookup() {
   const toast = useToast()
@@ -279,45 +277,69 @@ export function Lookup() {
         description="Type any phone number to see its full cross-store profile and risk score."
       />
 
-      {/* One clear search box. */}
-      <form className="rounded-[16px] border border-border bg-card p-6" onSubmit={handleSearch}>
-        <label className="flex flex-col gap-2">
-          <span className="text-[15px] font-semibold text-foreground">Enter a buyer&rsquo;s phone number</span>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              className={inputClass}
-              type="tel"
-              inputMode="tel"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="0301 234 5678"
-              aria-label="Buyer phone number"
-            />
-            <button type="submit" className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
-              <Icon name="arrow-forward" size={16} /> Look up
-            </button>
+      {/* One clear search box, first on the page. */}
+      <Card className="gap-0 p-6">
+        <form onSubmit={handleSearch}>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="buyer-phone" className="text-[15px] font-semibold text-foreground">
+              Enter a buyer&rsquo;s phone number
+            </label>
+            <p className="text-[13px] text-muted-foreground" id="buyer-phone-help">
+              Any Pakistani mobile number, with or without the country code. The result is a network-wide
+              aggregate — totals, stores, timeline and risk score.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                id="buyer-phone"
+                className={inputClass}
+                type="tel"
+                inputMode="tel"
+                autoComplete="off"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="0301 234 5678"
+                aria-describedby="buyer-phone-help"
+              />
+              <Button type="submit" className="h-11 shrink-0 gap-2 rounded-full px-5" disabled={state.kind === 'loading'}>
+                {state.kind === 'loading' ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ScanSearch className="size-4" />
+                )}
+                Look up
+              </Button>
+            </div>
+            <p className="text-[12.5px] text-muted-foreground">
+              Enter at least 6 digits. Verafo never shows another buyer&rsquo;s phone number.
+            </p>
           </div>
-          <span className="text-[13px] text-muted-foreground">
-            Search the network-wide profile: totals, stores, timeline and risk score.
-          </span>
-        </label>
-      </form>
+        </form>
+      </Card>
 
       {/* Before the first search. */}
       {state.kind === 'idle' && recents.length > 0 && (
         <Card className="gap-0 p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-[15px] font-semibold text-foreground">Recent lookups</h3>
-            <button type="button" className={buttonClass} onClick={() => void clearAll()}>
-              <Icon name="trash" size={15} /> Clear
-            </button>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-foreground">Recent lookups</h2>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">Only you can see this list.</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-11 gap-1.5 px-3 md:h-9"
+              onClick={() => void clearAll()}
+            >
+              <Trash2 className="size-3.5" /> Clear
+            </Button>
           </div>
           <Reveal stagger className="flex flex-col gap-1">
             {recents.map((r) => (
               <button
                 key={r.id}
                 type="button"
-                className="flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-2.5 text-start transition-colors hover:bg-muted"
+                className="flex min-h-11 flex-wrap items-center gap-3 rounded-[10px] px-2 py-2.5 text-start transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)]"
                 onClick={() => openRecent(r.buyer_phone)}
               >
                 <Avatar phone={r.buyer_phone} size={26} />
@@ -341,7 +363,7 @@ export function Lookup() {
       )}
 
       {state.kind === 'loading' && (
-        <Card className="gap-3 p-6">
+        <Card className="gap-3 p-6" aria-busy="true">
           <Skeleton width="40%" height={18} />
           <Skeleton width="65%" height={12} />
           <Skeleton width="50%" height={12} />
@@ -356,9 +378,17 @@ export function Lookup() {
             <p className="max-w-md text-[15px] text-muted-foreground">
               {phone(searched)} has no profile yet. Their first order creates one.
             </p>
-            <button type="button" className={buttonClass} onClick={() => setState({ kind: 'idle' })}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 px-4"
+              onClick={() => {
+                setState({ kind: 'idle' })
+                setInput('')
+              }}
+            >
               Try another number
-            </button>
+            </Button>
           </div>
         </Card>
       )}
@@ -368,6 +398,9 @@ export function Lookup() {
           <div className="flex flex-col gap-6 lg:col-span-7">
             {/* Verdict first. */}
             <Card className="gap-4 p-6">
+              <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+                Network profile
+              </p>
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`size-3 rounded-full ${VERDICT_DOT[verdict.tone]}`} aria-hidden="true" />
                 <h2 className={`text-3xl font-bold tracking-tight ${VERDICT_TEXT[verdict.tone]}`}>{verdict.label}</h2>
@@ -449,34 +482,50 @@ export function Lookup() {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-[15px] font-semibold text-foreground">AI assist</h3>
                 {buyer.embedding ? (
-                  <span className="rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-1 text-[13px] font-medium text-risk-safe-strong">
-                    fingerprint embedded
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-1 text-[12.5px] font-medium text-risk-safe-strong">
+                    <Fingerprint className="size-3.5" /> fingerprint embedded
                   </span>
                 ) : (
-                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[13px] font-medium text-muted-foreground">
+                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[12.5px] font-medium text-muted-foreground">
                     no fingerprint yet
                   </span>
                 )}
               </div>
-              {explanation && <p className="mb-3 text-[15px] text-muted-foreground">{explanation}</p>}
+              <p className="mb-3 text-[13px] text-muted-foreground">
+                These actions call the verafo-ai edge function. They explain or re-embed the buyer — they never
+                change the score themselves.
+              </p>
+              {explanation && (
+                <p className="mb-3 rounded-[10px] border border-border bg-muted/50 px-3 py-2.5 text-[14px] text-foreground">
+                  {explanation}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
-                <button type="button" className={buttonClass} disabled={!aiEnabled || explaining} onClick={() => void explain(buyer)}>
-                  {explaining ? <Icon name="refresh" size={15} className="spin" /> : <Icon name="sparkles" size={15} />}
-                  Explain this buyer
-                </button>
-                <button
+                <Button
                   type="button"
-                  className={buttonClass}
+                  variant="outline"
+                  className="h-11 gap-1.5 px-4 md:h-9"
+                  disabled={!aiEnabled || explaining}
+                  onClick={() => void explain(buyer)}
+                >
+                  {explaining ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  Explain this buyer
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 gap-1.5 px-4 md:h-9"
                   disabled={!aiEnabled || embeddingBusy}
                   onClick={() => void refreshEmbedding(buyer)}
                 >
-                  {embeddingBusy ? <Icon name="refresh" size={15} className="spin" /> : <Icon name="fingerprint" size={15} />}
+                  {embeddingBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Fingerprint className="size-3.5" />}
                   Refresh fingerprint
-                </button>
+                </Button>
               </div>
               {!aiEnabled && (
                 <p className="mt-3 text-[13px] text-muted-foreground">
-                  Deploy the <code>verafo-ai</code> edge function to enable AI explanations and embeddings.
+                  Deploy the <code className="font-mono text-[12.5px]">verafo-ai</code> edge function to enable AI
+                  explanations and embeddings.
                 </p>
               )}
             </Card>
@@ -495,7 +544,11 @@ export function Lookup() {
                 <EmptyState
                   icon="package"
                   title="No orders yet"
-                  detail="This buyer has never placed an order in the network."
+                  detail={
+                    store
+                      ? `${store.name} has no order for this buyer. Their network totals above may come from other stores.`
+                      : 'This buyer has never placed an order in the network.'
+                  }
                 />
               ) : (
                 <ul className="flex flex-col divide-y divide-border">

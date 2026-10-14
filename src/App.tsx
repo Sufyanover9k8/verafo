@@ -32,10 +32,10 @@ const AddStore = lazy(() => import('./pages/AddStore').then((m) => ({ default: m
 
 function RouteFallback() {
   return (
-    <div className="stack">
-      <div className="kpi-grid">
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div className="card" key={i}>
+          <div key={i} className="space-y-3 rounded-[16px] border border-border bg-card p-6">
             <Skeleton width="50%" height={12} />
             <Skeleton width="70%" height={22} />
             <Skeleton width="100%" height={28} />

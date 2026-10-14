@@ -1,7 +1,8 @@
-// Avatar colours are the website's chart family, used as a per-buyer identity
-// colour rather than a risk signal. They are written as tokens with the
-// website's own hex as the fallback, so they follow light/dark mode instead of
-// staying fixed. Each background is dark enough for white initials.
+import { cn } from '@/lib/utils'
+
+// Avatar colours are the brand's accent family, used as a per-buyer identity
+// colour rather than a risk signal. They are written as tokens so they follow
+// light/dark mode, and each stop is dark enough for white initials.
 const PALETTE: { from: string; to: string; text: string }[] = [
   { from: 'var(--teal-bright)', to: 'var(--teal-deep)', text: '#FFFFFF' }, // teal
   { from: 'var(--purple)', to: 'var(--v-unknown-strong)', text: '#FFFFFF' }, // purple
@@ -28,19 +29,25 @@ interface AvatarProps {
   className?: string
 }
 
+/**
+ * A buyer or store identity chip: initials (for a named store) or the last two
+ * digits of a phone number. Purely decorative — the label beside it always
+ * carries the real text, so it stays out of the accessibility tree.
+ */
 export function Avatar({ name, phone, size = 34, className }: AvatarProps) {
   const key = `${name ?? ''}|${phone ?? ''}`
   const { from, to, text } = PALETTE[hash(key) % PALETTE.length]
   const label = name?.trim() ? initials(name) : (phone?.replace(/\D/g, '').slice(-2) || '?')
   return (
     <span
-      className={`avatar${className ? ` ${className}` : ''}`}
+      className={cn('inline-grid shrink-0 place-items-center rounded-full font-semibold select-none', className)}
       style={{
         width: size,
         height: size,
         background: `linear-gradient(135deg, ${from}, ${to})`,
         color: text,
         fontSize: Math.round(size * 0.36),
+        lineHeight: 1,
       }}
       aria-hidden="true"
     >

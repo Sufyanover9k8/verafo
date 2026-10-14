@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Icon } from '../components/Icon'
+import { ArrowRight, BadgeCheck, CheckCheck, ClipboardList, Loader2, MapPin } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
+import { PageShell } from '../components/app/page-shell'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { VerdictBlock } from '../components/verdict/VerdictBlock'
 import { VerdictInline } from '../components/verdict/VerdictInline'
 import { EmptyState, NeedsSetup } from '../components/States'
@@ -29,6 +32,32 @@ type PreviewState =
   | { kind: 'loading' }
   | { kind: 'unknown' }
   | { kind: 'buyer'; buyer: Buyer; storeCount: number }
+
+/** One styled control, shared by every input and select on this form. */
+const CONTROL =
+  'h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[16px] text-foreground placeholder:text-muted-foreground transition-colors focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-10 md:text-[15px]'
+
+/** A labelled field. The label is tied to the control by id. */
+function Field({
+  id,
+  label,
+  className,
+  children,
+}: {
+  id: string
+  label: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div className={`flex flex-col gap-1.5 ${className ?? ''}`}>
+      <label htmlFor={id} className="text-[13px] font-medium text-muted-foreground">
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
 
 export function NewOrder() {
   const toast = useToast()
@@ -198,176 +227,183 @@ export function NewOrder() {
     preview.kind === 'buyer' ? { risk_score: preview.buyer.risk_score, total_orders: preview.buyer.total_orders } : null
 
   return (
-    <div className="stack">
+    <PageShell>
       <PageHeader
         title="New Order"
         description="Log an order and see the buyer's risk profile instantly — across every connected store."
       />
 
-      <Reveal stagger className="order-layout">
-        <form className="card form-card" onSubmit={handleSubmit}>
-          <div className="phone-field-row">
-            <label className="field">
-              <span className="field-label">
-                <Icon name="phone-portrait" size={15} /> Phone number
-              </span>
-              <input
-                type="tel"
-                inputMode="tel"
-                className="mono"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-                placeholder="0301 234 5678"
-                autoFocus
-                required
+      <Reveal stagger className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <Card className="gap-5 p-6">
+          <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+            {/* The phone field and its live verdict share one row. */}
+            <div className="flex flex-wrap items-end gap-3">
+              <Field id="order-phone" label="Phone number" className="min-w-[14rem] flex-1">
+                <input
+                  id="order-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  className={`${CONTROL} font-mono`}
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  placeholder="0301 234 5678"
+                  autoFocus
+                  required
+                />
+              </Field>
+              <VerdictInline
+                visible={normalizedPhone.length >= 7}
+                risk_score={liveInput?.risk_score ?? 0.5}
+                total_orders={liveInput?.total_orders ?? 0}
               />
-            </label>
-            <VerdictInline
-              visible={normalizedPhone.length >= 7}
-              risk_score={liveInput?.risk_score ?? 0.5}
-              total_orders={liveInput?.total_orders ?? 0}
-            />
-          </div>
+            </div>
 
-          <div className="form-grid">
-            <label className="field">
-              <span className="field-label">
-                <Icon name="storefront" size={15} /> Store
-              </span>
-              <select value={storeId} onChange={(e) => setStoreId(e.target.value)} required>
-                {stores.length === 0 && <option value="">No stores yet</option>}
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field id="order-store" label="Store">
+                <select
+                  id="order-store"
+                  className={CONTROL}
+                  value={storeId}
+                  onChange={(e) => setStoreId(e.target.value)}
+                  required
+                >
+                  {stores.length === 0 && <option value="">No stores yet</option>}
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-            <label className="field">
-              <span className="field-label">
-                <Icon name="pricetags" size={15} /> Category
-              </span>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <Field id="order-category" label="Category">
+                <select
+                  id="order-category"
+                  className={CONTROL}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-            <label className="field span-2">
-              <span className="field-label">
-                <Icon name="cube" size={15} /> Product
-              </span>
-              <input
-                type="text"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                placeholder="e.g. Vitamin C serum 30ml"
-              />
-            </label>
+              <Field id="order-product" label="Product" className="sm:col-span-2">
+                <input
+                  id="order-product"
+                  type="text"
+                  className={CONTROL}
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="e.g. Vitamin C serum 30ml"
+                />
+              </Field>
 
-            <label className="field">
-              <span className="field-label">
-                <Icon name="card" size={15} /> Price (PKR)
-              </span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="2499"
-                required
-              />
-            </label>
+              <Field id="order-price" label="Price (PKR)">
+                <input
+                  id="order-price"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  className={`${CONTROL} font-mono`}
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="2499"
+                  required
+                />
+              </Field>
 
-            <label className="field">
-              <span className="field-label">
-                <Icon name="layers" size={15} /> Quantity
-              </span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min="1"
-                step="1"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-              />
-            </label>
+              <Field id="order-quantity" label="Quantity">
+                <input
+                  id="order-quantity"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  className={`${CONTROL} font-mono`}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                />
+              </Field>
 
-            <label className="field span-2">
-              <span className="field-label">
-                <Icon name="location" size={15} /> Address
-              </span>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="House, street, area"
-              />
-            </label>
+              <Field id="order-address" label="Address" className="sm:col-span-2">
+                <input
+                  id="order-address"
+                  type="text"
+                  className={CONTROL}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="House, street, area"
+                />
+              </Field>
 
-            <label className="field span-2">
-              <span className="field-label">
-                <Icon name="business" size={15} /> City
-              </span>
-              <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lahore" />
-            </label>
-          </div>
+              <Field id="order-city" label="City" className="sm:col-span-2">
+                <input
+                  id="order-city"
+                  type="text"
+                  className={CONTROL}
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Lahore"
+                />
+              </Field>
+            </div>
 
-          <div className="form-actions">
-            <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
-              {submitting ? (
-                <>
-                  <Icon name="refresh" size={17} className="spin" /> Logging order…
-                </>
-              ) : (
-                <>
-                  <Icon name="checkmark-done" size={17} /> Log order
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+            <div className="border-t border-border pt-5">
+              <Button type="submit" className="h-11 w-full gap-2 px-5 sm:w-auto" disabled={submitting}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Logging order…
+                  </>
+                ) : (
+                  <>
+                    <CheckCheck className="size-4" /> Log order
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-        <aside className="card verdict-panel">
-          <div className="verdict-panel-head">
-            <span className="verdict-panel-title">Buyer insight</span>
-            <span className="verdict-live-tag">
-              <span className="conn-dot" /> live
+        <Card className="gap-4 self-start p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[15px] font-semibold text-foreground">Buyer insight</h2>
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-risk-safe" aria-hidden="true" /> live
             </span>
           </div>
 
           {preview.kind === 'idle' && (
             <EmptyState
+              icon="fingerprint"
               title="Type a phone number"
               detail="The risk verdict appears here as you type — before the order is even saved."
             />
           )}
 
           {preview.kind === 'loading' && (
-            <div className="preview-loading">
-              <Icon name="refresh" size={20} className="spin" /> Checking the network…
-            </div>
+            <p className="flex items-center gap-2 py-8 text-[13.5px] text-muted-foreground" role="status">
+              <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" /> Checking the network…
+            </p>
           )}
 
           {preview.kind === 'unknown' && (
-            <div className="stack">
+            <div className="flex flex-col gap-4">
               <VerdictBlock risk_score={0.5} total_orders={0} />
-              <p className="card-sub">
-                Unknown buyer — no history in the network yet. Starting at neutral{' '}
-                <strong>0.50</strong>.
+              <p className="text-[13.5px] text-muted-foreground">
+                Unknown buyer — no history in the network yet. Starting at neutral <strong className="font-semibold text-foreground">0.50</strong>.
               </p>
             </div>
           )}
 
           {preview.kind === 'buyer' && (
-            <div className="stack">
+            <div className="flex flex-col gap-4">
               <VerdictBlock
                 risk_score={preview.buyer.risk_score}
                 total_orders={preview.buyer.total_orders}
@@ -376,53 +412,66 @@ export function NewOrder() {
                 stores={preview.storeCount}
                 firstSeen={preview.buyer.first_seen}
               />
-              <div className="preview-stats">
-                <div>
-                  <strong>{preview.buyer.total_orders}</strong>
-                  <span>orders</span>
-                </div>
-                <div>
-                  <strong>{preview.buyer.total_accepted}</strong>
-                  <span>accepted</span>
-                </div>
-                <div>
-                  <strong>{preview.buyer.total_refused}</strong>
-                  <span>refused</span>
-                </div>
-                <div>
-                  <strong>{preview.storeCount}</strong>
-                  <span>stores</span>
-                </div>
-              </div>
-              <Link className="link" to={`/lookup?phone=${encodeURIComponent(preview.buyer.phone)}`}>
-                <Icon name="arrow-forward" size={14} /> Full profile
+              <dl className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'orders', value: preview.buyer.total_orders },
+                  { label: 'accepted', value: preview.buyer.total_accepted },
+                  { label: 'refused', value: preview.buyer.total_refused },
+                  { label: 'stores', value: preview.storeCount },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-[10px] border border-border bg-muted/40 px-2 py-2.5 text-center">
+                    <dd className="font-mono text-[17px] font-semibold tabular-nums text-foreground">{s.value}</dd>
+                    <dt className="mt-0.5 text-[11.5px] text-muted-foreground">{s.label}</dt>
+                  </div>
+                ))}
+              </dl>
+              <Link
+                to={`/lookup?phone=${encodeURIComponent(preview.buyer.phone)}`}
+                className="inline-flex h-11 items-center gap-1.5 text-[13px] font-semibold text-primary-text hover:underline md:h-9"
+              >
+                <ArrowRight className="size-3.5" /> Full profile
               </Link>
             </div>
           )}
-        </aside>
+        </Card>
       </Reveal>
 
       {lastOrder && (
         <Reveal>
-        <div className="card result-card">
-          <div className="result-row">
-            <span className="result-icon">
-              <Icon name="checkmark-circle" size={20} />
+          <div className="flex flex-wrap items-center gap-4 rounded-[16px] border border-risk-safe/40 bg-risk-safe-soft p-5">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-risk-safe-strong">
+              <BadgeCheck className="size-5" aria-hidden="true" />
             </span>
-            <div className="grow">
-              <strong>Order logged for {phone(lastOrder.buyer.phone)}</strong>
-              <p className="result-line">
-                Score updated to <strong>{lastOrder.buyer.risk_score.toFixed(2)}</strong> across{' '}
-                {lastOrder.storeCount} store{lastOrder.storeCount === 1 ? '' : 's'}.
+            <div className="min-w-0 flex-1">
+              <p className="text-[14.5px] font-semibold text-foreground">
+                Order logged for {phone(lastOrder.buyer.phone)}
+              </p>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                Score updated to{' '}
+                <strong className="font-semibold tabular-nums text-foreground">
+                  {lastOrder.buyer.risk_score.toFixed(2)}
+                </strong>{' '}
+                across {lastOrder.storeCount} store{lastOrder.storeCount === 1 ? '' : 's'}.
               </p>
             </div>
-            <Link className="btn btn-secondary" to="/orders/pending">
-              <Icon name="clipboard" size={15} /> Mark outcome
-            </Link>
+            <Button asChild variant="outline" className="h-11 gap-2 px-4 md:h-9">
+              <Link to="/orders/pending">
+                <ClipboardList className="size-4" /> Mark outcome
+              </Link>
+            </Button>
           </div>
-        </div>
         </Reveal>
       )}
-    </div>
+
+      {/* Two destinations this screen leads to, stated once at the bottom. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <MapPin className="size-3.5" aria-hidden="true" /> City and address feed the RTO insights.
+        </span>
+        <Link to="/import" className="font-medium text-primary-text hover:underline">
+          Import history instead
+        </Link>
+      </div>
+    </PageShell>
   )
 }

@@ -56,6 +56,12 @@ interface VerdictCardProps {
   score?: number | null
   /** One plain sentence under the word. */
   sentence: string
+  /**
+   * What the ring's number actually measures. Required whenever the score is
+   * shown, so a reader is never left guessing whether the figure is this order,
+   * a buyer, or the whole book.
+   */
+  ringCaption?: string
   /** The reasons the app already returns. Bars are drawn from these. */
   signals?: VerdictSignal[]
   /** Small honest line about where the numbers came from. */
@@ -78,6 +84,7 @@ export function VerdictCard({
   tone,
   score,
   sentence,
+  ringCaption = 'risk score',
   signals,
   footnote,
   children,
@@ -116,9 +123,15 @@ export function VerdictCard({
           </div>
 
           {scored ? (
-            <RiskRing score={Number(score)} toneClass={t.ring} caption="risk score" />
+            /* Sized down from the numeral scale so the ring and its tick labels
+               sit clear of the card edge, and dropped on the narrowest screens
+               where the headline and sentence need the full width. The same
+               figure is in the sentence for screen readers either way. */
+            <div className="shrink-0 max-sm:hidden">
+              <RiskRing score={Number(score)} size={112} toneClass={t.ring} caption={ringCaption} />
+            </div>
           ) : (
-            <div className="flex h-[132px] w-[132px] shrink-0 items-center justify-center rounded-full border border-dashed border-border px-4 text-center">
+            <div className="flex h-[112px] w-[112px] shrink-0 items-center justify-center rounded-full border border-dashed border-border px-4 text-center max-sm:hidden">
               <span className="text-[13px] text-muted-foreground">No score yet</span>
             </div>
           )}
