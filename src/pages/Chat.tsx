@@ -905,7 +905,10 @@ export function Chat() {
         }
       />
 
-      <div className="grid min-h-[calc(100dvh-var(--v-topbar-h)-11rem)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      {/* Sized to fill what is left of the viewport after the top bar, the
+          page padding and the page header, so the message list scrolls inside
+          this box instead of moving the whole page. */}
+      <div className="grid min-h-[calc(100dvh-var(--v-topbar-h)-8rem)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
         {/* ── Conversation rail: a column on desktop, a drawer on phones ── */}
         <aside
           className={cn(

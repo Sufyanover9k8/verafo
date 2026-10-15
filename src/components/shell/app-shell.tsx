@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
 import { LayoutTickContext } from '@/lib/motion'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
@@ -16,12 +15,15 @@ function readCollapsed(): boolean {
 }
 
 /**
- * The signed-in frame: navy sidebar, sticky top bar, content area.
- * Pages render as children. The `main` / `chat-main` classes are the legacy
- * content-padding rules that not-yet-ported pages still rely on.
+ * The signed-in frame: sidebar, sticky top bar, content area.
+ *
+ * The content padding lives here as utilities rather than on a `.main` class.
+ * That class outlived its stylesheet: once the legacy CSS was retired it
+ * matched no rule at all, which left the page heading flush against the sidebar
+ * with nothing between them. `px` matches the header's `md:px-6` so the two
+ * left edges line up, and the scale tightens on small screens.
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const { pathname } = useLocation()
   const [open, setOpen] = useState(() => !readCollapsed())
   // Charts re-measure themselves when this changes (the content width moves).
   const [layoutTick, setLayoutTick] = useState(0)
@@ -51,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AppSidebar />
         <SidebarInset className="min-w-0 overflow-x-hidden bg-background">
           <SiteHeader />
-          <main className={`main${pathname === '/chat' ? ' chat-main' : ''}`}>{children}</main>
+          <main className="min-w-0 px-4 pt-5 pb-16 sm:px-6 sm:pt-6 lg:px-8">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </LayoutTickContext.Provider>
