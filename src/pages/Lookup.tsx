@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Fingerprint, Loader2, ScanSearch, Sparkles, Trash2 } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Fingerprint, Loader2, Lock, MessageSquare, ScanSearch, Sparkles, Trash2, Users } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { VerdictBadge } from '../components/app/verdict-badge'
@@ -11,8 +11,9 @@ import { Skeleton } from '../components/primitives/Skeleton'
 import { Avatar } from '../components/Avatar'
 import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
+import { cn } from '@/lib/utils'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
-import { computeVerdict, riskFactors, type VerdictTone } from '../lib/risk'
+import { computeVerdict, riskFactors, toneFromScore, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
@@ -58,6 +59,31 @@ const VERDICT_DOT: Record<VerdictTone, string> = {
 
 const inputClass =
   'h-11 w-full rounded-[10px] border border-input bg-card px-3 font-mono text-[16px] text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:text-[15px]'
+
+/**
+ * The similarity score comes back as a distance, so it is shown inverted as a
+ * percentage. Clamped and defaulted, because a missing or out-of-range value
+ * must never render as `NaN%`.
+ */
+function alikePercent(s: SimilarBuyer): number {
+  return Math.round((1 - Math.min(1, Math.max(0, Number(s.similarity) || 0))) * 100)
+}
+
+/** Risk-band fills for the similar-buyers mix. One place, so the bar and its
+ *  legend can never disagree. */
+const SIMILAR_TONE: Record<'safe' | 'watch' | 'high' | 'unknown', { bar: string }> = {
+  safe: { bar: 'bg-risk-safe' },
+  watch: { bar: 'bg-risk-watch' },
+  high: { bar: 'bg-risk-high' },
+  unknown: { bar: 'bg-risk-unknown' },
+}
+
+/** Prompts worth one tap, each finished with the buyer's number by the caller. */
+const BUYER_PROMPTS = [
+  'Why does this buyer score the way they do?',
+  'Should I ship their next order?',
+  'What does their order history look like?',
+]
 
 export function Lookup() {
   const toast = useToast()
@@ -270,6 +296,20 @@ export function Lookup() {
       })
     : null
 
+  /** How this buyer's lookalikes split across the risk bands. Counted from the
+   *  rows the server returned, so the bar can never claim more than we have. */
+  const SIMILAR_BANDS = (() => {
+    const list = state.kind === 'found' ? state.similar : []
+    const counts: Record<'safe' | 'watch' | 'high' | 'unknown', number> = { safe: 0, watch: 0, high: 0, unknown: 0 }
+    for (const s of list) counts[toneFromScore(Number(s.risk_score) || 0)]++
+    return [
+      { tone: 'safe' as const, label: 'LOW', n: counts.safe },
+      { tone: 'watch' as const, label: 'MEDIUM', n: counts.watch },
+      { tone: 'high' as const, label: 'HIGH', n: counts.high },
+      { tone: 'unknown' as const, label: 'UNKNOWN', n: counts.unknown },
+    ]
+  })()
+
   return (
     <PageShell>
       <PageHeader
@@ -449,67 +489,117 @@ export function Lookup() {
 
             {state.kind === 'found' && state.similar.length > 0 && (
               <Card className="gap-0 p-6">
-                <h3 className="text-[15px] font-semibold text-foreground">Similar buyers</h3>
-                <p className="mt-1 mb-3 text-[13px] text-muted-foreground">
-                  Buyers whose behaviour looks closest to this one, by fingerprint. Resemblance is not a risk
-                  verdict, and it is never evidence of fraud.
+                <div className="mb-1 flex flex-wrap items-center gap-2.5">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-foreground">
+                    <Users className="size-4" aria-hidden="true" />
+                  </span>
+                  <h3 className="text-[15px] font-semibold text-foreground">Similar buyers</h3>
+                </div>
+                <p className="mb-4 text-[13px] text-muted-foreground">
+                  The{' '}
+                  <strong className="font-semibold text-foreground">
+                    {state.similar.length} closest
+                  </strong>{' '}
+                  match{state.similar.length === 1 ? '' : 'es'} in the Verafo network, found by AI fingerprint.
+                  Resemblance is not a risk verdict and is never evidence of fraud.
                 </p>
+
+                {/* How the lookalikes split across risk bands — the shape of the
+                    group at a glance, with every colour named in the legend. */}
+                <div className="mb-1 flex h-2.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Risk mix of similar buyers">
+                  {SIMILAR_BANDS.filter((b) => b.n > 0).map((b) => (
+                    <div key={b.tone} className={cn('h-full', SIMILAR_TONE[b.tone].bar)} style={{ width: `${(b.n / state.similar.length) * 100}%` }} />
+                  ))}
+                </div>
+                <ul className="m-0 mb-4 flex list-none flex-wrap gap-x-4 gap-y-1 p-0">
+                  {SIMILAR_BANDS.filter((b) => b.n > 0).map((b) => (
+                    <li key={b.tone} className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                      <span className={cn('size-2.5 rounded-full', SIMILAR_TONE[b.tone].bar)} aria-hidden="true" />
+                      {b.label}
+                      <span className="font-semibold text-foreground tabular-nums">{b.n}</span>
+                    </li>
+                  ))}
+                </ul>
+
                 <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
                   {state.similar.map((s, i) => (
-                    <li key={i} className="flex min-h-11 flex-wrap items-center gap-3 py-3">
-                      <span className="text-[13px] font-semibold text-foreground">
-                        {Math.round((1 - Math.min(1, Math.max(0, Number(s.similarity) || 0))) * 100)}% alike
+                    <li key={i} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 py-3">
+                      <span className="font-mono text-[13.5px] font-semibold tabular-nums text-foreground">
+                        {alikePercent(s)}%
                       </span>
-                      <span className="text-[13px] text-muted-foreground">
-                        {s.total_orders ?? 0} orders · {s.total_refused ?? 0} refused
+                      <span className="text-[12.5px] text-muted-foreground">alike</span>
+                      <span className="text-[12.5px] text-muted-foreground">
+                        {s.total_orders ?? 0} order{(s.total_orders ?? 0) === 1 ? '' : 's'}
                       </span>
+                      {(s.total_refused ?? 0) > 0 && (
+                        <span className="text-[12.5px] font-medium text-risk-high-strong">
+                          {s.total_refused} refused
+                        </span>
+                      )}
                       <span className="ms-auto">
                         <VerdictBadge riskScore={s.risk_score} totalOrders={s.total_orders} />
                       </span>
                     </li>
                   ))}
                 </ul>
+
                 {/* The server does not return these buyers' numbers, so they
                     cannot be opened from here. That is deliberate. */}
-                <p className="mt-3 text-[11.5px] text-muted-foreground">
-                  Verafo does not show other buyers&rsquo; phone numbers, so these cannot be opened. To check one,
-                  look it up with a number you already have.
-                </p>
+                <div className="mt-3 flex items-start gap-2.5 rounded-[10px] border border-border bg-muted/40 p-3">
+                  <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <p className="text-[12.5px] text-muted-foreground">
+                    Verafo never shows another buyer&rsquo;s phone number, so these cannot be opened. To check one,
+                    look it up with a number you already have.
+                  </p>
+                </div>
               </Card>
             )}
 
             <Card className="gap-0 p-6">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-[15px] font-semibold text-foreground">AI assist</h3>
+              <div className="mb-1 flex flex-wrap items-center gap-2.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-foreground">
+                  <Sparkles className="size-4" aria-hidden="true" />
+                </span>
+                <h3 className="text-[15px] font-semibold text-foreground">Ask Verafo about this buyer</h3>
                 {buyer.embedding ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-1 text-[12.5px] font-medium text-risk-safe-strong">
+                  <span className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-1 text-[12.5px] font-medium text-risk-safe-strong">
                     <Fingerprint className="size-3.5" /> fingerprint embedded
                   </span>
                 ) : (
-                  <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-[12.5px] font-medium text-muted-foreground">
-                    no fingerprint yet
+                  <span className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[12.5px] font-medium text-muted-foreground">
+                    <Fingerprint className="size-3.5" /> no fingerprint yet
                   </span>
                 )}
               </div>
-              <p className="mb-3 text-[13px] text-muted-foreground">
-                These actions call the verafo-ai edge function. They explain or re-embed the buyer — they never
-                change the score themselves.
+              <p className="mb-4 text-[13px] text-muted-foreground">
+                {aiEnabled
+                  ? 'Verafo can read this buyer’s history and answer in plain language. These actions never change the score themselves.'
+                  : 'Deploy the verafo-ai edge function to enable AI explanations, embeddings and chat about a buyer.'}
               </p>
+
               {explanation && (
-                <p className="mb-3 rounded-[10px] border border-border bg-muted/50 px-3 py-2.5 text-[14px] text-foreground">
-                  {explanation}
-                </p>
+                <div className="mb-4 rounded-[10px] border border-risk-safe/40 bg-risk-safe-soft p-4">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold tracking-[0.12em] text-risk-safe-strong uppercase">
+                    <Sparkles className="size-3.5" aria-hidden="true" /> Verafo&rsquo;s explanation
+                  </p>
+                  <p className="text-[14px] leading-relaxed text-foreground">{explanation}</p>
+                </div>
               )}
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant="outline"
                   className="h-11 gap-1.5 px-4 md:h-9"
                   disabled={!aiEnabled || explaining}
                   onClick={() => void explain(buyer)}
                 >
                   {explaining ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                   Explain this buyer
+                </Button>
+                <Button asChild variant="outline" className="h-11 gap-1.5 px-4 md:h-9">
+                  <Link to={`/chat?q=${encodeURIComponent(`Tell me about buyer ${buyer.phone} — ${verdict.label} risk. Should I ship to them?`)}`}>
+                    <MessageSquare className="size-3.5" /> Ask Verafo
+                  </Link>
                 </Button>
                 <Button
                   type="button"
@@ -522,12 +612,22 @@ export function Lookup() {
                   Refresh fingerprint
                 </Button>
               </div>
-              {!aiEnabled && (
-                <p className="mt-3 text-[13px] text-muted-foreground">
-                  Deploy the <code className="font-mono text-[12.5px]">verafo-ai</code> edge function to enable AI
-                  explanations and embeddings.
-                </p>
-              )}
+
+              {/* One tap into the assistant, each carrying this buyer's number. */}
+              <p className="mt-4 mb-2 text-[11.5px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                Or ask
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BUYER_PROMPTS.map((p) => (
+                  <Link
+                    key={p}
+                    to={`/chat?q=${encodeURIComponent(`${p} Buyer ${buyer.phone}.`)}`}
+                    className="inline-flex h-11 items-center rounded-full border border-border bg-card px-3 text-[12.5px] text-foreground transition-colors hover:bg-muted md:h-8"
+                  >
+                    {p}
+                  </Link>
+                ))}
+              </div>
             </Card>
           </div>
 

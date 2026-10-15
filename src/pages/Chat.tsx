@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Check,
   CheckCheck,
@@ -152,6 +153,7 @@ const COMPOSER_HINT = 'Enter sends · Shift + Enter adds a line · @ for a buyer
 
 export function Chat() {
   const toast = useToast()
+  const [params, setParams] = useSearchParams()
   const [chats, setChats] = useState<ChatRow[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -308,6 +310,20 @@ export function Chat() {
     const el = listRef.current
     if (el) el.scrollTo({ top: el.scrollHeight })
   }, [messages, activeId, loading, working, streamText])
+
+  /**
+   * A `?q=` in the URL prefills the composer but does NOT send. Buyer Lookup and
+   * the dashboard link here with a question already written; the merchant still
+   * gets to read and edit it before it costs a request, and an accidental link
+   * can never fire a message on its own.
+   */
+  useEffect(() => {
+    const q = params.get('q')
+    if (!q) return
+    setComposing(q)
+    if (params.has('q') || params.has('phone')) setParams({}, { replace: true })
+    window.setTimeout(() => textareaRef.current?.focus(), 0)
+  }, [params, setParams])
 
   const fetchMentions = useCallback(async (query: string) => {
     if (!supabase) return

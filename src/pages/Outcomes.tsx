@@ -7,7 +7,7 @@ import { StatusBadge } from '../components/app/status-badge'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
@@ -184,104 +184,102 @@ export function Outcomes() {
             }
           />
         ) : (
-          /* Wide table scrolls inside its own box on phones, never the page. */
-          <div className="w-full overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="ps-6">Buyer</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="hidden md:table-cell">Store</TableHead>
-                  <TableHead className="text-end">Amount</TableHead>
-                  <TableHead className="hidden lg:table-cell">Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="pe-6 text-end">Mark</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((o) => {
-                  const status = (o.outcomes?.status ?? 'pending') as OutcomeStatus
-                  const busy = working === o.id
-                  return (
-                    <TableRow
-                      key={o.id}
-                      // Keyboard marking: focus a row and press A (accept) or
-                      // R (refuse), as this screen has always supported.
-                      tabIndex={status === 'pending' ? 0 : undefined}
-                      onKeyDown={
-                        status === 'pending'
-                          ? (e) => {
-                              const k = e.key.toLowerCase()
-                              if (k !== 'a' && k !== 'r') return
-                              e.preventDefault()
-                              void mark(o, k === 'a' ? 'accepted' : 'refused')
-                            }
-                          : undefined
-                      }
-                      className={leaving[o.id] ? 'opacity-40 transition-opacity' : 'transition-opacity'}
-                    >
-                      <TableCell className="ps-6">
-                        <Link
-                          to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
-                          className="font-mono text-[13px] font-medium text-primary-text hover:underline"
+          /*
+           * A row list, not a table. As a seven-column table the Mark column sat
+           * last, so on anything narrower than a wide desktop the Accept /
+           * Refuse buttons were the first thing pushed out of view and the row
+           * had to be dragged sideways before it could be resolved.
+           *
+           * Here the facts wrap and the action stays pinned to the right edge at
+           * every width, so an outcome can always be marked where it is read.
+           */
+          <ul className="m-0 list-none divide-y divide-border p-0">
+            {visible.map((o) => {
+              const status = (o.outcomes?.status ?? 'pending') as OutcomeStatus
+              const busy = working === o.id
+              const facts = [
+                o.product_name || o.product_category || 'Untitled product',
+                o.stores?.name ?? 'Unknown store',
+                `${money(o.price)}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
+                dateTime(o.ordered_at),
+              ]
+              return (
+                <li
+                  key={o.id}
+                  // Keyboard marking: focus a row and press A (accept) or
+                  // R (refuse), as this screen has always supported.
+                  tabIndex={status === 'pending' ? 0 : undefined}
+                  onKeyDown={
+                    status === 'pending'
+                      ? (e) => {
+                          const k = e.key.toLowerCase()
+                          if (k !== 'a' && k !== 'r') return
+                          e.preventDefault()
+                          void mark(o, k === 'a' ? 'accepted' : 'refused')
+                        }
+                      : undefined
+                  }
+                  className={cn(
+                    'flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 transition-opacity sm:px-6',
+                    leaving[o.id] && 'opacity-40',
+                  )}
+                >
+                  <div className="min-w-[13rem] flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+                        className="font-mono text-[13.5px] font-medium text-primary-text hover:underline"
+                      >
+                        {phone(o.buyer_phone)}
+                      </Link>
+                      <StatusBadge status={status} />
+                    </div>
+                    <p className="mt-1.5 text-[12.5px] text-muted-foreground">
+                      {facts.map((f, i) => (
+                        <span key={i}>
+                          {i > 0 && <span aria-hidden="true"> · </span>}
+                          <span className={i === 2 ? 'tabular-nums' : undefined}>{f}</span>
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0">
+                    {status !== 'pending' ? (
+                      <span className="text-[13px] text-muted-foreground">Resolved</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-11 gap-1.5 border-risk-safe/40 px-3 text-risk-safe-strong hover:bg-risk-safe-soft md:h-9"
+                          disabled={busy}
+                          onClick={() => void mark(o, 'accepted')}
+                          aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
                         >
-                          {phone(o.buyer_phone)}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="max-w-56 truncate">
-                        {o.product_name || o.product_category || 'Untitled product'}
-                      </TableCell>
-                      <TableCell className="hidden text-muted-foreground md:table-cell">
-                        {o.stores?.name ?? 'Unknown store'}
-                      </TableCell>
-                      <TableCell className="text-end tabular-nums">
-                        {money(o.price)}
-                        {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
-                      </TableCell>
-                      <TableCell className="hidden text-muted-foreground lg:table-cell">
-                        {dateTime(o.ordered_at)}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={status} />
-                      </TableCell>
-                      <TableCell className="pe-6">
-                        {status !== 'pending' ? (
-                          <span className="block text-end text-[13px] text-muted-foreground">—</span>
-                        ) : (
-                          <span className="flex flex-wrap justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-11 gap-1.5 border-risk-safe/40 px-3 text-risk-safe-strong hover:bg-risk-safe-soft md:h-9"
-                              disabled={busy}
-                              onClick={() => void mark(o, 'accepted')}
-                              aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
-                            >
-                              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                              Accept
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
-                              disabled={busy}
-                              onClick={() => void mark(o, 'refused')}
-                              aria-label={`Mark ${phone(o.buyer_phone)} as refused`}
-                            >
-                              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
-                              Refuse
-                            </Button>
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                          Accept
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
+                          disabled={busy}
+                          onClick={() => void mark(o, 'refused')}
+                          aria-label={`Mark ${phone(o.buyer_phone)} as refused`}
+                        >
+                          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+                          Refuse
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         )}
       </Card>
     </PageShell>
