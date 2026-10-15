@@ -221,6 +221,15 @@ export function Lookup() {
     toast.push({ kind: 'success', title: 'History cleared' })
   }, [email, toast])
 
+  /**
+   * Ask the verafo-ai function for a one-sentence explanation.
+   *
+   * The contract is `action: "explain"` with the phone number at the TOP LEVEL:
+   * the function reads `body.phone` before it dispatches, and `fetchStats` uses
+   * that number to build the profile. This call used to send `mode: "explain"`
+   * with the buyer nested under `buyer`, so `body.phone` was empty and the
+   * function answered 400 — the button could never have worked.
+   */
   async function explain(buyer: Buyer) {
     if (!supabase) return
     setExplaining(true)
@@ -235,10 +244,11 @@ export function Lookup() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ mode: 'explain', buyer }),
+        body: JSON.stringify({ action: 'explain', phone: buyer.phone }),
       })
       if (!res.ok) throw new Error(`Request failed (${res.status})`)
-      const json = (await res.json()) as { text?: string }
+      const json = (await res.json()) as { text?: string; error?: string }
+      if (json.error) throw new Error(json.error)
       setExplanation(json.text ?? null)
     } catch (err) {
       toast.push({
@@ -265,7 +275,8 @@ export function Lookup() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ mode: 'embed', phone: buyer.phone }),
+        // Same correction as `explain`: the action name, phone at top level.
+        body: JSON.stringify({ action: 'embed', phone: buyer.phone }),
       })
       if (!res.ok) throw new Error(`Request failed (${res.status})`)
       toast.push({ kind: 'success', title: 'Fingerprint refreshed' })
