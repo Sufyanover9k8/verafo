@@ -282,7 +282,6 @@ export function Decide() {
                         <VerdictBadge
                           riskScore={buyer?.risk_score}
                           totalOrders={buyer?.total_orders}
-                          showScore={scored}
                         />
                       </div>
                     </div>

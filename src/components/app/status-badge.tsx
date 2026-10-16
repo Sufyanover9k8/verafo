@@ -1,10 +1,15 @@
 import { cn } from '@/lib/utils'
 import type { OutcomeStatus } from '@/lib/types'
 
+/**
+ * Delivery outcome of an order. Uses the same badge ramp as the risk bands, so
+ * an "Accepted" pill is as legible as a "SAFE" one instead of washing out
+ * against the card.
+ */
 const STATUS: Record<OutcomeStatus, { label: string; box: string; dot: string }> = {
-  accepted: { label: 'Accepted', box: 'border-risk-safe/40 bg-risk-safe-soft text-risk-safe-strong', dot: 'bg-risk-safe' },
-  refused: { label: 'Refused', box: 'border-risk-high/40 bg-risk-high-soft text-risk-high-strong', dot: 'bg-risk-high' },
-  pending: { label: 'Pending', box: 'border-border bg-muted text-muted-foreground', dot: 'bg-muted-foreground/60' },
+  accepted: { label: 'Accepted', box: 'border-risk-safe/50 bg-risk-safe-badge-bg text-risk-safe-badge', dot: 'bg-risk-safe' },
+  refused: { label: 'Refused', box: 'border-risk-high/50 bg-risk-high-badge-bg text-risk-high-badge', dot: 'bg-risk-high' },
+  pending: { label: 'Pending', box: 'border-border bg-muted text-foreground/75', dot: 'bg-muted-foreground' },
 }
 
 /** Delivery outcome of an order. */

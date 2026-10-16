@@ -72,6 +72,21 @@
   --risk-unknown-strong: var(--v-unknown-strong);
   --risk-unknown-soft: var(--v-unknown-bg);
 
+  /* Risk badges. A badge is type inside a pill, so it reads its own rung of
+     the ramp: a deeper text shade and an opaque tinted fill, because the
+     general `-strong`/`-soft` pair above washed out against the card it sat
+     on. Measured AA on its own fill in tokens.css. */
+  --risk-safe-badge: var(--v-safe-badge);
+  --risk-safe-badge-bg: var(--v-safe-badge-bg);
+  --risk-watch-badge: var(--v-watch-badge);
+  --risk-watch-badge-bg: var(--v-watch-badge-bg);
+  --risk-high-badge: var(--v-risk-badge);
+  --risk-high-badge-bg: var(--v-risk-badge-bg);
+  --risk-unknown-badge: var(--v-unknown-badge);
+  --risk-unknown-badge-bg: var(--v-unknown-badge-bg);
+  --risk-safe-badge-hover: var(--v-safe-badge-hover);
+  --risk-high-badge-hover: var(--v-risk-badge-hover);
+
   /* Charts — teal primary, then the site's accent family */
   --chart-1: var(--teal);
   --chart-2: var(--purple);
@@ -220,6 +235,16 @@
   --color-risk-unknown: var(--risk-unknown);
   --color-risk-unknown-strong: var(--risk-unknown-strong);
   --color-risk-unknown-soft: var(--risk-unknown-soft);
+  --color-risk-safe-badge: var(--risk-safe-badge);
+  --color-risk-safe-badge-bg: var(--risk-safe-badge-bg);
+  --color-risk-watch-badge: var(--risk-watch-badge);
+  --color-risk-watch-badge-bg: var(--risk-watch-badge-bg);
+  --color-risk-high-badge: var(--risk-high-badge);
+  --color-risk-high-badge-bg: var(--risk-high-badge-bg);
+  --color-risk-unknown-badge: var(--risk-unknown-badge);
+  --color-risk-unknown-badge-bg: var(--risk-unknown-badge-bg);
+  --color-risk-safe-badge-hover: var(--risk-safe-badge-hover);
+  --color-risk-high-badge-hover: var(--risk-high-badge-hover);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

@@ -174,6 +174,29 @@
   --v-unknown-strong: #1D4ED8;
   --v-unknown-bg: rgba(59, 130, 246, .10);
 
+  /* ── 1 · Colour — risk BADGE ramp
+        A badge is type inside a pill, so it gets its own rung: a deeper
+        text shade and an opaque tinted fill, where the general `-strong`
+        and `-bg` above were pale enough that the pill barely separated
+        from the card behind it (1.06–1.13:1).
+
+        Text clears WCAG AA on its own fill, measured:
+        safe 10.1 · medium 5.3 · high 7.7 · neutral 7.4.
+        These are the shades the band pills use everywhere — a "SAFE" pill
+        is the same green on any screen. ─────────────────────── */
+  --v-safe-badge: #0B5F58;
+  --v-safe-badge-bg: #E4F5F3;
+  --v-watch-badge: #6B4E06;
+  --v-watch-badge-bg: #FEF8E9;
+  --v-risk-badge: #9F1239;
+  --v-risk-badge-bg: #FDEEF1;
+  --v-unknown-badge: #1E40AF;
+  --v-unknown-badge-bg: #EAF2FF;
+  /* One step deeper, so a badge-tinted button visibly answers a hover
+     instead of sitting flat on its own base fill. */
+  --v-safe-badge-hover: #D3EDE9;
+  --v-risk-badge-hover: #FADFE5;
+
   /* Legacy semantic aliases */
   --accent: var(--teal);
   --accent-2: var(--teal-deep);
@@ -361,6 +384,22 @@
   --v-unknown-strong: #93C5FD;
   --v-unknown-bg: rgba(147, 197, 253, .12);
 
+  /* Risk badge ramp, dark. The bright site shades already read strongly on
+     a dark page, so text takes them directly; the fills stay near-opaque
+     and plainly darker than the badge type. Measured on their own fill:
+     safe 8.8 · medium 11.5 · high 9.3 · neutral 8.7. */
+  --v-safe-badge: #5EEAD4;
+  --v-safe-badge-bg: #0D2B28;
+  --v-watch-badge: #FCD34D;
+  --v-watch-badge-bg: #2B2411;
+  --v-risk-badge: #FDA4AF;
+  --v-risk-badge-bg: #2E1219;
+  --v-unknown-badge: #93C5FD;
+  --v-unknown-badge-bg: #131F33;
+  /* Hover lifts on the dark ramp rather than deepening. */
+  --v-safe-badge-hover: #14403B;
+  --v-risk-badge-hover: #431A23;
+
   --v-teal-900: #F2F6F6;
   --v-purple-900: var(--v-teal-900);
   --v-teal-600: var(--btn-teal-2);
@@ -448,6 +487,16 @@
   --v-unknown: #3B82F6;
   --v-unknown-strong: #1D4ED8;
   --v-unknown-bg: rgba(59, 130, 246, .10);
+  --v-safe-badge: #0B5F58;
+  --v-safe-badge-bg: #E4F5F3;
+  --v-watch-badge: #6B4E06;
+  --v-watch-badge-bg: #FEF8E9;
+  --v-risk-badge: #9F1239;
+  --v-risk-badge-bg: #FDEEF1;
+  --v-unknown-badge: #1E40AF;
+  --v-unknown-badge-bg: #EAF2FF;
+  --v-safe-badge-hover: #D3EDE9;
+  --v-risk-badge-hover: #FADFE5;
   --v-teal-900: var(--ink);
   --v-purple-900: var(--v-teal-900);
   --v-teal-600: var(--btn-teal-2);

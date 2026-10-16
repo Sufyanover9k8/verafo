@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { Check, Loader2, RefreshCw, X } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
-import { RiskScoreBadge, bandEvidence } from '../components/app/risk-score-badge'
-import { StatusBadge } from '../components/app/status-badge'
+import { VerdictBadge, bandEvidence } from '../components/app/verdict-badge'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -247,11 +246,12 @@ export function Outcomes() {
                       >
                         {phone(o.buyer_phone)}
                       </Link>
-                      <StatusBadge status={status} />
                       {/* Band + the actual score, so the row says how risky the
-                          buyer looks without a trip to Buyer Lookup. Buyers with
-                          nothing resolved show NEUTRAL and no number. */}
-                      <RiskScoreBadge riskScore={o.buyers?.risk_score} totalOrders={o.buyers?.total_orders} />
+                          buyer looks without a trip to Buyer Lookup. The
+                          delivery status is gone from these rows: the tab
+                          already says it, so "Pending" on every row of the
+                          Pending tab was noise. */}
+                      <VerdictBadge riskScore={o.buyers?.risk_score} totalOrders={o.buyers?.total_orders} />
                     </div>
                     <p className="mt-1.5 text-[12.5px] text-muted-foreground">
                       {facts.map((f, i) => (
@@ -272,7 +272,7 @@ export function Outcomes() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-11 gap-1.5 border-risk-safe/40 px-3 text-risk-safe-strong hover:bg-risk-safe-soft md:h-9"
+                          className="h-11 gap-1.5 border-risk-safe/50 bg-risk-safe-badge-bg px-3 text-risk-safe-badge hover:bg-risk-safe-badge-hover hover:text-risk-safe-badge md:h-9"
                           disabled={busy}
                           onClick={() => void mark(o, 'accepted')}
                           aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
@@ -284,7 +284,7 @@ export function Outcomes() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
+                          className="h-11 gap-1.5 border-risk-high/50 bg-risk-high-badge-bg px-3 text-risk-high-badge hover:bg-risk-high-badge-hover hover:text-risk-high-badge md:h-9"
                           disabled={busy}
                           onClick={() => void mark(o, 'refused')}
                           aria-label={`Mark ${phone(o.buyer_phone)} as refused`}

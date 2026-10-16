@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bandEvidence, buyerBand } from './risk-score-badge'
+import { bandEvidence, buyerBand } from './verdict-badge'
 
 describe('buyerBand', () => {
   it('is neutral for a buyer Verafo knows nothing about', () => {
     expect(buyerBand(undefined, undefined)).toBe('neutral')
     expect(buyerBand(null, null)).toBe('neutral')
-    // The neutral default 0.5 must never read as a real score.
+    // The neutral 0.5 default must never read as a real score.
     expect(buyerBand(0.5, 0)).toBe('neutral')
     expect(buyerBand(0.99, 0)).toBe('neutral')
     expect(buyerBand(0.82, null)).toBe('neutral')
