@@ -1,5 +1,5 @@
 import { useIsAdmin } from '../lib/admin'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -17,13 +17,20 @@ import { NeedsSetup } from '../components/States'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { normalizePhone } from '../lib/format'
+import { formatPhonePK } from '../lib/ui/phone'
+import { parseOrderCsv, type ParsedOrder } from '../lib/ui/order-csv'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
 
+/**
+ * The shape Verafo still accepts. A merchant with a Shopify store never needs
+ * this — they upload Shopify's own orders export untouched — but it stays for
+ * anyone importing from a spreadsheet of their own, and it is what the parser
+ * treats as a Verafo-format file.
+ */
 const TEMPLATE = [
   'phone,store,category,product,price,quantity,address,city,ordered_at,outcome,resolved_at',
   '+923001112222,Sanicore,skincare,Vitamin C serum 30ml,2499,1,House 12 Block B Model Town,Lahore,2026-07-01 14:30,refused,2026-07-03 10:00',
@@ -31,146 +38,114 @@ const TEMPLATE = [
   '+923337778888,Sanicore,skincare,Retinol cream 30ml,2699,1,House 2 F-11 Markaz,Islamabad,2026-07-10 09:15,pending,',
 ].join('\n')
 
-const HEADER_ALIASES: Record<string, string> = {
-  phone: 'phone',
-  buyer: 'phone',
-  buyer_phone: 'phone',
-  mobileno: 'phone',
-  number: 'phone',
-  store: 'store',
-  storename: 'store',
-  store_name: 'store',
-  category: 'category',
-  product_category: 'category',
-  product: 'product',
-  productname: 'product',
-  product_name: 'product',
-  item: 'product',
-  name: 'product',
-  price: 'price',
-  amount: 'price',
-  value: 'price',
-  quantity: 'quantity',
-  qty: 'quantity',
-  address: 'address',
-  city: 'city',
-  ordered_at: 'ordered_at',
-  date: 'ordered_at',
-  orderdate: 'ordered_at',
-  order_date: 'ordered_at',
-  outcome: 'outcome',
-  status: 'outcome',
-  result: 'outcome',
-  resolved_at: 'resolved_at',
-}
+/**
+ * Shopify's own export header, verbatim. Shown so a merchant can see exactly
+ * what is read — and that nothing has to be added to their file.
+ */
+const SHOPIFY_COLUMNS = [
+  'Name',
+  'Email',
+  'Financial Status',
+  'Paid at',
+  'Fulfillment Status',
+  'Fulfilled at',
+  'Accepts Marketing',
+  'Currency',
+  'Subtotal',
+  'Shipping',
+  'Taxes',
+  'Total',
+  'Discount Code',
+  'Discount Amount',
+  'Shipping Method',
+  'Created at',
+  'Lineitem quantity',
+  'Lineitem name',
+  'Lineitem price',
+  'Lineitem compare at price',
+  'Lineitem sku',
+  'Lineitem requires shipping',
+  'Lineitem taxable',
+  'Lineitem fulfillment status',
+  'Billing Name',
+  'Billing Street',
+  'Billing Address1',
+  'Billing Address2',
+  'Billing Company',
+  'Billing City',
+  'Billing Zip',
+  'Billing Province',
+  'Billing Country',
+  'Billing Phone',
+  'Shipping Name',
+  'Shipping Street',
+  'Shipping Address1',
+  'Shipping Address2',
+  'Shipping Company',
+  'Shipping City',
+  'Shipping Zip',
+  'Shipping Province',
+  'Shipping Country',
+  'Shipping Phone',
+  'Notes',
+  'Note Attributes',
+  'Cancelled at',
+  'Payment Method',
+  'Payment Reference',
+  'Refunded Amount',
+  'Vendor',
+  'Outstanding Balance',
+  'Employee',
+  'Location',
+  'Device ID',
+  'Id',
+  'Tags',
+  'Risk Level',
+  'Source',
+  'Lineitem discount',
+  'Tax 1 Name',
+  'Tax 1 Value',
+  'Tax 2 Name',
+  'Tax 2 Value',
+  'Tax 3 Name',
+  'Tax 3 Value',
+  'Tax 4 Name',
+  'Tax 4 Value',
+  'Tax 5 Name',
+  'Tax 5 Value',
+  'Phone',
+  'Receipt Number',
+  'Duties',
+  'Billing Province Name',
+  'Shipping Province Name',
+  'Payment ID',
+  'Payment Terms Name',
+  'Next Payment Due At',
+  'Payment References',
+]
 
-type Outcome = 'accepted' | 'refused' | 'pending'
+/** The columns Verafo actually reads, marked on Shopify's own header. */
+const SHOPIFY_TEMPLATE = `${SHOPIFY_COLUMNS.map((c) =>
+  [
+    'Name',
+    'Email',
+    'Fulfilled at',
+    'Cancelled at',
+    'Created at',
+    'Lineitem quantity',
+    'Lineitem name',
+    'Lineitem price',
+    'Shipping Address1',
+    'Shipping City',
+    'Shipping Phone',
+    'Billing Phone',
+    'Vendor',
+  ].includes(c)
+    ? `<${c}>`
+    : c,
+).join(',')}
 
-interface ParsedRow {
-  line: number
-  phone: string
-  store: string
-  category: string
-  product: string
-  price: number | null
-  quantity: number
-  address: string
-  city: string
-  ordered_at: string | null
-  outcome: Outcome | null
-  resolved_at: string | null
-}
-
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let cur = ''
-  let inQuotes = false
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          cur += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        cur += c
-      }
-    } else if (c === '"') {
-      inQuotes = true
-    } else if (c === ',') {
-      row.push(cur)
-      cur = ''
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++
-      row.push(cur)
-      cur = ''
-      if (row.some((x) => x.trim() !== '')) rows.push(row)
-      row = []
-    } else {
-      cur += c
-    }
-  }
-  row.push(cur)
-  if (row.some((x) => x.trim() !== '')) rows.push(row)
-  return rows
-}
-
-function toIso(v: string): string | null {
-  const t = v.trim()
-  if (!t) return null
-  const d = new Date(t.includes(' ') ? t.replace(' ', 'T') : t)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString()
-}
-
-function parseRows(text: string): { rows: ParsedRow[]; header: string[]; lineErrors: string[] } {
-  const cells = parseCsv(text)
-  if (cells.length === 0) return { rows: [], header: [], lineErrors: ['File is empty'] }
-  const header = cells[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
-  const col = new Map<string, number>()
-  header.forEach((h, i) => {
-    const mapped = HEADER_ALIASES[h]
-    if (mapped && !col.has(mapped)) col.set(mapped, i)
-  })
-  const missing = ['phone', 'store'].filter((k) => !col.has(k))
-  if (missing.length > 0) {
-    return { rows: [], header, lineErrors: [`Missing required column(s): ${missing.join(', ')}`] }
-  }
-  const lineErrors: string[] = []
-  const rows: ParsedRow[] = []
-  for (let i = 1; i < cells.length; i++) {
-    const r = cells[i]
-    const get = (k: string) => (col.has(k) ? (r[col.get(k)!] ?? '').trim() : '')
-    rows.push({
-      line: i + 1,
-      phone: normalizePhone(get('phone')),
-      store: get('store'),
-      category: get('category'),
-      product: get('product'),
-      price: (() => {
-        const p = parseFloat(get('price'))
-        return Number.isNaN(p) || !get('price') ? null : p
-      })(),
-      quantity: Math.max(1, parseInt(get('quantity'), 10) || 1),
-      address: get('address'),
-      city: get('city'),
-      ordered_at: toIso(get('ordered_at')),
-      outcome: (() => {
-        const s = get('outcome').toLowerCase()
-        return s === 'accepted' || s === 'refused' || s === 'pending' ? s : null
-      })(),
-      resolved_at: toIso(get('resolved_at')),
-    })
-  }
-  const badLines = rows.filter((r) => !r.phone || r.phone.length < 6)
-  if (badLines.length > 0) {
-    lineErrors.push(`Missing or invalid phone on line(s): ${badLines.map((r) => r.line).join(', ')}`)
-  }
-  return { rows, header, lineErrors }
-}
+Columns in <angle brackets> are the ones Verafo reads; the rest of Shopify's export is ignored. Do not add or rename anything — upload the file as Shopify writes it.`
 
 const CONTROL =
   'h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[16px] text-foreground placeholder:text-muted-foreground transition-colors focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-10 md:text-[15px]'
@@ -215,7 +190,7 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 export function BulkImport() {
   const toast = useToast()
   const { admin } = useIsAdmin()
-  const { role, stores: myStores } = useStoreScope()
+  const { role, store: activeStore, stores: myStores } = useStoreScope()
   const [stores, setStores] = useState<Store[]>([])
   const [text, setText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -251,17 +226,44 @@ export function BulkImport() {
       })
   }, [role, myStores])
 
-  const parsed = useMemo(() => parseRows(text), [text])
+  const parsed = useMemo(() => parseOrderCsv(text), [text])
 
-  const storeNames = useMemo(() => new Set(stores.map((s) => s.name.trim().toLowerCase())), [stores])
+  /**
+   * Which store a row belongs to.
+   *
+   * Shopify's export names the shop as `Vendor`, which need not match a Verafo
+   * store name, and a merchant uploading their own export should not have to
+   * reconcile the two. So a missing or unmatched store name falls back to the
+   * store they are currently working in — which for a merchant is their only
+   * store. An admin, who can see every store, still has to be told which one.
+   */
+  const resolveRow = useCallback(
+    (r: ParsedOrder): { storeId: string; storeName: string; fromVendor: string | null } | { error: string } => {
+      const byName = stores.find((s) => s.name.trim().toLowerCase() === r.store.trim().toLowerCase())
+      if (byName) return { storeId: byName.id, storeName: byName.name, fromVendor: null }
+      const fallback = activeStore ?? (stores.length === 1 ? stores[0] : null)
+      if (fallback) {
+        // A vendor name we do not recognise is worth surfacing, even though the
+        // fallback saves the row: it usually means a store is not set up yet.
+        const mismatch = r.store && r.store.trim().toLowerCase() !== fallback.name.trim().toLowerCase()
+        return { storeId: fallback.id, storeName: fallback.name, fromVendor: mismatch ? r.store : null }
+      }
+      return {
+        error: r.store
+          ? `unknown store "${r.store}"`
+          : 'no store column — pick a store, or add a store column',
+      }
+    },
+    [stores, activeStore],
+  )
 
   const preview = useMemo(() => {
-    if (parsed.rows.length === 0) return []
-    return parsed.rows.slice(0, 6).map((r) => ({
-      ...r,
-      storeOk: storeNames.has(r.store.trim().toLowerCase()),
-    }))
-  }, [parsed.rows, storeNames])
+    if (parsed.orders.length === 0) return []
+    return parsed.orders.slice(0, 6).map((r) => {
+      const res = resolveRow(r)
+      return { ...r, resolved: 'error' in res ? null : res, storeError: 'error' in res ? res.error : null }
+    })
+  }, [parsed.orders, resolveRow])
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -272,9 +274,9 @@ export function BulkImport() {
     e.target.value = ''
   }
 
-  async function copyTemplate() {
+  async function copyTemplate(body: string) {
     try {
-      await navigator.clipboard.writeText(TEMPLATE)
+      await navigator.clipboard.writeText(body)
       toast.push({
         kind: 'success',
         title: 'Template copied',
@@ -316,12 +318,15 @@ export function BulkImport() {
 
   async function runImport() {
     if (!supabase) return
-    if (parsed.rows.length === 0) {
-      toast.push({ kind: 'error', title: 'Nothing to import', detail: parsed.lineErrors.join(' · ') || 'No valid rows.' })
+    if (parsed.orders.length === 0) {
+      toast.push({
+        kind: 'error',
+        title: 'Nothing to import',
+        detail: parsed.errors.join(' · ') || 'No orders with a phone number were found.',
+      })
       return
     }
-    const storeMap = new Map(stores.map((s) => [s.name.trim().toLowerCase(), s]))
-    const total = parsed.rows.length
+    const total = parsed.orders.length
     setImporting(true)
     setResult(null)
     setProgress(0)
@@ -329,11 +334,11 @@ export function BulkImport() {
     const failed: { line: number; reason: string }[] = []
 
     for (let i = 0; i < total; i++) {
-      const r = parsed.rows[i]
+      const r = parsed.orders[i]
       setProgress(i + 1)
-      const store = storeMap.get(r.store.trim().toLowerCase())
-      if (!store) {
-        failed.push({ line: r.line, reason: `unknown store "${r.store || 'blank'}"` })
+      const res = resolveRow(r)
+      if ('error' in res) {
+        failed.push({ line: r.line, reason: res.error })
         continue
       }
       if (!r.phone) {
@@ -354,7 +359,7 @@ export function BulkImport() {
           .from('orders')
           .insert({
             buyer_phone: r.phone,
-            store_id: store.id,
+            store_id: res.storeId,
             product_category: r.category || null,
             product_name: r.product || null,
             price: r.price,
@@ -385,43 +390,88 @@ export function BulkImport() {
     setResult({ imported, failed })
     toast.push({
       kind: 'success',
-      title: `Imported ${imported} of ${total} rows`,
+      title: `Imported ${imported} of ${total} order${total === 1 ? '' : 's'}`,
       detail: failed.length > 0 ? `${failed.length} failed — see the list below` : 'Scores recomputed automatically.',
     })
   }
 
   if (!isConfigured) return <NeedsSetup />
 
-  const pctDone = Math.round((progress / Math.max(1, parsed.rows.length)) * 100)
+  const pctDone = Math.round((progress / Math.max(1, parsed.orders.length)) * 100)
 
   return (
     <PageShell>
       <PageHeader
         title="Bulk Import"
-        description="Load many orders (and their outcomes) from a CSV. Risk scores recompute automatically."
+        description="Upload your Shopify orders export as it is, or paste a CSV. Risk scores recompute automatically."
       />
 
       <Reveal stagger className="flex flex-col gap-6">
         <Panel
           icon={FileText}
-          title="CSV format"
+          title="What to upload"
           action={
-            <Button variant="outline" size="sm" className="h-11 gap-1.5 px-3 md:h-9" onClick={() => void copyTemplate()}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 gap-1.5 px-3 md:h-9"
+              onClick={() => void copyTemplate(SHOPIFY_TEMPLATE)}
+            >
               <Copy className="size-3.5" /> Copy template
             </Button>
           }
         >
-          <pre className="overflow-x-auto rounded-[10px] border border-border bg-muted/40 p-4 font-mono text-[12px] leading-relaxed text-foreground">
-            {TEMPLATE}
-          </pre>
-          <p className="mt-3 text-[12.5px] text-muted-foreground">
-            <strong className="font-semibold text-foreground">phone</strong> and{' '}
-            <strong className="font-semibold text-foreground">store</strong> are required (store must match an
-            existing store name). <strong className="font-semibold text-foreground">outcome</strong> can be{' '}
-            <code className="font-mono">accepted</code>, <code className="font-mono">refused</code> or left blank
-            (pending). Dates accept <code className="font-mono">YYYY-MM-DD HH:MM</code> or ISO. Other columns are
-            optional.
+          <p className="text-[13.5px] text-foreground">
+            <strong className="font-semibold">Already on Shopify?</strong> Export your orders — Shopify admin →
+            Orders → Export → <em>All orders</em>, CSV for Excel — and upload that file here unchanged. Nothing needs
+            editing: the order number, buyer phone, city, address, products, quantities, prices and dates are all read
+            from Shopify's own columns.
           </p>
+          <ul className="mt-3 flex list-disc flex-col gap-1.5 ps-5 text-[12.5px] text-muted-foreground">
+            <li>
+              A multi-item order is several rows in Shopify's file; they are merged back into <strong>one order</strong>{' '}
+              here, so your order count stays honest.
+            </li>
+            <li>
+              Only the <strong>phone number</strong> is required. Shopify writes it on the customer's row, so any line
+              item without one is skipped and reported.
+            </li>
+            <li>
+              The store comes from the export's <strong>Vendor</strong> column when it matches one of your stores, and
+              otherwise from the store you are working in.
+            </li>
+          </ul>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-[12.5px] font-medium text-primary-text">
+              See the exact columns Verafo reads
+            </summary>
+            <pre className="mt-2 overflow-x-auto rounded-[10px] border border-border bg-muted/40 p-4 font-mono text-[12px] leading-relaxed text-foreground">
+              {SHOPIFY_TEMPLATE}
+            </pre>
+          </details>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-[12.5px] font-medium text-primary-text">
+              No Shopify export? Use Verafo's own template
+            </summary>
+            <pre className="mt-2 overflow-x-auto rounded-[10px] border border-border bg-muted/40 p-4 font-mono text-[12px] leading-relaxed text-foreground">
+              {TEMPLATE}
+            </pre>
+            <p className="mt-2 text-[12.5px] text-muted-foreground">
+              <strong className="font-semibold text-foreground">phone</strong> is required;{' '}
+              <strong className="font-semibold text-foreground">store</strong> must match an existing store name when it
+              is present. <strong className="font-semibold text-foreground">outcome</strong> can be{' '}
+              <code className="font-mono">accepted</code>, <code className="font-mono">refused</code> or left blank
+              (pending). Dates accept <code className="font-mono">YYYY-MM-DD HH:MM</code> or ISO.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 h-11 gap-1.5 px-3 md:h-9"
+              onClick={() => void copyTemplate(TEMPLATE)}
+            >
+              <Copy className="size-3.5" /> Copy this template
+            </Button>
+          </details>
         </Panel>
 
         {admin && (
@@ -554,12 +604,30 @@ export function BulkImport() {
             rows={6}
           />
 
-          {parsed.lineErrors.length > 0 && (
+          {/* What the parser made of the file, in the file's own terms. */}
+          {parsed.format && (
+            <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-0.5 font-medium text-risk-safe-strong">
+                {parsed.format === 'shopify' ? 'Shopify export' : 'Verafo template'}
+              </span>
+              <span>
+                <strong className="font-semibold text-foreground">{parsed.orders.length}</strong> order
+                {parsed.orders.length === 1 ? '' : 's'} found
+              </span>
+              {parsed.skipped > 0 && (
+                <span>
+                  · {parsed.skipped} row{parsed.skipped === 1 ? '' : 's'} skipped (no phone number)
+                </span>
+              )}
+            </p>
+          )}
+
+          {parsed.errors.length > 0 && (
             <div className="mt-3 flex flex-col gap-1.5" role="alert">
-              {parsed.lineErrors.map((e, i) => (
+              {parsed.errors.map((e, i) => (
                 <p
                   key={i}
-                  className="flex items-start gap-2 rounded-[10px] border border-risk-high/40 bg-risk-high-soft px-3 py-2 text-[12.5px] text-risk-high-strong"
+                  className="flex items-start gap-2 rounded-[10px] border border-risk-high/50 bg-risk-high-badge-bg px-3 py-2 text-[12.5px] text-risk-high-badge"
                 >
                   <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> {e}
                 </p>
@@ -569,35 +637,47 @@ export function BulkImport() {
 
           {preview.length > 0 && (
             <div className="mt-4">
-              <p className="mb-2 text-[12.5px] text-muted-foreground">First {preview.length} rows</p>
+              <p className="mb-2 text-[12.5px] text-muted-foreground">
+                First {preview.length} order{preview.length === 1 ? '' : 's'} — this is what will be imported
+              </p>
               <div className="overflow-x-auto rounded-[10px] border border-border">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>#</TableHead>
+                      <TableHead>Order</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Store</TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-end">Price</TableHead>
-                      <TableHead className="text-end">Qty</TableHead>
+                      <TableHead>Products</TableHead>
+                      <TableHead className="text-end">Amount</TableHead>
+                      <TableHead className="text-end">Items</TableHead>
                       <TableHead>City</TableHead>
                       <TableHead className="pe-6">Outcome</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {preview.map((r) => (
-                      <TableRow key={r.line} className={cn(!r.storeOk && 'bg-risk-high-soft')}>
-                        <TableCell className="font-mono text-[12.5px] tabular-nums">{r.line}</TableCell>
-                        <TableCell className="font-mono text-[12.5px]">{r.phone}</TableCell>
+                      <TableRow key={`${r.line}-${r.reference}`} className={cn(r.storeError && 'bg-risk-high-badge-bg')}>
+                        <TableCell className="font-mono text-[12.5px]">{r.reference || `line ${r.line}`}</TableCell>
+                        <TableCell className="font-mono text-[12.5px]">
+                          {formatPhonePK(r.phone)?.national ?? r.phone}
+                        </TableCell>
                         <TableCell className="text-[12.5px]">
-                          {r.store}
-                          {!r.storeOk && (
-                            <span className="ms-2 font-semibold text-risk-high-strong">unknown</span>
+                          {r.resolved ? (
+                            <>
+                              {r.resolved.storeName}
+                              {r.resolved.fromVendor && (
+                                <span className="ms-2 text-muted-foreground">
+                                  (export said “{r.resolved.fromVendor}”)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="font-semibold text-risk-high-badge">{r.storeError}</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-[12.5px]">{r.product || '—'}</TableCell>
+                        <TableCell className="max-w-72 truncate text-[12.5px]">{r.product || '—'}</TableCell>
                         <TableCell className="text-end font-mono text-[12.5px] tabular-nums">
-                          {r.price ?? '—'}
+                          {r.price == null ? '—' : r.price.toLocaleString('en-PK')}
                         </TableCell>
                         <TableCell className="text-end font-mono text-[12.5px] tabular-nums">{r.quantity}</TableCell>
                         <TableCell className="text-[12.5px]">{r.city || '—'}</TableCell>
@@ -613,16 +693,19 @@ export function BulkImport() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button
               className="h-11 gap-2 px-5"
-              disabled={importing || parsed.rows.length === 0}
+              disabled={importing || parsed.orders.length === 0}
               onClick={() => void runImport()}
             >
               {importing ? (
                 <>
-                  <Loader2 className="size-4 animate-spin" /> Importing {progress}/{parsed.rows.length}…
+                  <Loader2 className="size-4 animate-spin" /> Importing {progress}/{parsed.orders.length}…
                 </>
               ) : (
                 <>
-                  <CloudUpload className="size-4" /> Import {parsed.rows.length > 0 ? `${parsed.rows.length} rows` : ''}
+                  <CloudUpload className="size-4" /> Import{' '}
+                  {parsed.orders.length > 0
+                    ? `${parsed.orders.length} order${parsed.orders.length === 1 ? '' : 's'}`
+                    : ''}
                 </>
               )}
             </Button>
