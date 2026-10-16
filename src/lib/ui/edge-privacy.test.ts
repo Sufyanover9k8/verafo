@@ -90,12 +90,18 @@ describe('PRIVACY: buyer search is not an enumeration endpoint', () => {
 
   it('never passes an empty candidate list to a phone filter', () => {
     // An empty `in (...)` list matches every row, so the short-input case must
-    // bail out before the query is built.
-    const fn = EDGE_SOURCE.slice(
-      EDGE_SOURCE.indexOf('function phoneLookupCandidates'),
-      EDGE_SOURCE.indexOf('function phoneLookupCandidates') + 700,
-    )
+    // bail out before the query is built. `phoneVariants` is the single place
+    // that builds the list, so it is the place that must hold this guard.
+    const start = EDGE_SOURCE.indexOf('function phoneVariants')
+    expect(start).toBeGreaterThan(-1)
+    const fn = EDGE_SOURCE.slice(start, start + 900)
     expect(fn).toContain('if (digits.length < FULL_PHONE_DIGITS) return []')
+    // And the search tool must go through it rather than building its own list.
+    const search = EDGE_SOURCE.slice(
+      EDGE_SOURCE.indexOf('async function toolSearchBuyers'),
+      EDGE_SOURCE.indexOf('async function toolSearchBuyers') + 3000,
+    )
+    expect(search).toContain('phoneVariants(')
   })
 
   it('masks buyer identities in the ranking path', () => {

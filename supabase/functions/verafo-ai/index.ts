@@ -521,19 +521,23 @@ async function fetchStats(
   phone: string,
   storeIds: string[] = [],
 ): Promise<SummaryInput> {
-  const { data: buyerData, error: bErr } = await supabase
-    .from("buyers")
-    .select("phone, first_seen, total_orders, total_accepted, total_refused, risk_score")
-    .eq("phone", phone)
-    .maybeSingle();
-  if (bErr) throw new Error(bErr.message);
-  const buyer = asOne<BuyerRow>(buyerData);
-  if (!buyer) throw new Error("Buyer not found");
+  /*
+   * Match through every spelling of the number, not one. Stored numbers are not
+   * normalized, so an `eq` on the caller's spelling returns no buyer at all and
+   * every caller of this function then reports "Buyer not found" — which the
+   * model narrates as the account not being linked to a store.
+   */
+  const found = await findBuyer(supabase, phone);
+  if (!found) throw new Error("Buyer not found");
+  const buyer = found.row;
+  // Query orders with the STORED spelling: orders and buyers are written with
+  // the same string, so the caller's spelling would find nothing here.
+  const storedPhone = found.phone;
 
   const { data: orderData, error: oErr } = await supabase
     .from("orders")
     .select("store_id, product_category, price, quantity, city, ordered_at, outcomes(status)")
-    .eq("buyer_phone", phone)
+    .eq("buyer_phone", storedPhone)
     .in("store_id", storeIds)
     .order("ordered_at", { ascending: false });
   if (oErr) throw new Error(oErr.message);
@@ -570,7 +574,9 @@ async function fetchStats(
     : 0;
 
   return {
-    phone,
+    // The stored spelling, so the model repeats back the number the record
+    // holds rather than the one the merchant happened to type.
+    phone: storedPhone,
     risk_score: Number(buyer.risk_score ?? 0.5),
     total_orders: Number(buyer.total_orders ?? 0),
     total_accepted: Number(buyer.total_accepted ?? 0),
@@ -640,14 +646,9 @@ async function buildFeatureVector(
   phone: string,
   storeIds: string[] = [],
 ): Promise<FeatureVector> {
-  const { data: buyer, error: bErr } = await supabase
-    .from("buyers")
-    .select("phone, first_seen, total_accepted")
-    .eq("phone", phone)
-    .maybeSingle();
-  if (bErr) throw new Error(bErr.message);
-  if (!buyer) throw new Error("Buyer not found");
-  const buyerIdentity = asOne<BuyerIdentityRow>(buyer);
+  const foundBuyer = await findBuyer(supabase, phone);
+  if (!foundBuyer) throw new Error("Buyer not found");
+  const buyerIdentity = foundBuyer.row as BuyerIdentityRow;
   if (!buyerIdentity) throw new Error("Buyer not found");
 
   const { data: orders, error: oErr } = await supabase
@@ -655,7 +656,7 @@ async function buildFeatureVector(
     .select(
       "store_id, product_category, product_name, price, quantity, address, city, ordered_at, outcomes(status)",
     )
-    .eq("buyer_phone", phone)
+    .eq("buyer_phone", foundBuyer.phone)
     .in("store_id", storeIds)
     .order("ordered_at", { ascending: true });
   if (oErr) throw new Error(oErr.message);
@@ -1016,9 +1017,19 @@ async function buildChartData(
   const title = spec.title?.trim() || `By ${dimension}`;
   const category = KNOWN_CATEGORIES[String(spec.category ?? "").trim().toLowerCase()];
 
+  const phoneFilter = phone
+    ? (() => {
+        const variants = phoneVariants(String(phone));
+        return variants.length > 0
+          ? `&buyer_phone=in.(${variants.map((v) => encodeURIComponent(v)).join(",")})`
+          : "";
+      })()
+    : "";
+
   const orderParams = (select: string) => {
     let p = `select=${encodeURIComponent(select)}&limit=2000`;
-    if (phone) p += `&buyer_phone=eq.${encodeURIComponent(phone)}`;
+    // Every spelling, never one: stored numbers are not normalized.
+    if (phoneFilter) p += phoneFilter;
     if (days > 0) p += `&ordered_at=gte.${new Date(Date.now() - days * 86400000).toISOString()}`;
     if (category) p += `&product_category=eq.${encodeURIComponent(category)}`;
     return p;
@@ -1255,7 +1266,15 @@ function buildOrderParams(f: OrderQueryFilters): string {
   if (f.city) p += `&city=eq.${encodeURIComponent(f.city)}`;
   if (f.min_price != null && !Number.isNaN(f.min_price)) p += `&price=gte.${f.min_price}`;
   if (f.max_price != null && !Number.isNaN(f.max_price)) p += `&price=lte.${f.max_price}`;
-  if (f.phone) p += `&buyer_phone=eq.${encodeURIComponent(f.phone)}`;
+  // Match every spelling of the number: stored values are not normalized, so an
+  // `eq` on the merchant's spelling silently returns nothing for a buyer who
+  // does exist. PostgREST spells a list filter `in.(a,b,c)`.
+  if (f.phone) {
+    const variants = phoneVariants(f.phone);
+    if (variants.length > 0) {
+      p += `&buyer_phone=in.(${variants.map((v) => encodeURIComponent(v)).join(",")})`;
+    }
+  }
   if (f.days != null && !Number.isNaN(f.days) && f.days > 0) {
     p += `&ordered_at=gte.${new Date(Date.now() - f.days * 86400000).toISOString()}`;
   }
@@ -1707,11 +1726,14 @@ async function toolBuyerVerdict(
   if (denied) return denied;
   const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone, storeIds);
+  const found = await findBuyer(supabase, phone);
+  if (!found) return { phone, error: "no buyer found for that number" };
+  const storedPhone = found.phone;
+  const stats = await fetchStats(supabase, storedPhone, storeIds);
   const { data: recent, error: rErr } = await supabase
     .from("orders")
     .select("product_name, product_category, price, city, ordered_at, outcomes(status, refusal_reason)")
-    .eq("buyer_phone", phone)
+    .eq("buyer_phone", storedPhone)
     .in("store_id", storeIds)
     .order("ordered_at", { ascending: false })
     .limit(10);
@@ -1756,21 +1778,75 @@ function digitsOnly(v: unknown): string {
 const FULL_PHONE_DIGITS = 10;
 
 /**
- * Phone spellings to try against `buyers.phone`.
+ * Every spelling `buyers.phone` / `orders.buyer_phone` might be stored under.
  *
- * Stored numbers are not guaranteed to be normalized, so a merchant typing
- * "03001234567" must still find "+923001234567". This widens the MATCH, never
- * the result set: the caller still has to supply a complete number.
+ * THIS IS THE ONLY SAFE WAY TO MATCH A PHONE NUMBER IN THIS FILE.
  *
- * Returns an empty array for anything shorter than a full number. Callers must
+ * Stored numbers are NOT normalized: the app writes whatever format the number
+ * arrived in, so the same buyer can exist as "+923077000007", "03077000007",
+ * "923077000007" or "3077000007" depending on how the order was logged or which
+ * export it came from. An `eq` match on one spelling therefore misses the buyer
+ * entirely — which is exactly how "should I ship to +92 307 7000007?" came back
+ * as "your account is not linked to any specific store" instead of an answer.
+ *
+ * Never call `.eq("phone", …)` or `.eq("buyer_phone", …)` on a caller-supplied
+ * number. Use this, and prefer the spelling the buyer row actually holds.
+ *
+ * Returns an empty array for anything shorter than a full number; callers must
  * treat that as "no match" and must never pass it to a filter, because an empty
  * `in (...)` list matches every row.
  */
-function phoneLookupCandidates(raw: string): string[] {
+function phoneVariants(raw: string): string[] {
   const digits = digitsOnly(raw);
   if (digits.length < FULL_PHONE_DIGITS) return [];
   const local10 = digits.slice(-FULL_PHONE_DIGITS);
-  return [...new Set<string>([digits, `0${local10}`, local10, `+92${local10}`])];
+  /*
+   * Every spelling the app can have written:
+   *   +923077000007  as typed in New Order
+   *   03077000007    as typed, or as Shopify exports it
+   *   923077000007   Shopify, when the export drops the leading zero
+   *   3077000007     a spreadsheet that lost both prefixes
+   *   00923077000007 an international dialling prefix
+   *   <raw>          anything else that already ends in the same 10 digits
+   */
+  return [
+    ...new Set<string>([
+      `+92${local10}`,
+      `0${local10}`,
+      local10,
+      `92${local10}`,
+      `0092${local10}`,
+      digits,
+    ]),
+  ];
+}
+
+/**
+ * Resolve a caller-supplied number to the buyer row that actually exists.
+ *
+ * Returns the STORED `phone` alongside the row, because every sibling table
+ * (`orders.buyer_phone` and friends) spells the number the way `buyers` does:
+ * querying orders with the caller's spelling would find nothing even after the
+ * buyer was found.
+ */
+async function findBuyer(
+  supabase: Db,
+  raw: string,
+): Promise<{ row: BuyerRow; phone: string } | null> {
+  const variants = phoneVariants(raw);
+  if (variants.length === 0) return null;
+  const { data, error } = await supabase
+    .from("buyers")
+    .select("phone, first_seen, total_orders, total_accepted, total_refused, risk_score")
+    .in("phone", variants)
+    .limit(5);
+  if (error) throw new Error(error.message);
+  const rows = asRows<BuyerRow>(data);
+  if (rows.length === 0) return null;
+  // If the same person was stored twice under two spellings, prefer the record
+  // with the most history — that is the one the scores were computed from.
+  const row = rows.sort((a, b) => Number(b.total_orders ?? 0) - Number(a.total_orders ?? 0))[0];
+  return { row, phone: String(row.phone ?? raw) };
 }
 
 /**
@@ -1859,7 +1935,7 @@ async function toolSearchBuyers(supabase: Db, args: Record<string, unknown>, sto
 
   // Exact lookup. Compare across common spellings so "+92 300 1234567" and
   // "03001234567" both resolve, but only ever return the single buyer asked for.
-  const candidates = phoneLookupCandidates(queryDigits);
+  const candidates = phoneVariants(queryDigits);
   if (candidates.length === 0) {
     return { buyers: [], error: "Enter a complete phone number to look a buyer up." };
   }
@@ -3166,11 +3242,13 @@ const supabase = createClient(
 
     if (action === "analyze") {
       if (!phone) return json({ error: "phone is required" }, 400);
-      const stats = await fetchStats(supabase, phone, storeIds);
+      const analyzeBuyer = await findBuyer(supabase, phone);
+      if (!analyzeBuyer) return json({ error: "no buyer found for that number" }, 404);
+      const stats = await fetchStats(supabase, analyzeBuyer.phone, storeIds);
       const { data: recent, error: rErr } = await supabase
         .from("orders")
         .select("product_name, product_category, price, city, ordered_at, outcomes(status, refusal_reason)")
-        .eq("buyer_phone", phone)
+        .eq("buyer_phone", analyzeBuyer.phone)
         .in("store_id", storeIds)
         .order("ordered_at", { ascending: false })
         .limit(10);
