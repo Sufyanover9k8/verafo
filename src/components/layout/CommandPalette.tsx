@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { NAV_SECTIONS, SETTINGS_ITEM } from './nav'
+import { useIsAdmin } from '../../lib/admin'
 import { supabase } from '../../lib/supabase'
 import { useStoreScope, type ActiveStore } from '../../lib/store'
 import { normalizePhone } from '../../lib/format'
@@ -65,6 +66,9 @@ function Palette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { store, setStore } = useStoreScope()
+  // Same gate the sidebar uses, so a row hidden from the sidebar is not
+  // offered here instead — and typing "new order" as a merchant finds nothing.
+  const { admin } = useIsAdmin()
   const [query, setQuery] = useState('')
   const [stores, setStores] = useState<ActiveStore[]>([])
   const [index, setIndex] = useState(0)
@@ -133,12 +137,14 @@ function Palette({ onClose }: { onClose: () => void }) {
     const out: Group[] = []
 
     const pages: PaletteItem[] = [
-      ...NAV_SECTIONS.flatMap((s) => s.items).map((n) => ({
-        kind: 'page' as const,
-        label: n.label,
-        to: n.to,
-        icon: n.icon,
-      })),
+      ...NAV_SECTIONS.flatMap((s) => s.items)
+        .filter((n) => !n.adminOnly || admin)
+        .map((n) => ({
+          kind: 'page' as const,
+          label: n.label,
+          to: n.to,
+          icon: n.icon,
+        })),
       {
         kind: 'page' as const,
         label: SETTINGS_ITEM.label,

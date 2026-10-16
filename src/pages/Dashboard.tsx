@@ -553,10 +553,16 @@ export function Dashboard() {
   ) : orders.length === 0 ? (
     <span>
       Verafo scores every buyer from their first resolved order.{' '}
-      <Link className="font-medium text-primary-text underline-offset-4 hover:underline" to="/orders/new">
-        Log an order
-      </Link>{' '}
-      or{' '}
+      {/* Hand-logging an order is a Verafo-team tool now, so a merchant is
+          pointed at the route they actually have: their own history. */}
+      {isAdmin ? (
+        <>
+          <Link className="font-medium text-primary-text underline-offset-4 hover:underline" to="/orders/new">
+            Log an order
+          </Link>{' '}
+          or{' '}
+        </>
+      ) : null}
       <Link className="font-medium text-primary-text underline-offset-4 hover:underline" to="/import">
         import your history
       </Link>{' '}

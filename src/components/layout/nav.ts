@@ -40,7 +40,10 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/orders', label: 'Orders', icon: Package },
-      { to: '/orders/new', label: 'New Order', icon: PlusSquare },
+      // Logging an order by hand is a Verafo-team tool. Merchants' orders
+      // arrive through Bulk Import or the Shopify app, so this row is not
+      // theirs to see.
+      { to: '/orders/new', label: 'New Order', icon: PlusSquare, adminOnly: true },
       // Unreleased pages. Their switches live in src/lib/features.ts; flipping
       // one on brings the sidebar row, the command-palette entry and the route
       // back together, because all three read that single constant.

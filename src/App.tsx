@@ -60,7 +60,10 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/lookup" element={<Lookup />} />
-          <Route path="/orders/new" element={<NewOrder />} />
+          {/* Hand-logging an order is a Verafo-team tool. For a merchant the
+              route is absent, so a typed URL falls through to the catch-all
+              and lands on the dashboard. */}
+          {isAdmin && <Route path="/orders/new" element={<NewOrder />} />}
           <Route path="/orders/pending" element={<Outcomes />} />
           {/* Unreleased pages: switched off in src/lib/features.ts. With the
               route gone, a direct URL falls through to the catch-all below and
