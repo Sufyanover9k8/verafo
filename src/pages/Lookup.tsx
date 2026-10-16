@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
 import { computeVerdict, riskFactors, toneFromScore, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { aiJson, classifyAiThrow } from '../lib/ai'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -234,28 +235,12 @@ export function Lookup() {
     if (!supabase) return
     setExplaining(true)
     try {
-      const base = functionsBaseUrl()
-      if (!base) throw new Error('Edge functions are not deployed.')
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ action: 'explain', phone: buyer.phone }),
-      })
-      if (!res.ok) throw new Error(`Request failed (${res.status})`)
-      const json = (await res.json()) as { text?: string; error?: string }
+      const json = await aiJson<{ text?: string; error?: string }>('explain', { phone: buyer.phone })
       if (json.error) throw new Error(json.error)
       setExplanation(json.text ?? null)
     } catch (err) {
-      toast.push({
-        kind: 'error',
-        title: 'Could not explain this buyer',
-        detail: err instanceof Error ? err.message : String(err),
-      })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Could not explain this buyer', detail: failure.detail })
     } finally {
       setExplaining(false)
     }
@@ -265,28 +250,13 @@ export function Lookup() {
     if (!supabase) return
     setEmbeddingBusy(true)
     try {
-      const base = functionsBaseUrl()
-      if (!base) throw new Error('Edge functions are not deployed.')
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        // Same correction as `explain`: the action name, phone at top level.
-        body: JSON.stringify({ action: 'embed', phone: buyer.phone }),
-      })
-      if (!res.ok) throw new Error(`Request failed (${res.status})`)
+      // Same correction as `explain`: the action name, phone at top level.
+      await aiJson('embed', { phone: buyer.phone })
       toast.push({ kind: 'success', title: 'Fingerprint refreshed' })
       void search(buyer.phone)
     } catch (err) {
-      toast.push({
-        kind: 'error',
-        title: 'Could not refresh the fingerprint',
-        detail: err instanceof Error ? err.message : String(err),
-      })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Could not refresh the fingerprint', detail: failure.detail })
     } finally {
       setEmbeddingBusy(false)
     }

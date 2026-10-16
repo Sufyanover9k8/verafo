@@ -37,6 +37,7 @@ import {
   type ScoredOrder,
 } from '../lib/ui/analytics'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 
@@ -292,26 +293,19 @@ export function BuyerMap() {
   }, [load])
 
   const loadSim = useCallback(async () => {
-    const base = functionsBaseUrl()
-    if (!base) {
+    if (!functionsBaseUrl()) {
       toast.push({ kind: 'error', title: 'Vectors unavailable', detail: 'Edge functions are not configured.' })
       return
     }
     setSimLoading(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'embed_map' }),
-      })
-      const j = (await res.json()) as {
+      const j = await aiJson<{
         points?: MapPoint3D[]
         embedded?: number
         total?: number
         failed?: string[]
-        error?: string
-      }
-      if (!res.ok || !j.points) throw new Error(j.error ?? 'Could not build the vector map')
+      }>('embed_map')
+      if (!j.points) throw new AiError({ kind: 'server', title: 'Could not build the vector map' })
       setSimPoints(j.points)
       setSimMeta({ embedded: j.embedded ?? j.points.length, total: j.total ?? j.points.length })
       if (j.failed && j.failed.length > 0) {
@@ -322,8 +316,8 @@ export function BuyerMap() {
         })
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.push({ kind: 'error', title: 'Vector map failed', detail: message })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Vector map failed', detail: failure.detail })
       setSimPoints([])
       setSimMeta(null)
     } finally {

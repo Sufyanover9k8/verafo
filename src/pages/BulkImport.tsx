@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils'
 import { normalizePhone } from '../lib/format'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
@@ -285,28 +286,20 @@ export function BulkImport() {
   }
 
   async function generateDummy() {
-    const base = functionsBaseUrl()
-    if (!supabase || !base) return
+    if (!supabase || !functionsBaseUrl()) return
     setGenBusy(true)
     setGenResult(null)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'generate-dummy',
-          stores: Math.max(1, Math.min(5, genStores)),
-          buyers_per_store: Math.max(1, Math.min(6, genBuyers)),
-          orders_per_buyer: Math.max(2, Math.min(8, genOrders)),
-          mix: genMix,
-        }),
-      })
-      const json = (await res.json()) as {
+      const json = await aiJson<{
         ok?: boolean
         summary?: { stores: number; buyers: number; orders: number; refused: number; pending: number; accepted: number }
-        error?: string
-      }
-      if (!res.ok || !json.ok || !json.summary) throw new Error(json.error ?? 'Request failed')
+      }>('generate-dummy', {
+        stores: Math.max(1, Math.min(5, genStores)),
+        buyers_per_store: Math.max(1, Math.min(6, genBuyers)),
+        orders_per_buyer: Math.max(2, Math.min(8, genOrders)),
+        mix: genMix,
+      })
+      if (!json.ok || !json.summary) throw new AiError({ kind: 'server', title: 'Generation failed' })
       setGenResult(json.summary)
       toast.push({
         kind: 'success',
@@ -314,12 +307,8 @@ export function BulkImport() {
         detail: `${json.summary.stores} stores, ${json.summary.buyers} buyers, ${json.summary.orders} orders. Scores computed automatically.`,
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.push({
-        kind: 'error',
-        title: 'Generation failed',
-        detail: `${message} — is the verafo-ai edge function deployed with an OpenAI key?`,
-      })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Generation failed', detail: failure.detail })
     } finally {
       setGenBusy(false)
     }

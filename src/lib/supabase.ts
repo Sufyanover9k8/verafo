@@ -7,6 +7,11 @@ const clientKey =
 
 export const isConfigured = Boolean(url && clientKey)
 
+/** The project URL and publishable key, for callers that need to talk to the
+ *  REST or Functions gateway directly (both are public and ship in the bundle). */
+export const supabaseUrl: string | null = url ?? null
+export const supabaseKey: string | null = clientKey ?? null
+
 export const supabase: SupabaseClient | null = isConfigured
   ? createClient(url!, clientKey!)
   : null

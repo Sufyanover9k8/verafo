@@ -140,6 +140,27 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Native controls.
+     The app styles these by hand, so the browser's own chrome has to go. An
+     unstyled <button> otherwise paints the UA default — a 2px outset border
+     and a grey fill — which is what every bare button in the app (rail rows,
+     suggestion chips, the starter cards on Ask Verafo, the action buttons on
+     Outcomes) was doing once the legacy stylesheet was retired. Utilities live
+     in a later layer, so anything that sets its own border, background or
+     padding still wins. */
+  button,
+  [type='button'],
+  [type='reset'],
+  [type='submit'] {
+    appearance: button;
+    background-color: transparent;
+    background-image: none;
+    border: 0 solid;
+    border-radius: 0;
+    padding: 0;
+    text-align: inherit;
+  }
+
   /* The list resets the shadcn components rely on. */
   button:where([data-slot], [data-sidebar]),
   [data-sidebar] button,

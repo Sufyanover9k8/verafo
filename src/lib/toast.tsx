@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react'
 import { cn } from './utils'
 
@@ -41,8 +41,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, 4800)
   }, [])
 
+  /*
+   * The context value MUST be stable. `{ push }` inline created a new object on
+   * every provider render — that is, every time a toast appeared or expired —
+   * and anything that listed `toast` in a dependency array then re-ran for
+   * reasons that had nothing to do with its own inputs. On Ask Verafo that
+   * reloaded the thread and cleared the in-thread failure notice the moment it
+   * pushed its own error toast, so a failed answer showed the toast and then
+   * nothing at all. `push` is already stable, so the memo never changes.
+   */
+  const value = useMemo(() => ({ push }), [push])
+
   return (
-    <ToastContext.Provider value={{ push }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div
         className="pointer-events-none fixed inset-x-3 bottom-3 z-[70] flex flex-col-reverse gap-2 sm:inset-x-auto sm:end-4 sm:bottom-4 sm:w-[22rem]"

@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { aiJson } from '../lib/ai'
 import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
 import { useToast } from '../lib/toast'
@@ -142,13 +143,8 @@ export function Settings() {
       }
     })
     if (base) {
-      fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'suggest' }),
-      })
-        .then((r) => r.json())
-        .then((j: { ok?: boolean }) => {
+      void aiJson<{ ok?: boolean }>('suggest')
+        .then((j) => {
           if (!cancelled && !j.ok) setConn('fail')
         })
         .catch(() => {

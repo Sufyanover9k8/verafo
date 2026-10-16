@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
+  AlertTriangle,
   Check,
   CheckCheck,
+  ClipboardList,
   Download,
   Loader2,
+  MapPin,
   MessageSquare,
   MoreHorizontal,
+  Package,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Send,
   Sparkles,
+  Square,
   Star,
   Trash2,
+  TrendingUp,
+  UserSearch,
+  Users,
   X,
 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
@@ -43,7 +52,16 @@ import { NeedsSetup } from '../components/States'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '../lib/format'
 import { activeMention, mentionPhones, type ActiveMention } from '../lib/mentions'
+import { appendDelta, parseSseFrame, splitSseFrames, type SseFrame } from '../lib/sse'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import {
+  AiError,
+  aiFailureFromResponse,
+  aiHeaders,
+  aiJson,
+  classifyAiThrow,
+  type AiFailure,
+} from '../lib/ai'
 import { useToast } from '../lib/toast'
 import type { AnalyzeReport, ChatMessage, ChatRow, FileSpec } from '../lib/types'
 
@@ -54,13 +72,48 @@ const FALLBACK_SUGGESTIONS = [
   'Which buyers are the biggest refusal risk?',
 ]
 
+/**
+ * The four things this page is actually for.
+ *
+ * Shown on an empty conversation instead of a bare "no messages" box: a blank
+ * chat gives the merchant nothing to type and no clue what Verafo can see.
+ * Each one pre-fills the composer rather than sending, so a click can never
+ * spend a request on a question they did not mean to ask.
+ */
+const STARTERS = [
+  {
+    icon: UserSearch,
+    label: 'Check a buyer',
+    hint: 'Refusal history and usual order size',
+    prompt: 'Check @ for me — refusal history, usual order size, and whether you would ship to them.',
+  },
+  {
+    icon: MapPin,
+    label: 'Look at a city',
+    hint: 'Volume and returns by city',
+    prompt: 'How many orders go to Karachi, and how many of them come back?',
+  },
+  {
+    icon: Package,
+    label: 'Rank a product',
+    hint: 'Best sellers next to worst refusals',
+    prompt: 'Which products sell best, and which ones get refused most?',
+  },
+  {
+    icon: TrendingUp,
+    label: 'Read the trend',
+    hint: 'Orders and refusals over time',
+    prompt: 'How have my orders and refusals moved over the last 8 weeks?',
+  },
+] as const
+
 const QUICK_ACTIONS = [
-  { key: 'analyze', label: 'Analyze buyer', icon: Sparkles },
-  { key: 'trends', label: 'Trends', icon: Sparkles },
+  { key: 'analyze', label: 'Analyze buyer', icon: UserSearch },
+  { key: 'trends', label: 'Trends', icon: TrendingUp },
   { key: 'suggest', label: 'Suggestions', icon: Sparkles },
-  { key: 'topbuyers', label: 'Top buyers', icon: Sparkles },
-  { key: 'topproducts', label: 'Top products', icon: Sparkles },
-  { key: 'paste', label: 'Paste orders', icon: Sparkles },
+  { key: 'topbuyers', label: 'Top buyers', icon: Users },
+  { key: 'topproducts', label: 'Top products', icon: Package },
+  { key: 'paste', label: 'Paste orders', icon: ClipboardList },
 ] as const
 
 const FILTERS = [
@@ -70,6 +123,20 @@ const FILTERS = [
   { label: 'Footwear', token: 'footwear' },
   { label: 'Pending only', token: 'pending orders only' },
 ] as const
+
+/** Today / Previous 7 days / Older, so a long list reads as a timeline. */
+function timeBucket(iso: string | null | undefined): string {
+  if (!iso) return 'Older'
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return 'Older'
+  const startOfToday = new Date().setHours(0, 0, 0, 0)
+  if (then >= startOfToday) return 'Today'
+  if (Date.now() - then <= 7 * 86_400_000) return 'Previous 7 days'
+  return 'Older'
+}
+
+/** Render order for the rail groups — newest bucket first. */
+const CHAT_BUCKETS = ['Today', 'Previous 7 days', 'Older'] as const
 
 function formatAnalyze(phone: string, r: AnalyzeReport): string {
   const lines = [
@@ -151,9 +218,41 @@ interface WorkingState {
 /** The small print under the composer. Kept honest and short. */
 const COMPOSER_HINT = 'Enter sends · Shift + Enter adds a line · @ for a buyer · # for a store'
 
+/**
+ * The four ways in, as cards.
+ *
+ * Defined outside `Chat` on purpose: a component created during render is a new
+ * type on every pass, so React would unmount and remount the grid (losing focus
+ * and hover) each time the composer changed.
+ */
+function StarterGrid({ onPick, disabled }: { onPick: (prompt: string) => void; disabled?: boolean }) {
+  return (
+    <div className="grid w-full gap-2 sm:grid-cols-2">
+      {STARTERS.map((s) => (
+        <button
+          key={s.label}
+          type="button"
+          disabled={disabled}
+          onClick={() => onPick(s.prompt)}
+          className="group flex items-start gap-3 rounded-[14px] border border-border bg-card p-3 text-start transition-colors hover:border-[var(--teal)] hover:bg-[var(--bg-tint)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-[var(--bg-tint)] text-[var(--v-safe-strong)] transition-colors group-hover:bg-card">
+            <s.icon className="size-4" aria-hidden="true" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[13px] font-semibold text-foreground">{s.label}</span>
+            <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">{s.hint}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function Chat() {
   const toast = useToast()
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [chats, setChats] = useState<ChatRow[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -162,6 +261,9 @@ export function Chat() {
   const [busy, setBusy] = useState(false)
   const [featureBusy, setFeatureBusy] = useState(false)
   const [working, setWorking] = useState<WorkingState | null>(null)
+  /** The last turn that failed, so the thread can offer a way out instead of
+   *  leaving an unanswered question behind a toast that already faded. */
+  const [failure, setFailure] = useState<{ prompt: string; failure: AiFailure } | null>(null)
   const [streamText, setStreamText] = useState('')
   const [liveFiles, setLiveFiles] = useState<FileSpec[]>([])
   const [mention, setMention] = useState<ActiveMention | null>(null)
@@ -192,6 +294,12 @@ export function Chat() {
   const doneMsgIdRef = useRef<string | null>(null)
   /** Deltas as received, so the finished turn can be saved if the stream did not. */
   const streamedRef = useRef('')
+  /** An `error` frame from the function, kept until the stream ends. */
+  const streamErrorRef = useRef<string | null>(null)
+  /** The in-flight answer, so the merchant can stop a runaway one. */
+  const abortRef = useRef<AbortController | null>(null)
+  /** Whether the merchant pressed Stop, rather than the watchdog firing. */
+  const stoppedRef = useRef(false)
   const sendRef = useRef<((override?: string) => void) | null>(null)
 
   useEffect(() => {
@@ -247,15 +355,9 @@ export function Chat() {
   }, [])
 
   const loadSuggestions = useCallback(async () => {
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!functionsBaseUrl()) return
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'suggest' }),
-      })
-      const j = (await res.json()) as { suggestions?: string[] }
+      const j = await aiJson<{ suggestions?: string[] }>('suggest')
       if (Array.isArray(j.suggestions) && j.suggestions.length > 0) setSuggestions(j.suggestions)
     } catch {
       setSuggestions(FALLBACK_SUGGESTIONS)
@@ -280,6 +382,7 @@ export function Chat() {
     setWorking(null)
     setStreamText('')
     setLiveFiles([])
+    setFailure(null)
     loadMessages(activeId)
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -519,17 +622,17 @@ export function Chat() {
     }
   }
 
-  function handleSseEvent(raw: string) {
-    let event = 'message'
-    const dataLines: string[] = []
-    for (const line of raw.split('\n')) {
-      if (line.startsWith('event:')) event = line.slice(6).trim()
-      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-    }
-    if (dataLines.length === 0) return
+  /**
+   * One parsed frame from the answer stream.
+   *
+   * `useCallback` with no dependencies because everything it touches is either a
+   * ref or a state setter, both of which React keeps stable — so `send`, which
+   * calls it, does not have to be rebuilt on every render.
+   */
+  const dispatchSseFrame = useCallback(({ event, data: payload }: SseFrame) => {
     let data: Record<string, unknown>
     try {
-      data = JSON.parse(dataLines.join('\n'))
+      data = JSON.parse(payload)
     } catch {
       return
     }
@@ -582,10 +685,17 @@ export function Chat() {
       case 'delta': {
         const content = String(data.content ?? '')
         if (content) {
-          setStreamText((t) => {
-            streamedRef.current = `${streamedRef.current}${content}`.slice(-200_000)
-            return t + content
-          })
+          /*
+           * The buffer is appended HERE, not inside the `setStreamText`
+           * updater: a React updater must be pure. React invokes updaters more
+           * than once — twice under StrictMode, and again whenever a concurrent
+           * render is discarded — so accumulating in one interleaved the same
+           * delta into the buffer several times and every saved answer came out
+           * with its chunks duplicated. The updater below only adds, and adding
+           * the same string twice to discarded state is harmless.
+           */
+          streamedRef.current = appendDelta(streamedRef.current, content)
+          setStreamText((t) => t + content)
           setWorking((w) =>
             w ? { ...w, phase: 'writing', label: w.label } : { phase: 'writing', label: 'Writing your answer…', tools: [] },
           )
@@ -608,10 +718,25 @@ export function Chat() {
         break
       }
       case 'error': {
-        throw new Error(String(data.message ?? 'Verafo hit an error'))
+        /*
+         * Recorded rather than thrown. The function reports its own failures
+         * mid-stream, after it has already sent phases and — sometimes — part
+         * of an answer. Throwing from here would abandon whatever had already
+         * arrived, and the merchant would watch a half-written reply vanish.
+         */
+        streamErrorRef.current = String(data.message ?? 'Verafo hit an error')
+        break
       }
     }
-  }
+  }, [])
+
+  const handleSseEvent = useCallback(
+    (block: string) => {
+      const frame = parseSseFrame(block)
+      if (frame) dispatchSseFrame(frame)
+    },
+    [dispatchSseFrame],
+  )
 
   const persistCitations = useCallback(async () => {
     const mid = doneMsgIdRef.current
@@ -654,6 +779,7 @@ export function Chat() {
       const phones = mentionPhones(raw)
       const phone = phones[0] ?? activeChat?.phone ?? null
       setBusy(true)
+      setFailure(null)
       setComposing('')
       setMention(null)
       setStreamText('')
@@ -662,10 +788,12 @@ export function Chat() {
       toolsUsedRef.current = []
       doneMsgIdRef.current = null
       streamedRef.current = ''
+      streamErrorRef.current = null
+      const optimisticId = `tmp-${Date.now()}`
       setMessages((m) => [
         ...m,
         {
-          id: `tmp-${Date.now()}`,
+          id: optimisticId,
           chat_id: activeId,
           role: 'user',
           content: raw,
@@ -673,74 +801,178 @@ export function Chat() {
           created_at: new Date().toISOString(),
         },
       ])
+      const dropOptimistic = () => setMessages((m) => m.filter((x) => x.id !== optimisticId))
       try {
         const { error: insErr } = await supabase
           .from('chat_messages')
           .insert({ chat_id: activeId, role: 'user', content: raw, phone })
-        if (insErr) throw insErr
+        if (insErr) {
+          /*
+           * The question never reached the thread. Showing it as sent would
+           * leave the merchant waiting for an answer to something Verafo never
+           * received, so the bubble comes back out and the text returns to the
+           * composer.
+           */
+          dropOptimistic()
+          setComposing(raw)
+          throw new AiError(classifyAiThrow(insErr))
+        }
         if (phone && !activeChat?.phone) {
           await supabase.from('chats').update({ phone }).eq('id', activeId)
         }
-        const base = functionsBaseUrl()
-        if (!base) throw new Error('Edge functions are not configured')
-        const res = await fetch(`${base}/verafo-ai`, {
+        if (!functionsBaseUrl()) {
+          throw new AiError({
+            kind: 'config',
+            title: 'Verafo AI is not configured',
+            detail: 'This build has no Supabase URL, so the AI function cannot be called.',
+          })
+        }
+        const ac = new AbortController()
+        abortRef.current = ac
+        const res = await fetch(`${functionsBaseUrl()}/verafo-ai`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await aiHeaders(),
+          signal: ac.signal,
           body: JSON.stringify({ action: 'chat', chat_id: activeId, prompt: raw, phone: phone ?? undefined }),
         })
-        if (!res.ok || !res.body) {
-          let detail = 'Request failed'
-          try {
-            const j = (await res.json()) as { error?: string }
-            if (j.error) detail = j.error
-          } catch {
-            /* not json */
-          }
-          throw new Error(detail)
-        }
+        if (!res.ok || !res.body) throw new AiError(await aiFailureFromResponse(res))
 
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
         let buf = ''
         let done = false
-        while (!done) {
-          const { value, done: streamDone } = await reader.read()
-          done = streamDone
-          buf += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-          let sep: number
-          while ((sep = buf.indexOf('\n\n')) >= 0) {
-            const chunk = buf.slice(0, sep)
-            buf = buf.slice(sep + 2)
-            if (chunk.trim()) handleSseEvent(chunk)
+        /*
+         * A watchdog on the gaps, not on the whole answer: a long reply is
+         * allowed to stream for as long as it needs, but a connection that goes
+         * quiet for 90 seconds is dead, and leaving the composer spinning on it
+         * is what "Verafo is not responding" looks like.
+         */
+        let watchdog: ReturnType<typeof setTimeout> | null = null
+        const armWatchdog = () => {
+          if (watchdog) clearTimeout(watchdog)
+          watchdog = setTimeout(() => ac.abort(), 90_000)
+        }
+        try {
+          armWatchdog()
+          while (!done) {
+            const { value, done: streamDone } = await reader.read()
+            done = streamDone
+            armWatchdog()
+            buf += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+            const { frames, rest } = splitSseFrames(buf)
+            buf = rest
+            for (const frame of frames) {
+              if (streamErrorRef.current) break
+              dispatchSseFrame(frame)
+            }
+            if (streamErrorRef.current) break
+          }
+          if (buf.trim() && !streamErrorRef.current) handleSseEvent(buf)
+        } finally {
+          if (watchdog) clearTimeout(watchdog)          // The function may have more frames queued behind the failure; let the
+          // connection go rather than reading a stream nobody is listening to.
+          if (streamErrorRef.current || ac.signal.aborted) {
+            await reader.cancel().catch(() => undefined)
           }
         }
-        if (buf.trim()) handleSseEvent(buf)
+
+        if (streamErrorRef.current) {
+          if (streamedRef.current) {
+            /*
+             * Part of an answer did arrive. Keeping it — clearly marked as
+             * unfinished — beats deleting it: the merchant can still read what
+             * Verafo worked out, and can ask again for the rest.
+             */
+            await persistAssistantTurn(activeId)
+            setFailure({
+              prompt: raw,
+              failure: {
+                kind: 'server',
+                title: 'That answer was cut short',
+                detail: streamErrorRef.current,
+                retryable: true,
+              },
+            })
+            await Promise.all([loadMessages(activeId), loadChats()])
+            return
+          }
+          throw new Error(streamErrorRef.current)
+        }
+
         await persistCitations()
         await persistAssistantTurn(activeId)
         await Promise.all([loadMessages(activeId), loadChats()])
         void loadSuggestions()
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        toast.push({
-          kind: 'error',
-          title: 'Verafo chat failed',
-          detail: `${message} - is the verafo-ai edge function deployed with an OpenAI key?`,
-        })
+        const aborted = err instanceof DOMException && err.name === 'AbortError'
+        if (aborted && streamedRef.current) {
+          // Stopped, either by the merchant or by the watchdog. Whatever had
+          // arrived is kept — it is usually most of the answer.
+          await persistAssistantTurn(activeId)
+          const byMerchant = stoppedRef.current
+          setFailure({
+            prompt: raw,
+            failure: {
+              kind: 'timeout',
+              title: byMerchant ? 'Answer stopped' : 'That answer was cut short',
+              detail: byMerchant
+                ? 'You stopped Verafo. What had already arrived was kept — ask again for the rest.'
+                : 'The connection went quiet before the answer finished. What had already arrived was kept.',
+              retryable: true,
+            },
+          })
+          await Promise.all([loadMessages(activeId), loadChats()])
+          return
+        }
+        if (aborted) {
+          throw new AiError({
+            kind: 'timeout',
+            title: stoppedRef.current ? 'Answer stopped' : 'Verafo went quiet',
+            detail: stoppedRef.current
+              ? 'You stopped Verafo before it answered.'
+              : 'No answer arrived for 90 seconds, so the request was closed. Try again, or ask something narrower.',
+          })
+        }
+        const failure = classifyAiThrow(err)
+        /*
+         * The failure is shown in the thread as well as in a toast. A toast
+         * disappears after a few seconds and leaves the question sitting there
+         * unanswered, which is exactly what "Verafo is not responding" looks
+         * like from the merchant's side.
+         */
+        setFailure({ prompt: raw, failure })
+        toast.push({ kind: 'error', title: failure.title, detail: failure.detail })
         try {
           await loadMessages(activeId)
         } catch {
           /* keep the optimistic bubble */
         }
       } finally {
+        abortRef.current = null
+        stoppedRef.current = false
         setBusy(false)
         setWorking(null)
         setStreamText('')
         setLiveFiles([])
         doneMsgIdRef.current = null
         toolsUsedRef.current = []
+        streamErrorRef.current = null
       }
     },
-    [composing, busy, activeId, activeChat, toast, loadMessages, loadChats, loadSuggestions, persistCitations, persistAssistantTurn],
+    [
+      composing,
+      busy,
+      activeId,
+      activeChat,
+      toast,
+      loadMessages,
+      loadChats,
+      loadSuggestions,
+      persistCitations,
+      persistAssistantTurn,
+      handleSseEvent,
+      dispatchSseFrame,
+    ],
   )
 
   // The keyboard handler lives on the textarea. Keeping the latest `send` in a
@@ -763,23 +995,17 @@ export function Chat() {
     e.preventDefault()
     const phone = analyzePhone.trim()
     if (!supabase || !activeId || !phone || featureBusy) return
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!functionsBaseUrl()) return
     setFeatureBusy(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'analyze', phone }),
-      })
-      const json = (await res.json()) as { report?: AnalyzeReport; error?: string }
-      if (!res.ok || !json.report) throw new Error(json.error ?? 'Analysis failed')
+      const json = await aiJson<{ report?: AnalyzeReport }>('analyze', { phone })
+      if (!json.report) throw new AiError({ kind: 'server', title: 'Analysis failed' })
       await appendAssistant(formatAnalyze(phone, json.report))
       setAnalyzeOpen(false)
       setAnalyzePhone('')
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.push({ kind: 'error', title: 'Analysis failed', detail: message })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Analysis failed', detail: failure.detail })
     } finally {
       setFeatureBusy(false)
     }
@@ -787,21 +1013,15 @@ export function Chat() {
 
   async function runTrends() {
     if (!supabase || !activeId || featureBusy) return
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!functionsBaseUrl()) return
     setFeatureBusy(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'trends' }),
-      })
-      const json = (await res.json()) as { error?: string; totals?: unknown }
-      if (!res.ok || !json.totals) throw new Error(json.error ?? 'Trends failed')
+      const json = await aiJson<{ totals?: unknown }>('trends')
+      if (!json.totals) throw new AiError({ kind: 'server', title: 'Trends failed' })
       await appendAssistant(formatTrends(json as unknown as TrendsReport))
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.push({ kind: 'error', title: 'Trends failed', detail: message })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Trends failed', detail: failure.detail })
     } finally {
       setFeatureBusy(false)
     }
@@ -809,28 +1029,51 @@ export function Chat() {
 
   async function runSuggest() {
     if (!supabase || !activeId || featureBusy) return
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!functionsBaseUrl()) return
     setFeatureBusy(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'suggest' }),
-      })
-      const json = (await res.json()) as { error?: string; suggestions?: string[] }
-      if (!res.ok || !Array.isArray(json.suggestions)) throw new Error(json.error ?? 'Suggestions failed')
+      const json = await aiJson<{ suggestions?: string[] }>('suggest')
+      if (!Array.isArray(json.suggestions)) throw new AiError({ kind: 'server', title: 'Suggestions failed' })
       await appendAssistant(['[Suggestions] Things to try', ...json.suggestions.map((s) => `- ${s}`)].join('\n'))
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      toast.push({ kind: 'error', title: 'Suggestions failed', detail: message })
+      const failure = classifyAiThrow(err)
+      toast.push({ kind: 'error', title: 'Suggestions failed', detail: failure.detail })
     } finally {
       setFeatureBusy(false)
     }
   }
 
-  function handleQuickAction(key: (typeof QUICK_ACTIONS)[number]['key']) {
-    if (busy || featureBusy) return
+  /** Stop the answer in flight. Whatever already arrived is kept. */
+  function stopAnswer() {
+    stoppedRef.current = true
+    abortRef.current?.abort()
+  }
+
+  /**
+   * Re-ask the question that failed.
+   *
+   * The failed exchange is removed first — the question and, if the answer was
+   * cut short, the fragment that was saved with it — so retrying re-asks the
+   * question once instead of leaving two copies of it in the thread.
+   */
+  async function retryFailure() {
+    if (!failure || !supabase || !activeId || busy) return
+    const prompt = failure.prompt
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user')
+    if (lastUser && !lastUser.id.startsWith('tmp-') && lastUser.content.trim() === prompt.trim()) {
+      const at = messages.findIndex((m) => m.id === lastUser.id)
+      const doomed = messages
+        .slice(at)
+        .filter((m) => !m.id.startsWith('tmp-'))
+        .map((m) => m.id)
+      if (doomed.length > 0) await supabase.from('chat_messages').delete().in('id', doomed)
+    }
+    setFailure(null)
+    await loadMessages(activeId).catch(() => undefined)
+    void send(prompt)
+  }
+
+  function handleQuickAction(key: (typeof QUICK_ACTIONS)[number]['key']) {    if (busy || featureBusy) return
     if (key === 'analyze') {
       setAnalyzeOpen((v) => !v)
     } else if (key === 'trends') {
@@ -921,15 +1164,35 @@ export function Chat() {
         }
       />
 
-      {/* Sized to fill what is left of the viewport after the top bar, the
-          page padding and the page header, so the message list scrolls inside
-          this box instead of moving the whole page. */}
-      <div className="grid min-h-[calc(100dvh-var(--v-topbar-h)-8rem)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      {/*
+       * A DEFINITE height, not a minimum.
+       *
+       * With only `min-h`, the grid row sized itself to its content: the
+       * conversation rail's `overflow-y-auto` never engaged (a scroll region
+       * needs a definite height), so a long conversation list stretched the row
+       * downward and pushed the chat window out of the viewport entirely.
+       * `h-*` makes both columns definite, so each scrolls inside its own box
+       * and the composer stays on screen.
+       */}
+      <div className="grid h-[calc(100dvh-var(--v-topbar-h)-9rem)] min-h-[30rem] gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
         {/* ── Conversation rail: a column on desktop, a drawer on phones ── */}
         <aside
           className={cn(
-            'flex min-h-0 flex-col gap-3 rounded-[16px] border border-border bg-card p-4',
-            !railOpen && 'hidden lg:hidden',
+            // `min-w-0` matters: without it the search input's min-content width
+            // set the column, and on a phone the rail grew wider than the screen
+            // instead of shrinking with it.
+            'flex min-h-0 min-w-0 flex-col gap-3 rounded-[16px] border border-border bg-card p-4',
+            /*
+             * Phones: an overlay drawer, not a second row.
+             *
+             * Sharing one fixed-height grid with the conversation gave the rail
+             * and the transcript half the screen each, which left the composer
+             * unusably short. The floating "Chats" button and the drawer's close
+             * button already assume an overlay, so this is what they expect.
+             */
+            'max-lg:fixed max-lg:top-[var(--v-topbar-h)] max-lg:bottom-0 max-lg:start-0 max-lg:z-40 max-lg:h-auto max-lg:w-[min(20rem,86vw)] max-lg:rounded-s-none max-lg:shadow-3',
+            'lg:h-full lg:static lg:z-auto lg:w-auto',
+            !railOpen && 'hidden',
           )}
           aria-label="Your conversations"
         >
@@ -1010,72 +1273,99 @@ export function Chat() {
                 />
               </div>
             )}
-            {sortedChats.map((c) => {
-              const active = activeId === c.id
+            {CHAT_BUCKETS.map((bucket) => {
+              const rows = sortedChats.filter(
+                (c) => timeBucket(c.last_message_at ?? c.created_at) === bucket,
+              )
+              if (rows.length === 0) return null
               return (
-                <div
-                  key={c.id}
-                  className={cn(
-                    'group/row flex items-start gap-2 rounded-[10px] border border-transparent px-2 py-2 transition-colors',
-                    active ? 'border-border bg-muted' : 'hover:bg-muted/60',
-                  )}
-                >
-                  {manageMode && (
-                    <input
-                      type="checkbox"
-                      className="mt-1.5 size-4 shrink-0 accent-[var(--teal)]"
-                      checked={selected.has(c.id)}
-                      onChange={() =>
-                        setSelected((s) => {
-                          const next = new Set(s)
-                          if (next.has(c.id)) next.delete(c.id)
-                          else next.add(c.id)
-                          return next
-                        })
-                      }
-                      aria-label={`Select ${c.title}`}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-start"
-                    aria-current={active ? 'true' : undefined}
-                    onClick={() => {
-                      setRenaming(false)
-                      setAnalyzeOpen(false)
-                      setActiveId(c.id)
-                      // On a phone the drawer has done its job once a chat is
-                      // open. On desktop the column stays where it is.
-                      if (isNarrow()) setRailOpen(false)
-                    }}
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[13.5px] font-semibold text-foreground">{c.title}</span>
-                      <span className="shrink-0 text-[11.5px] text-muted-foreground">
-                        {timeAgo(c.last_message_at ?? c.created_at)}
-                      </span>
-                    </span>
-                    <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
-                      {c.last_message ?? 'No messages yet'}
-                    </span>
-                    {c.phone && (
-                      <span className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-primary-text">
-                        {c.phone}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      'mt-0.5 grid size-8 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-card',
-                      c.pinned ? 'text-risk-watch-strong' : 'text-muted-foreground/60 hover:text-foreground',
-                    )}
-                    title={c.pinned ? 'Unpin' : 'Pin conversation'}
-                    aria-pressed={Boolean(c.pinned)}
-                    onClick={() => void togglePin(c)}
-                  >
-                    <Star className={cn('size-3.5', c.pinned && 'fill-current')} />
-                  </button>
+                <div key={bucket} className="flex flex-col gap-1">
+                  <p className="px-2 pt-2 pb-0.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                    {bucket}
+                  </p>
+                  {rows.map((c) => {
+                    const active = activeId === c.id
+                    const empty = !c.last_message
+                    return (
+                      <div
+                        key={c.id}
+                        className={cn(
+                          'group/row flex items-start gap-2 rounded-[10px] border px-2 py-2 transition-colors',
+                          active
+                            ? 'border-border bg-muted'
+                            : empty
+                              ? 'border-transparent hover:bg-muted/50'
+                              : 'border-transparent hover:bg-muted/60',
+                        )}
+                      >
+                        {manageMode && (
+                          <input
+                            type="checkbox"
+                            className="mt-1.5 size-4 shrink-0 accent-[var(--teal)]"
+                            checked={selected.has(c.id)}
+                            onChange={() =>
+                              setSelected((s) => {
+                                const next = new Set(s)
+                                if (next.has(c.id)) next.delete(c.id)
+                                else next.add(c.id)
+                                return next
+                              })
+                            }
+                            aria-label={`Select ${c.title}`}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-start"
+                          aria-current={active ? 'true' : undefined}
+                          onClick={() => {
+                            setRenaming(false)
+                            setAnalyzeOpen(false)
+                            setActiveId(c.id)
+                            // On a phone the drawer has done its job once a chat is
+                            // open. On desktop the column stays where it is.
+                            if (isNarrow()) setRailOpen(false)
+                          }}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-[13.5px] font-semibold text-foreground">
+                              {c.title}
+                            </span>
+                            <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                              {timeAgo(c.last_message_at ?? c.created_at)}
+                            </span>
+                          </span>
+                          <span
+                            className={cn(
+                              'mt-0.5 block truncate text-[12px]',
+                              empty ? 'text-muted-foreground/70 italic' : 'text-muted-foreground',
+                            )}
+                          >
+                            {c.last_message ?? 'Empty — not asked yet'}
+                          </span>
+                          {c.phone && (
+                            <span className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-primary-text">
+                              {c.phone}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className={cn(
+                            'mt-0.5 grid size-8 shrink-0 place-items-center rounded-[10px] transition-colors hover:bg-card',
+                            c.pinned
+                              ? 'text-risk-watch-strong'
+                              : 'text-muted-foreground/60 hover:text-foreground',
+                          )}
+                          title={c.pinned ? 'Unpin' : 'Pin conversation'}
+                          aria-pressed={Boolean(c.pinned)}
+                          onClick={() => void togglePin(c)}
+                        >
+                          <Star className={cn('size-3.5', c.pinned && 'fill-current')} />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -1095,9 +1385,9 @@ export function Chat() {
         </aside>
 
         {/* ── The conversation ── */}
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-border bg-card">
+        <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-border bg-card">
           {!activeChat ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-6">
               <EmptyHint
                 large
                 title="No conversation open"
@@ -1108,6 +1398,17 @@ export function Chat() {
                   </Button>
                 }
               />
+              <div className="w-full max-w-xl">
+                <p className="mb-2 text-center text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                  What you can ask
+                </p>
+                <StarterGrid
+                  disabled={busy}
+                  onPick={(prompt) => {
+                    void newChat().then(() => setComposing(prompt))
+                  }}
+                />
+              </div>
               <Button
                 variant="outline"
                 className="h-11 lg:hidden"
@@ -1224,11 +1525,25 @@ export function Chat() {
                 )}
 
                 {!loading && messages.length === 0 && (
-                  <div className="m-auto">
-                    <EmptyHint
-                      large
-                      title="Say hello to Verafo"
-                      detail="Mention a buyer with @ or a store with #, or use the shortcuts under the composer."
+                  <div className="m-auto flex w-full max-w-xl flex-col items-center gap-4 py-4">
+                    <span className="grid size-11 place-items-center rounded-[14px] bg-[var(--bg-tint)] text-[var(--v-safe-strong)]">
+                      <Sparkles className="size-5" aria-hidden="true" />
+                    </span>
+                    <div className="text-center">
+                      <p className="font-display text-[19px] leading-tight text-foreground">
+                        Ask Verafo about your own orders
+                      </p>
+                      <p className="mx-auto mt-1.5 max-w-md text-[13.5px] leading-relaxed text-muted-foreground">
+                        Verafo reads this store's buyers, orders and refusals before it answers. Mention a buyer
+                        with @ or a store with #.
+                      </p>
+                    </div>
+                    <StarterGrid
+                      disabled={busy || !activeChat}
+                      onPick={(prompt) => {
+                        setComposing(prompt)
+                        window.setTimeout(() => textareaRef.current?.focus(), 0)
+                      }}
                     />
                   </div>
                 )}
@@ -1236,6 +1551,60 @@ export function Chat() {
                 {messages.map((m) => (
                   <ChatMessageBubble key={m.id} msg={m} />
                 ))}
+
+                {failure && !busy && (
+                  <div className="flex max-w-[min(52rem,94%)] flex-col gap-2 self-start">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] text-[var(--v-watch-strong)] uppercase">
+                      <AlertTriangle className="size-3.5" aria-hidden="true" /> Not answered
+                    </span>
+                    <div
+                      className="rounded-[16px] rounded-es-[4px] border border-s-[3px] border-[var(--v-watch-bar)] bg-[var(--v-watch-bg)] px-4 py-3.5"
+                      role="alert"
+                    >
+                      <p className="text-[14px] font-semibold text-foreground">{failure.failure.title}</p>
+                      <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--text-secondary)]">
+                        {failure.failure.detail}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {failure.failure.retryable && (
+                          <Button size="sm" className="h-11 md:h-8" onClick={() => void retryFailure()}>
+                            <RotateCcw className="size-3.5" /> Try again
+                          </Button>
+                        )}
+                        {failure.failure.kind === 'session' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-11 md:h-8"
+                            onClick={() => navigate('/login')}
+                          >
+                            Sign in again
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-11 md:h-8"
+                          onClick={() => {
+                            setFailure(null)
+                            setComposing(failure.prompt)
+                            window.setTimeout(() => textareaRef.current?.focus(), 0)
+                          }}
+                        >
+                          <Pencil className="size-3.5" /> Edit the question
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-11 md:h-8"
+                          onClick={() => setFailure(null)}
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {working && (
                   <div className="flex max-w-[min(52rem,94%)] flex-col gap-2 self-start">
@@ -1320,28 +1689,6 @@ export function Chat() {
               </div>
 
               <footer className="border-t border-border px-4 pt-3 pb-4">
-                {messages.length === 0 && (
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-                      <Sparkles className="size-3.5" aria-hidden="true" /> Try asking
-                    </span>
-                    {suggestions.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="h-11 max-w-full truncate rounded-full border border-border bg-card px-3 text-[12.5px] text-foreground transition-colors hover:bg-muted disabled:opacity-50 md:h-8"
-                        disabled={busy}
-                        onClick={() => {
-                          setComposing(s)
-                          window.setTimeout(() => textareaRef.current?.focus(), 0)
-                        }}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
                 <div ref={composerRef} className="relative flex items-end gap-2">
                   <div className="relative shrink-0">
                     <Button
@@ -1481,12 +1828,13 @@ export function Chat() {
                   <Button
                     className="size-11 shrink-0 rounded-full"
                     size="icon"
-                    disabled={!canSend}
-                    onClick={() => void send()}
-                    aria-label="Send message"
-                    title="Send"
+                    variant={busy ? 'outline' : 'default'}
+                    disabled={!busy && !canSend}
+                    onClick={() => (busy ? stopAnswer() : void send())}
+                    aria-label={busy ? 'Stop the answer' : 'Send message'}
+                    title={busy ? 'Stop' : 'Send'}
                   >
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    {busy ? <Square className="size-3.5 fill-current" /> : <Send className="size-4" />}
                   </Button>
                 </div>
 
