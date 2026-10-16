@@ -190,6 +190,25 @@
   [data-sidebar] svg {
     display: block;
   }
+  /* The sidebar is the Verafo teal, so the default teal focus ring would be
+     invisible on it. Keyboard focus inside the frame uses the frame's own
+     ring token instead — near-white on teal in both themes. */
+  [data-sidebar='sidebar'] :focus-visible {
+    outline: 2px solid var(--sidebar-ring);
+    outline-offset: 2px;
+  }
+
+  /* The teal top bar. The shadcn ghost/outline button variants paint their
+     hover as `bg-accent text-accent-foreground`, which the wrapper's
+     `[data-slot]` reset turns transparent, leaving white type on the teal
+     with no hover feedback at all. This class gives the bar's controls a
+     white wash and a near-white label instead, so the hover state is
+     visible and the text keeps its contrast on the fill. */
+  .topbar-control:hover,
+  .topbar-control:focus-visible {
+    background-color: var(--topbar-hover);
+    color: var(--topbar-foreground);
+  }
 }
 
 /* Reduced motion, and the app's own data-motion="off" switch. */

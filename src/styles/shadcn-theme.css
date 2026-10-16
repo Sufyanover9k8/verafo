@@ -79,16 +79,34 @@
   --chart-4: var(--coral);
   --chart-5: var(--v-unknown);
 
-  /* The sidebar follows the site's surfaces: white in light mode and
-     the panel ramp in dark mode. It is NOT a fixed navy panel. */
-  --sidebar: var(--panel);
-  --sidebar-foreground: var(--ink-2);
-  --sidebar-primary: var(--teal);
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: var(--tint);
-  --sidebar-accent-foreground: var(--teal-deep);
-  --sidebar-border: var(--line);
-  --sidebar-ring: var(--teal);
+  /* The navigation frame — sidebar AND top bar — is the Verafo teal.
+     One colour (--teal-nav, the site's teal-700) for both, so the frame
+     reads as a single surface wrapping the white content area.
+
+     Row hover/active are WHITE washes rather than darker tints: a white
+     wash barely moves the fill's luminance, so the near-white labels keep
+     their ratio (4.6:1 hover, 4.2:1 active) where a darkened row would
+     have pulled them down. --sidebar-primary is the dark chip shade, not
+     the teal accent, because it fills BOTH the avatar and the 2px
+     active-row bar — white on it measures 8.8:1.
+     See tokens.css for the measured ratios. */
+  --sidebar: var(--teal-nav);
+  --sidebar-foreground: var(--teal-nav-fg);
+  --sidebar-primary: var(--teal-nav-chip);
+  --sidebar-primary-foreground: var(--teal-nav-fg);
+  --sidebar-accent: var(--teal-nav-active);
+  --sidebar-accent-foreground: var(--teal-nav-fg);
+  --sidebar-border: var(--teal-nav-line);
+  --sidebar-ring: var(--teal-nav-fg);
+
+  /* Top bar. Same surface as the sidebar; it must never be translucent,
+     or the white content scrolling underneath would wash the teal out. */
+  --topbar: var(--teal-nav);
+  --topbar-foreground: var(--teal-nav-fg);
+  --topbar-muted: var(--teal-nav-fg-soft);
+  --topbar-border: var(--teal-nav-line);
+  --topbar-hover: var(--teal-nav-hover);
+  --topbar-chip: rgba(255, 255, 255, .14);
 }
 
 [data-theme='dark'] {
@@ -123,12 +141,24 @@
   --input: var(--line-2);
   --ring: var(--teal);
 
-  /* Sidebar surfaces in dark mode — the site's panel ramp. */
-  --sidebar: var(--panel);
-  --sidebar-foreground: var(--ink-2);
-  --sidebar-accent: var(--tint);
-  --sidebar-accent-foreground: var(--teal-deep);
-  --sidebar-border: var(--line);
+  /* The navigation frame keeps the Verafo teal in dark mode as well —
+     a darker brand shade, so the frame stays distinct from the page
+     while white type holds 6.8:1. Same token names, same behaviour. */
+  --sidebar: var(--teal-nav);
+  --sidebar-foreground: var(--teal-nav-fg);
+  --sidebar-primary: var(--teal-nav-chip);
+  --sidebar-primary-foreground: var(--teal-nav-fg);
+  --sidebar-accent: var(--teal-nav-active);
+  --sidebar-accent-foreground: var(--teal-nav-fg);
+  --sidebar-border: var(--teal-nav-line);
+  --sidebar-ring: var(--teal-nav-fg);
+
+  --topbar: var(--teal-nav);
+  --topbar-foreground: var(--teal-nav-fg);
+  --topbar-muted: var(--teal-nav-fg-soft);
+  --topbar-border: var(--teal-nav-line);
+  --topbar-hover: var(--teal-nav-hover);
+  --topbar-chip: rgba(255, 255, 255, .12);
 }
 
 @theme inline {
@@ -199,6 +229,15 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Top bar utilities: bg-topbar, text-topbar-foreground, and so on. The
+     bar and the sidebar are the same brand teal by design. */
+  --color-topbar: var(--topbar);
+  --color-topbar-foreground: var(--topbar-foreground);
+  --color-topbar-muted: var(--topbar-muted);
+  --color-topbar-border: var(--topbar-border);
+  --color-topbar-hover: var(--topbar-hover);
+  --color-topbar-chip: var(--topbar-chip);
 
   --shadow-1: var(--sh-1);
   --shadow-2: var(--sh-2);

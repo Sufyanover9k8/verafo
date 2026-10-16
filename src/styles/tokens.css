@@ -51,6 +51,31 @@
   --teal-bright: #2DD4BF;
   --teal-deep: var(--teal-700);
   --teal-glow: rgba(20, 184, 166, .26);
+
+  /* ── 1 · Colour — the teal navigation frame
+        The sidebar and the top bar are one continuous brand surface, so
+        they share ONE colour: --teal-nav, which is the site's own
+        --teal-700 (#0F766E) from the teal-500/600/700 ramp above.
+
+        Why the 700 rather than the 500 accent: #14B8A6 as a large fill
+        leaves neither black nor white text comfortably legible — white
+        measures only 2.49:1 on it. #0F766E keeps the same brand hue and
+        holds white at 5.47:1 and near-white at 4.64:1, so every label,
+        icon and group heading in the frame stays readable.
+
+        -fg/-fg-soft are the only text colours allowed on the frame;
+        -hover/-active are white washes (not darker tints) that lift a row
+        off the fill: a white wash barely moves the fill's luminance, so
+        the label keeps 4.6:1 on hover and 4.2:1 on the active row. */
+  --teal-nav: var(--teal-700);
+  --teal-nav-fg: #FFFFFF;              /* 5.47:1 on --teal-nav */
+  --teal-nav-fg-soft: #D6F2EE;         /* 4.64:1 on --teal-nav */
+  --teal-nav-hover: rgba(255, 255, 255, .09);
+  --teal-nav-active: rgba(255, 255, 255, .14);
+  --teal-nav-line: rgba(255, 255, 255, .22);
+  --teal-nav-bar: #2DD4BF;             /* active-row indicator, --teal-bright */
+  --teal-nav-chip: #0A5450;            /* dark fill for the user avatar */
+
   --coral: #E11D48;
   --amber: #D97706;
   --purple: #7C3AED;
@@ -279,6 +304,19 @@
   --teal-deep: #5EEAD4;
   --teal-glow: rgba(45, 212, 191, .34);
 
+  /* The navigation frame stays a brand teal in dark mode too: the brand
+     colour is constant, only the surfaces around it move. This shade is
+     chosen to sit clear of --bg #0A0F10 (2.5:1 separation, so the frame
+     still reads above the page) while holding white type at 6.8:1. */
+  --teal-nav: #0C574F;
+  --teal-nav-fg: #FFFFFF;
+  --teal-nav-fg-soft: #C9E9E5;
+  --teal-nav-hover: rgba(255, 255, 255, .08);
+  --teal-nav-active: rgba(255, 255, 255, .13);
+  --teal-nav-line: rgba(255, 255, 255, .20);
+  --teal-nav-bar: var(--teal-bright);
+  --teal-nav-chip: #0A3F3B;
+
   --ink: #F2F6F6;
   --ink-2: #A3B1B3;
   --ink-3: #748386;
@@ -368,6 +406,17 @@
   --teal: var(--teal-500);
   --teal-deep: var(--teal-700);
   --teal-glow: rgba(20, 184, 166, .26);
+
+  /* Navigation frame — same brand teal as :root (see the note there). */
+  --teal-nav: var(--teal-700);
+  --teal-nav-fg: #FFFFFF;
+  --teal-nav-fg-soft: #D6F2EE;
+  --teal-nav-hover: rgba(255, 255, 255, .09);
+  --teal-nav-active: rgba(255, 255, 255, .14);
+  --teal-nav-line: rgba(255, 255, 255, .22);
+  --teal-nav-bar: #2DD4BF;
+  --teal-nav-chip: #0A5450;
+
   --ink: #0B1011;
   --ink-2: var(--text);
   --ink-3: var(--text-soft);

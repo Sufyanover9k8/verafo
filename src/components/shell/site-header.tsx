@@ -40,7 +40,7 @@ function QuickCheck() {
         onChange={(e) => setValue(e.target.value)}
         placeholder="Check a buyer by phone"
         aria-label="Check a buyer by phone number"
-        className="h-9 w-56 ps-8 font-mono text-[13px]"
+        className="h-9 w-56 border-topbar-border bg-transparent ps-8 font-mono text-[13px] text-topbar-foreground placeholder:text-topbar-muted focus-visible:border-topbar-foreground focus-visible:outline-none focus-visible:ring-0 dark:bg-transparent"
       />
     </form>
   )
@@ -55,7 +55,7 @@ function ThemeMenu() {
         <Button
           variant="ghost"
           size="icon"
-          className="size-11 rounded-full md:size-9"
+          className="topbar-control size-11 rounded-full text-topbar-foreground hover:text-topbar-foreground focus-visible:ring-topbar-foreground/50 md:size-9"
           aria-label="Change theme"
         >
           <Icon className="size-4" />
@@ -90,31 +90,36 @@ export function SiteHeader() {
     .sort((a, b) => b.to.length - a.to.length)[0]
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
-      <SidebarTrigger className="-ms-1 size-11 md:size-8" />
-      <Separator orientation="vertical" className="mx-1 hidden h-5 sm:block" />
+    /* The top bar is the Verafo teal, the same surface as the sidebar, so the
+       two read as one frame around the white content area. It is opaque on
+       purpose: a translucent teal would let the page scroll through it and
+       drain the brand colour, and the near-white type needs the full-strength
+       fill to hold its contrast. */
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 bg-topbar px-3 text-topbar-foreground md:px-6">
+      <SidebarTrigger className="topbar-control -ms-1 size-11 text-topbar-foreground hover:text-topbar-foreground focus-visible:ring-topbar-foreground/50 md:size-8" />
+      <Separator orientation="vertical" className="mx-1 hidden h-5 bg-topbar-border sm:block" />
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
-        {sectionOf?.label && <span className="hidden text-muted-foreground sm:inline">{sectionOf.label}</span>}
-        {sectionOf?.label && <span className="hidden text-muted-foreground/50 sm:inline">/</span>}
-        <span className="truncate font-medium text-foreground">{current?.label ?? 'Dashboard'}</span>      </nav>
+        {sectionOf?.label && <span className="hidden text-topbar-muted sm:inline">{sectionOf.label}</span>}
+        {sectionOf?.label && <span className="hidden text-topbar-muted/70 sm:inline">/</span>}
+        <span className="truncate font-medium text-topbar-foreground">{current?.label ?? 'Dashboard'}</span>      </nav>
 
       <div className="ms-auto flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={palette.open}
-          className="h-11 gap-2 px-3 text-muted-foreground max-sm:w-11 max-sm:justify-center max-sm:px-0 md:h-9"
+          className="topbar-control h-11 gap-2 border-topbar-border bg-transparent px-3 text-topbar-foreground hover:text-topbar-foreground focus-visible:ring-topbar-foreground/50 dark:bg-transparent dark:hover:bg-transparent max-sm:w-11 max-sm:justify-center max-sm:px-0 md:h-9"
           aria-label="Open command palette (Ctrl+K)"
         >
           <Search className="size-4" />
           <span className="hidden sm:inline">Search</span>
-          <kbd className="ms-2 hidden rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground md:inline">
+          <kbd className="ms-2 hidden rounded border border-topbar-border bg-topbar-chip px-1.5 font-mono text-[10px] font-medium text-topbar-foreground md:inline">
             Ctrl K
           </kbd>
         </Button>
         <QuickCheck />
         <span
-          className="hidden items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground xl:inline-flex"
+          className="hidden items-center gap-1.5 rounded-full border border-topbar-border bg-topbar-chip px-2.5 py-1 text-xs font-medium text-topbar-foreground xl:inline-flex"
           title={isConfigured ? 'Connected to Verafo' : 'Supabase is not configured'}
         >
           <span className={`size-1.5 rounded-full ${isConfigured ? 'bg-success' : 'bg-warning'}`} />
