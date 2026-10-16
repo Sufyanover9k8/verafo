@@ -10,12 +10,12 @@
    tie-break where one is needed.
    ============================================================ */
 
-export type SortKey = 'newest' | 'oldest' | 'amount-high' | 'amount-low' | 'risk-high' | 'status'
+export type SortKey = 'new-to-old' | 'old-to-new' | 'amount-high' | 'amount-low' | 'risk-high' | 'status'
 
 /** The choices offered, in the order they appear. */
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
+  { value: 'new-to-old', label: 'New to old' },
+  { value: 'old-to-new', label: 'Old to new' },
   { value: 'amount-high', label: 'Amount — high to low' },
   { value: 'amount-low', label: 'Amount — low to high' },
   { value: 'risk-high', label: 'Risk — high to low' },
@@ -56,6 +56,11 @@ function timeOf(o: SortableOrder): number {
 /**
  * Order two rows.
  *
+ * "New to old" puts the LARGEST date first, so the most recent order is the
+ * top row of the table. "Old to new" puts the smallest date first. The sort
+ * compares timestamps directly — never the formatted date text, and never the
+ * order the rows happen to arrive in.
+ *
  * Every rule falls back to the phone number, so two orders placed in the same
  * second keep a stable order instead of shuffling between renders.
  *
@@ -69,7 +74,7 @@ export function compareOrders(a: SortableOrder, b: SortableOrder, key: SortKey):
   const byPhone = a.buyer_phone.localeCompare(b.buyer_phone)
 
   switch (key) {
-    case 'oldest':
+    case 'old-to-new':
       // An unknown date is not "oldest", so it goes last rather than leading.
       return (at || Infinity) - (bt || Infinity) || byPhone
     case 'amount-high':
@@ -83,7 +88,7 @@ export function compareOrders(a: SortableOrder, b: SortableOrder, key: SortKey):
     }
     case 'status':
       return statusRank(a) - statusRank(b) || bt - at
-    case 'newest':
+    case 'new-to-old':
     default:
       return bt - at || byPhone
   }

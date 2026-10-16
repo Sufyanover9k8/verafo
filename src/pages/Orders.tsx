@@ -49,8 +49,8 @@ export function Orders() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [status, setStatus] = useState<StatusFilter>('all')
-  /** Newest first, so the list opens on what just came in. */
-  const [sort, setSort] = useState<SortKey>('newest')
+  /** New to old, so the list opens on the most recent order. */
+  const [sort, setSort] = useState<SortKey>('new-to-old')
   const [term, setTerm] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
