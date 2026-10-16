@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Reveal } from '../components/Reveal'
 import { NeedsSetup } from '../components/States'
 import { cn } from '@/lib/utils'
-import { money } from '../lib/format'
+import { money, phone } from '../lib/format'
 import { RISK, formatScore, riskLevel } from '../lib/risk'
 import {
   cityRefusalRates,
@@ -129,7 +129,7 @@ function MapTooltip({ active, payload }: { active?: boolean; payload?: { payload
   const p = payload[0].payload
   return (
     <div className="rounded-[10px] border border-border bg-popover px-3 py-2 shadow-2">
-      <div className="font-mono text-[12.5px] font-medium text-foreground">{p.phone}</div>
+      <div className="font-mono text-[12.5px] font-medium text-foreground">{phone(p.phone)}</div>
       <div className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
         <span className="size-2 rounded-full" style={{ background: RISK[p.bucket].color }} aria-hidden="true" />
         {RISK[p.bucket].label} · risk {formatScore(p.risk)}

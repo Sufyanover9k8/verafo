@@ -1,5 +1,7 @@
 /* format.ts — owns all number/phone/date formatting. */
 
+import { formatPhonePK } from './ui/phone'
+
 export function currency(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return '—'
   return `PKR ${Math.round(Number(n)).toLocaleString('en-PK')}`
@@ -10,22 +12,24 @@ export function money(n: number | null | undefined): string {
   return `PKR ${new Intl.NumberFormat('en-PK').format(Number(n))}`
 }
 
+/**
+ * How every phone number in the app is written: `+92 301 2345678`.
+ *
+ * One format, one place. The number is normalised to its Pakistani national
+ * form first, so `03012345678`, `+923012345678`, `0092 301 234 5678` and
+ * `923012345678` all print identically — a merchant reading two screens can
+ * tell they are looking at the same buyer.
+ *
+ * A number that cannot be resolved to a Pakistani one is NOT dressed up as
+ * `+92 …`, which would assert a country we cannot vouch for. It falls back to
+ * the raw value so the merchant still sees whatever the record holds.
+ */
 export function phone(p: string | null | undefined): string {
   if (!p) return '—'
-  let digits = p.replace(/[^\d+]/g, '')
-  const hasPlus = digits.startsWith('+')
-  if (hasPlus) digits = digits.slice(1)
-  if (digits.startsWith('92') && digits.length >= 11) digits = '0' + digits.slice(2)
-  const groups = [4, 3, 4]
-  let out = ''
-  let i = 0
-  for (const g of groups) {
-    if (i >= digits.length) break
-    out += (out ? ' ' : '') + digits.slice(i, i + g)
-    i += g
-  }
-  if (i < digits.length) out += ' ' + digits.slice(i)
-  return out
+  const pk = formatPhonePK(p)
+  if (pk) return pk.display
+  const shown = p.trim()
+  return shown || '—'
 }
 
 export const normalizePhone = (p: string): string => p.replace(/[^\d+]/g, '')

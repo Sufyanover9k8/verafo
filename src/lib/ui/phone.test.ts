@@ -3,7 +3,12 @@ import { formatPhonePK, telLink, whatsappLink, confirmOrderMessage } from './pho
 
 describe('formatPhonePK', () => {
   it('accepts the ways Pakistani merchants write a mobile', () => {
-    const expected = { e164: '+923001234567', national: '0300 1234567', kind: 'mobile' }
+    const expected = {
+      e164: '+923001234567',
+      national: '0300 1234567',
+      display: '+92 300 1234567',
+      kind: 'mobile',
+    }
     expect(formatPhonePK('03001234567')).toEqual(expected)
     expect(formatPhonePK('0300 123 4567')).toEqual(expected)
     expect(formatPhonePK('0300-1234567')).toEqual(expected)
@@ -11,6 +16,14 @@ describe('formatPhonePK', () => {
     expect(formatPhonePK('+923001234567')).toEqual(expected)
     expect(formatPhonePK('00923001234567')).toEqual(expected)
     expect(formatPhonePK('923001234567')).toEqual(expected)
+  })
+
+  it('offers one display form, whatever way the number arrived', () => {
+    const display = '+92 321 8210110'
+    // The spelling Shopify exports, a local one, and an international one.
+    expect(formatPhonePK('923218210110')?.display).toBe(display)
+    expect(formatPhonePK('0321 8210110')?.display).toBe(display)
+    expect(formatPhonePK('+92 321 8210110')?.display).toBe(display)
   })
 
   it('tags a landline and keeps it usable for calls', () => {

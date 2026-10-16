@@ -12,8 +12,10 @@ export type PhoneKind = 'mobile' | 'landline'
 export interface PkPhone {
   /** +923001234567 — what tel: and wa.me both want. */
   e164: string
-  /** 0300 1234567 — what a merchant reads. */
+  /** 0300 1234567 — the local way of writing it. */
   national: string
+  /** +92 300 1234567 — how the app writes a number on screen, everywhere. */
+  display: string
   kind: PhoneKind
 }
 
@@ -61,7 +63,14 @@ export function formatPhonePK(raw: string | null | undefined): PkPhone | null {
     ? `0${d.slice(0, 3)} ${d.slice(3)}`
     : `0${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5)}`.trim()
 
-  return { e164: `+92${d}`, national, kind: isMobile ? 'mobile' : 'landline' }
+  /*
+   * The one format the whole app prints: +92 then the mobile's 3-digit
+   * network code, then the 7-digit subscriber number. `d` is the national
+   * number without its trunk 0, so it is already what follows +92.
+   */
+  const display = `+92 ${d.slice(0, 3)} ${d.slice(3)}`
+
+  return { e164: `+92${d}`, national, display, kind: isMobile ? 'mobile' : 'landline' }
 }
 
 /** tel: link, or null when the number cannot be trusted. */

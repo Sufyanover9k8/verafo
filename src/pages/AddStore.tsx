@@ -38,7 +38,7 @@ export function AddStore() {
   const previewEmail = email.trim() || 'owner@example.com'
   const previewPhone = useMemo(() => {
     const digits = normalizePhone(contact)
-    return digits ? phone(digits) : '+92 3XX XXXXXXX'
+    return digits ? phone(digits) : '+92 3xx xxxxxxx'
   }, [contact])
 
   async function handleSubmit(e: React.FormEvent) {

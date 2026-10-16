@@ -17,7 +17,7 @@ import { NeedsSetup } from '../components/States'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { formatPhonePK } from '../lib/ui/phone'
+import { phone } from '../lib/format'
 import { parseOrderCsv, type ParsedOrder } from '../lib/ui/order-csv'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
@@ -658,9 +658,7 @@ export function BulkImport() {
                     {preview.map((r) => (
                       <TableRow key={`${r.line}-${r.reference}`} className={cn(r.storeError && 'bg-risk-high-badge-bg')}>
                         <TableCell className="font-mono text-[12.5px]">{r.reference || `line ${r.line}`}</TableCell>
-                        <TableCell className="font-mono text-[12.5px]">
-                          {formatPhonePK(r.phone)?.national ?? r.phone}
-                        </TableCell>
+                        <TableCell className="font-mono text-[12.5px]">{phone(r.phone)}</TableCell>
                         <TableCell className="text-[12.5px]">
                           {r.resolved ? (
                             <>

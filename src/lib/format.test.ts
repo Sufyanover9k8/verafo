@@ -24,22 +24,32 @@ describe('money', () => {
 })
 
 describe('phone', () => {
-  it('groups a local number 0301 234 5678', () => {
-    expect(phone('03012345678')).toBe('0301 234 5678')
+  it('prints every spelling of a number in one format', () => {
+    expect(phone('03012345678')).toBe('+92 301 2345678')
+    expect(phone('+923012345678')).toBe('+92 301 2345678')
+    expect(phone('923012345678')).toBe('+92 301 2345678')
+    expect(phone('0092 301 234 5678')).toBe('+92 301 2345678')
+    expect(phone('0301 234 5678')).toBe('+92 301 2345678')
+    expect(phone('+92 301 234 5678')).toBe('+92 301 2345678')
   })
 
-  it('rewrites the 92 country code to a leading 0', () => {
-    expect(phone('+923012345678')).toBe('0301 234 5678')
-    expect(phone('923012345678')).toBe('0301 234 5678')
-  })
-
-  it('does not rewrite a short/non-92 number', () => {
-    expect(phone('301234567')).toBe('3012 345 67')
+  it('keeps the country code on a number Shopify exported without one', () => {
+    // Shopify writes "923218210110" for +92 321 8210110.
+    expect(phone('923218210110')).toBe('+92 321 8210110')
+    expect(phone('3335400507')).toBe('+92 333 5400507')
   })
 
   it('falls back to em-dash for empty input', () => {
     expect(phone('')).toBe('—')
     expect(phone(null)).toBe('—')
+    expect(phone(undefined)).toBe('—')
+  })
+
+  it('never dresses an unusable number up as a Pakistani one', () => {
+    // Asserting "+92" on something we cannot verify would be a lie, so the raw
+    // value is shown instead.
+    expect(phone('+15551234567')).toBe('+15551234567')
+    expect(phone('nonsense')).toBe('nonsense')
   })
 })
 
