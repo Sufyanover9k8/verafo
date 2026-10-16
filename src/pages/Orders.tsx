@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { dateTime, money, normalizePhone, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
+import { SORT_OPTIONS, sortOrders, type SortKey } from '../lib/ui/order-sort'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -48,6 +49,8 @@ export function Orders() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [status, setStatus] = useState<StatusFilter>('all')
+  /** Newest first, so the list opens on what just came in. */
+  const [sort, setSort] = useState<SortKey>('newest')
   const [term, setTerm] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -109,6 +112,16 @@ export function Orders() {
       return true
     })
   }, [rows, status, term, city, product])
+
+  /**
+   * The order the table renders in.
+   *
+   * Sorted here rather than re-queried, so changing the sort is instant and
+   * cannot cost a round trip. The rows arrive newest-first, which is also the
+   * default rule, so the opening view is unchanged for anyone who never opens
+   * the menu.
+   */
+  const shownRows = useMemo(() => sortOrders(filtered, sort), [filtered, sort])
 
   const counts = useMemo(() => {
     const c = { all: rows.length, pending: 0, accepted: 0, refused: 0 }
@@ -188,7 +201,7 @@ export function Orders() {
   }
 
   function exportCsv() {
-    const out = filtered.map((o) => ({
+    const out = shownRows.map((o) => ({
       buyer_phone: o.buyer_phone,
       store: o.stores?.name ?? '',
       product: o.product_name || o.product_category || '',
@@ -347,6 +360,27 @@ export function Orders() {
             {showMoreFilters ? 'Fewer filters' : 'More filters'}
           </Button>
 
+          {/* Sorting sits with the filters, because that is where a merchant
+              looks when the list is not in the order they want. It reorders
+              what is already loaded, so it takes effect immediately. */}
+          <div className="flex min-w-[190px] flex-col gap-2">
+            <Label htmlFor="orders-sort" className="text-[13px] font-medium text-muted-foreground">
+              Sort by
+            </Label>
+            <select
+              id="orders-sort"
+              className="h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[16px] text-foreground md:h-10 md:text-[15px]"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+            >
+              {SORT_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="ms-auto flex items-center gap-2">
             <Button type="button" className="h-11 gap-2 px-4 md:h-10" onClick={() => void load()}>
               <Search className="size-4" /> Search
@@ -408,7 +442,7 @@ export function Orders() {
               Retry
             </Button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : shownRows.length === 0 ? (
           <EmptyState
             icon="clipboard"
             title={rows.length === 0 ? 'No orders yet' : 'No orders match'}
@@ -436,7 +470,7 @@ export function Orders() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((o) => {
+                {shownRows.map((o) => {
                   const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
                   const busy = working === o.id
                   return (
