@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Check, Loader2, RefreshCw, X } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
+import { RiskScoreBadge, bandEvidence } from '../components/app/risk-score-badge'
 import { StatusBadge } from '../components/app/status-badge'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
-import { formatScore, riskLevel } from '../lib/risk'
+import { formatScore } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -18,13 +19,18 @@ import type { OrderRow, OutcomeStatus } from '../lib/types'
 
 type Tab = 'pending' | 'resolved'
 
+/** The order rows here carry the buyer's score, so each row can show its band. */
+interface Row extends OrderRow {
+  buyers?: { risk_score: number | null; total_orders: number | null } | null
+}
+
 /** How long the row stays faded after a mark, so the change is visible. */
 const EXIT_MS = 260
 
 export function Outcomes() {
   const toast = useToast()
   const { store } = useStoreScope()
-  const [orders, setOrders] = useState<OrderRow[]>([])
+  const [orders, setOrders] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [tab, setTab] = useState<Tab>('pending')
@@ -36,14 +42,18 @@ export function Outcomes() {
     if (!supabase) return
     setLoading(true)
     setLoadError(false)
-    let query = supabase.from('orders').select('*, stores(name), outcomes(status, resolved_at, refusal_reason)')
+    // The buyer's score comes along with the order so each row can show its
+    // band — the merchant should not have to open Buyer Lookup to judge a row.
+    let query = supabase
+      .from('orders')
+      .select('*, stores(name), buyers(risk_score, total_orders), outcomes(status, resolved_at, refusal_reason)')
     if (store) query = query.eq('store_id', store.id)
     const { data, error } = await query.order('ordered_at', { ascending: false }).limit(200)
     if (error) {
       setLoadError(true)
       toast.push({ kind: 'error', title: 'Could not load orders', detail: error.message })
     } else {
-      setOrders((data ?? []) as OrderRow[])
+      setOrders((data ?? []) as Row[])
     }
     setLoading(false)
   }, [toast, store])
@@ -70,17 +80,22 @@ export function Outcomes() {
 
       const { data: buyer, error: bErr } = await supabase
         .from('buyers')
-        .select('risk_score')
+        .select('risk_score, total_orders')
         .eq('phone', order.buyer_phone)
         .maybeSingle()
       if (bErr) throw bErr
 
       setLeaving((prev) => ({ ...prev, [order.id]: true }))
       const score = buyer?.risk_score ?? 0.5
+      // This order has just resolved, so count it before classifying. The
+      // vocabulary must match the row badge exactly, or the toast and the
+      // badge that re-renders under it would name two different bands.
+      const totalOrdersAfter = Number(buyer?.total_orders ?? 0) + 1
+      const { band } = bandEvidence(score, totalOrdersAfter)
       toast.push({
         kind: 'success',
         title: status === 'accepted' ? 'Marked as accepted' : 'Marked as refused',
-        detail: `${phone(order.buyer_phone)} — new risk score ${formatScore(score)} (${riskLevel(score)})`,
+        detail: `${phone(order.buyer_phone)} — new risk score ${formatScore(score)} (${band})`,
       })
       timers.current.push(window.setTimeout(() => void load(), EXIT_MS))
     } catch (err) {
@@ -233,6 +248,10 @@ export function Outcomes() {
                         {phone(o.buyer_phone)}
                       </Link>
                       <StatusBadge status={status} />
+                      {/* Band + the actual score, so the row says how risky the
+                          buyer looks without a trip to Buyer Lookup. Buyers with
+                          nothing resolved show NEUTRAL and no number. */}
+                      <RiskScoreBadge riskScore={o.buyers?.risk_score} totalOrders={o.buyers?.total_orders} />
                     </div>
                     <p className="mt-1.5 text-[12.5px] text-muted-foreground">
                       {facts.map((f, i) => (
