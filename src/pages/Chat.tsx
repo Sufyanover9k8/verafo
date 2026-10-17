@@ -71,6 +71,35 @@ import type { AnalyzeReport, ChatMessage, ChatRow, FileSpec } from '../lib/types
 /** Remembers whether the conversation rail is collapsed. */
 const RAIL_KEY = 'verafo.chatRailOpen'
 
+/**
+ * Chat ids this browser created.
+ *
+ * Held in sessionStorage and used ONLY while `chats.owner_email` does not exist
+ * yet: with no owner column the client cannot tell whose conversation is whose,
+ * and the database policies are still permissive, so the safe thing is to show
+ * only what this session demonstrably created. Cleared when the tab closes.
+ */
+const OWN_CHATS_KEY = 'verafo.ownChatIds'
+
+function ownChatIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(OWN_CHATS_KEY)
+    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+function rememberOwnChat(id: string) {
+  try {
+    const ids = ownChatIds()
+    ids.add(id)
+    sessionStorage.setItem(OWN_CHATS_KEY, JSON.stringify([...ids].slice(-50)))
+  } catch {
+    /* storage unavailable — the chat is still usable, just not remembered */
+  }
+}
+
 const FALLBACK_SUGGESTIONS = [
   'Should I ship an order to a buyer in my network?',
   'Show me the top 10 people who buy footwear',
@@ -367,18 +396,27 @@ export function Chat() {
        * supabase/chat-privacy.sql has been applied; filtering here as well
        * means a policy that is ever mis-applied cannot turn one merchant's
        * transcripts into another's list. Admins see everything, for support.
-       *
-       * If `owner_email` does not exist yet the query errors with 42703 —
-       * fall back to the unfiltered read rather than breaking the page before
-       * the migration is run. RLS still applies to that read.
        */
       const wantsFilter = !admin && Boolean(email)
       let res = await (wantsFilter ? base().eq('owner_email', email!) : base())
+      let ownerColumnMissing = false
       if (res.error && (res.error.code === '42703' || /owner_email/.test(res.error.message))) {
+        ownerColumnMissing = true
         res = await base()
       }
       if (res.error) throw res.error
-      setChats(res.data ?? [])
+      const rows = (res.data ?? []) as ChatRow[]
+      /*
+       * FAIL CLOSED while the owner column is missing.
+       *
+       * Without it the database cannot tell whose chat is whose, and the
+       * policies are still `using (true)` — so an unfiltered response is
+       * literally every merchant's book of conversations. Falling back to that
+       * would put other people's transcripts on screen. Instead, show only the
+       * chats this browser created, which are provably the signed-in user's.
+       * Everything reappears once the migration is applied.
+       */
+      setChats(ownerColumnMissing && !admin ? rows.filter((r) => ownChatIds().has(r.id)) : rows)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       toast.push({ kind: 'error', title: 'Could not load chats', detail: message })
@@ -519,6 +557,8 @@ export function Chat() {
       toast.push({ kind: 'error', title: 'Could not create chat', detail: error.message })
       return
     }
+    // Claim it as ours for the fail-closed list above.
+    if (data?.id) rememberOwnChat(String(data.id))
     setComposing('')
     setMention(null)
     setMessages([])
