@@ -75,6 +75,10 @@ export function Outcomes() {
       toast.push({ kind: 'error', title: 'Could not load orders', detail: error.message })
     } else {
       setOrders((data ?? []) as Row[])
+      // Clear the "just marked" fade. It was set and never cleared, so every row
+      // a merchant had touched stayed at 40% opacity for the rest of the session
+      // — washed out and hard to read.
+      setLeaving({})
     }
     setLoading(false)
   }, [toast, store])
@@ -519,10 +523,12 @@ export function Outcomes() {
 
                   <div className="shrink-0">
                     {/*
-                     * Accept stays green and Refuse stays red on a PENDING row —
-                     * that colour is the affordance. On a RESOLVED row the
-                     * outcome already chosen keeps its colour and the other
-                     * button goes neutral, so the edit option reads as secondary.
+                     * Three states, three looks, so the row's current outcome is
+                     * unmistakable:
+                     *   pending   → both buttons tinted (green / red)
+                     *   accepted  → "Accepted" FILLED green, "Change to Refused" neutral
+                     *   refused   → "Refused"  FILLED red,   "Change to Accepted" neutral
+                     * Filled, saturated fills are the outcome; outline is the edit.
                      */}
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -531,9 +537,9 @@ export function Outcomes() {
                         size="sm"
                         className={cn(
                           'h-11 gap-1.5 px-3 md:h-9',
-                          status === 'pending' || status === 'accepted'
-                            ? 'border-risk-safe/50 bg-risk-safe-badge-bg text-risk-safe-badge hover:bg-risk-safe-badge-hover hover:text-risk-safe-badge'
-                            : 'border-border text-muted-foreground hover:text-foreground',
+                          status === 'accepted'
+                            ? 'border-transparent bg-risk-safe-badge text-white'
+                            : 'border-risk-safe/60 bg-risk-safe-badge-bg text-risk-safe-badge hover:bg-risk-safe-badge-hover hover:text-risk-safe-badge',
                         )}
                         disabled={busy || status === 'accepted'}
                         aria-pressed={status === 'accepted'}
@@ -545,7 +551,7 @@ export function Outcomes() {
                         }
                       >
                         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                        {status === 'accepted' ? 'Accepted' : 'Accept'}
+                        {status === 'accepted' ? 'Accepted' : status === 'refused' ? 'Change to Accepted' : 'Accept'}
                       </Button>
                       <Button
                         type="button"
@@ -553,9 +559,9 @@ export function Outcomes() {
                         size="sm"
                         className={cn(
                           'h-11 gap-1.5 px-3 md:h-9',
-                          status === 'pending' || status === 'refused'
-                            ? 'border-risk-high/50 bg-risk-high-badge-bg text-risk-high-badge hover:bg-risk-high-badge-hover hover:text-risk-high-badge'
-                            : 'border-border text-muted-foreground hover:text-foreground',
+                          status === 'refused'
+                            ? 'border-transparent bg-risk-high-badge text-white'
+                            : 'border-risk-high/60 bg-risk-high-badge-bg text-risk-high-badge hover:bg-risk-high-badge-hover hover:text-risk-high-badge',
                         )}
                         disabled={busy || status === 'refused'}
                         aria-pressed={status === 'refused'}
@@ -567,7 +573,7 @@ export function Outcomes() {
                         }
                       >
                         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
-                        {status === 'refused' ? 'Refused' : 'Refuse'}
+                        {status === 'refused' ? 'Refused' : status === 'accepted' ? 'Change to Refused' : 'Refuse'}
                       </Button>
                     </div>
                   </div>
