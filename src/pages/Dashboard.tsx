@@ -691,7 +691,7 @@ export function Dashboard() {
       )}
 
       {/* Who needs you, and how risky the book is. */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Needs your attention</CardTitle>
@@ -818,7 +818,7 @@ export function Dashboard() {
 
       {/* How risky the book is, what COD is carrying, and the daily sales line
           the admin-only daily_sales function feeds. */}
-      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
         <Card className="gap-0">
           <CardHeader>
             <CardTitle>Risk distribution</CardTitle>
@@ -881,7 +881,7 @@ export function Dashboard() {
       )}
 
       {/* Where the money is. */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Sales by city</CardTitle>

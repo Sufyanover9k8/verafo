@@ -46,7 +46,9 @@
     color: var(--ink);
     font-family: var(--v-font-sans);
     font-size: var(--t-body);
-    line-height: 1.62;
+    /* 1.62 leading on 15px text was a large part of why the app read as
+       zoomed in — it inflated every paragraph, table row and sidebar item. */
+    line-height: 1.5;
     font-weight: 400;
     letter-spacing: -0.004em;
     -webkit-font-smoothing: antialiased;

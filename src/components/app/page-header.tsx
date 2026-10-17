@@ -19,13 +19,13 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="min-w-0">
-        <h1 className="text-2xl leading-tight font-bold tracking-tight text-foreground sm:text-[28px]">
+        <h1 className="text-[22px] leading-tight font-bold tracking-tight text-foreground sm:text-[26px]">
           {title}
         </h1>
         {description && (
-          <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:mt-2.5">
+          <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
             {description}
           </p>
         )}

@@ -9,7 +9,7 @@ export const CHECKLIST_HIDDEN_KEY = 'dashboard.checklistHidden'
 
 /**
  * A small "get started" card for a store that has not finished setting up.
- * Each item is detected from data the dashboard already loaded — nothing is
+ * Each item is detected from data the dashboard already loaded â€” nothing is
  * assumed and nothing is scored. The card disappears on its own once every
  * item is done, and the merchant can hide it for good on this device.
  */
@@ -38,7 +38,7 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
   const doneCount = items.filter((i) => i.done).length
 
   return (
-    <div className="rounded-[16px] border border-border bg-card p-6">
+    <div className="rounded-[var(--r-card)] border border-border bg-card p-5">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-semibold text-foreground">Finish setting up</h2>
@@ -140,7 +140,7 @@ export function MoneyRiskCards({
 
   if (layout === 'stack') {
     return (
-      <div className="flex flex-col gap-5 rounded-[16px] border border-border bg-card p-6">
+      <div className="flex flex-col gap-5 rounded-[var(--r-card)] border border-border bg-card p-5">
         <h2 className="text-[15px] font-semibold text-foreground">Money at stake</h2>
         {cod}
         {lost}
@@ -150,9 +150,9 @@ export function MoneyRiskCards({
   }
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2">
-      {cod && <div className="rounded-[16px] border border-border bg-card p-6">{cod}</div>}
-      {lost && <div className="rounded-[16px] border border-border bg-card p-6">{lost}</div>}
+    <div className="grid gap-5 sm:grid-cols-2">
+      {cod && <div className="rounded-[var(--r-card)] border border-border bg-card p-5">{cod}</div>}
+      {lost && <div className="rounded-[var(--r-card)] border border-border bg-card p-5">{lost}</div>}
       <div className="sm:col-span-2">{footnote}</div>
     </div>
   )

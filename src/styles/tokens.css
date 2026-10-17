@@ -214,18 +214,23 @@
   --v-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* ── 2 · Type — scale
-        Body sits at 15px: inside the 14–15px limit, and closer to the
-        website's 15.5px than the 13px this app used to render at. ── */
-  --t-display: 40px;      /* verdict numeral only */
-  --t-h1: clamp(26px, 3.6vw, 44px);  /* page titles */
-  --t-h2: clamp(19px, 2.1vw, 26px);  /* section headers */
-  --t-h3: 17.5px;         /* card titles */
-  --t-body: 15px;         /* body copy */
-  --t-body-sm: 13.5px;    /* secondary text */
-  --t-caption: 12.8px;    /* labels, helper text */
-  --t-micro: 11.5px;      /* eyebrows — uppercase, tracked */
-  --t-data: 13.5px;       /* identifiers, values (mono) */
-  --t-data-lg: 22px;      /* emphasised metrics (mono) */
+        Body sits at 14px. It was 15px, which with the 1.62 leading below made
+        every screen read as though the browser were zoomed in: the sidebar
+        rows, table text and card copy all ran large, so less of the page fit
+        and everything felt cramped despite the generous spacing. 14px is the
+        density a dashboard is normally read at, and it matches the sm/md
+        utilities the components already use, so body copy no longer prints
+        larger than the labels beside it. ── */
+  --t-display: 38px;      /* verdict numeral only */
+  --t-h1: clamp(24px, 3.2vw, 34px);  /* page titles */
+  --t-h2: clamp(18px, 2vw, 24px);  /* section headers */
+  --t-h3: 16.5px;         /* card titles */
+  --t-body: 14px;         /* body copy */
+  --t-body-sm: 13px;      /* secondary text */
+  --t-caption: 12.5px;    /* labels, helper text */
+  --t-micro: 11px;        /* eyebrows — uppercase, tracked */
+  --t-data: 13px;         /* identifiers, values (mono) */
+  --t-data-lg: 21px;      /* emphasised metrics (mono) */
 
   /* ── 3 · Space — 4px scale ─────────────────────────────── */
   --s-1: 4px;   --s-2: 8px;    --s-3: 12px;
@@ -235,10 +240,10 @@
 
   /* ── 4 · Radius ────────────────────────────────────────── */
   --r-sm: 10px;   /* inputs, chips, non-primary buttons */
-  --r: 16px;      /* cards, panels */
-  --r-card: 16px; /* the dashboard's card radius, named so it is explicit */
-  --r-lg: 16px;   /* cards */
-  --r-xl: 22px;   /* the main hero only */
+  --r: 14px;      /* cards, panels */
+  --r-card: 12px; /* the dashboard's card radius, named so it is explicit */
+  --r-lg: 14px;   /* cards */
+  --r-xl: 16px;   /* the main hero only */
   --r-pill: 100px;/* primary buttons only */
   --r-full: 999px;
 

@@ -96,7 +96,7 @@ export function VerdictCard({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-[var(--r-xl)] border border-border bg-card p-6',
+        'relative overflow-hidden rounded-[var(--r-card)] border border-border bg-card p-5',
         className,
       )}
     >

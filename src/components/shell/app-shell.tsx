@@ -53,7 +53,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <AppSidebar />
         <SidebarInset className="min-w-0 overflow-x-hidden bg-background">
           <SiteHeader />
-          <main className="min-w-0 px-4 pt-5 pb-16 sm:px-6 sm:pt-6 lg:px-8">{children}</main>
+          {/* pt-4/5 rather than pt-5/6: with the header's own reduced margin,
+              this is what stops the first block sitting too far down the page. */}
+          <main className="min-w-0 px-4 pt-4 pb-16 sm:px-6 sm:pt-5 lg:px-8">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </LayoutTickContext.Provider>
