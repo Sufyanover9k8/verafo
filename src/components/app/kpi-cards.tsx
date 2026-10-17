@@ -39,20 +39,26 @@ export function KpiCard({
   const DeltaIcon = trend === 'up' ? ArrowUpRight : trend === 'down' ? ArrowDownRight : Minus
 
   return (
-    <div className="flex flex-col gap-3 rounded-[16px] border border-border bg-card p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[12.5px] font-medium text-muted-foreground">{label}</span>
-        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-foreground">
-          <Icon className="size-[18px]" aria-hidden="true" />
+    /*
+     * Phone-first sizing. At full width on a 390px screen this card was ~145px
+     * tall, so four of them filled the entire first screen and pushed the
+     * verdict — the actual answer — below the fold. Two per row with tighter
+     * padding and a smaller numeral keeps the opening view useful.
+     */
+    <div className="flex min-w-0 flex-col gap-2 rounded-[var(--r-card)] border border-border bg-card p-3.5 sm:gap-3 sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 text-[11.5px] font-medium text-muted-foreground sm:text-[12.5px]">{label}</span>
+        <span className="grid size-7 shrink-0 place-items-center rounded-[8px] bg-accent text-accent-foreground sm:size-9 sm:rounded-[10px]">
+          <Icon className="size-4 sm:size-[18px]" aria-hidden="true" />
         </span>
       </div>
 
-      <p className="font-mono text-[26px] leading-none font-semibold tracking-tight tabular-nums text-foreground">
+      <p className="font-mono text-[20px] leading-none font-semibold tracking-tight tabular-nums text-foreground sm:text-[26px]">
         {value}
       </p>
 
       {shown != null ? (
-        <p className="flex flex-wrap items-center gap-1.5 text-[12px]">
+        <p className="flex flex-wrap items-center gap-1.5 text-[11.5px] sm:text-[12px]">
           <span
             className={cn(
               'inline-flex items-center gap-0.5 font-semibold tabular-nums',
@@ -65,10 +71,10 @@ export function KpiCard({
             {shown > 0 ? '+' : ''}
             {shown}%
           </span>
-          {deltaLabel && <span className="text-muted-foreground">{deltaLabel}</span>}
+          {deltaLabel && <span className="text-muted-foreground max-sm:hidden">{deltaLabel}</span>}
         </p>
       ) : (
-        hint && <p className="text-[12px] text-muted-foreground">{hint}</p>
+        hint && <p className="text-[11.5px] text-muted-foreground sm:text-[12px]">{hint}</p>
       )}
     </div>
   )

@@ -135,23 +135,37 @@ export function Outcomes() {
         }
       />
 
-      {/* What is waiting, and how the book has resolved so far. */}
+      {/* What is waiting, and how the book has resolved so far.
+          Three across at every width: stacked on a phone these took the whole
+          first screen and the list the merchant came for began below the fold. */}
       {!loading && !loadError && orders.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-[16px] border border-border bg-card p-5">
-            <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">Awaiting a verdict</p>
-            <p className="mt-1.5 text-[26px] leading-none font-semibold tabular-nums text-foreground">{pending.length}</p>
-            <p className="mt-1.5 text-[12.5px] text-muted-foreground">No outcome recorded yet</p>
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+          <div className="min-w-0 rounded-[var(--r-card)] border border-border bg-card p-3 sm:p-5">
+            <p className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase sm:text-[11px] sm:tracking-[0.14em]">
+              Awaiting a verdict
+            </p>
+            <p className="mt-1.5 text-[21px] leading-none font-semibold tabular-nums text-foreground sm:text-[26px]">
+              {pending.length}
+            </p>
+            <p className="mt-1.5 text-[11.5px] text-muted-foreground sm:text-[12.5px]">No outcome recorded yet</p>
           </div>
-          <div className="rounded-[16px] border border-border bg-card p-5">
-            <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">Refusal rate</p>
-            <p className="mt-1.5 text-[26px] leading-none font-semibold tabular-nums text-foreground">{refusalRate}</p>
-            <p className="mt-1.5 text-[12.5px] text-muted-foreground">Of the orders you have resolved</p>
+          <div className="min-w-0 rounded-[var(--r-card)] border border-border bg-card p-3 sm:p-5">
+            <p className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase sm:text-[11px] sm:tracking-[0.14em]">
+              Refusal rate
+            </p>
+            <p className="mt-1.5 text-[21px] leading-none font-semibold tabular-nums text-foreground sm:text-[26px]">
+              {refusalRate}
+            </p>
+            <p className="mt-1.5 text-[11.5px] text-muted-foreground sm:text-[12.5px]">Of the orders you have resolved</p>
           </div>
-          <div className="rounded-[16px] border border-border bg-card p-5">
-            <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">Loaded</p>
-            <p className="mt-1.5 text-[26px] leading-none font-semibold tabular-nums text-foreground">{orders.length}</p>
-            <p className="mt-1.5 text-[12.5px] text-muted-foreground">Newest 200 orders</p>
+          <div className="min-w-0 rounded-[var(--r-card)] border border-border bg-card p-3 sm:p-5">
+            <p className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase sm:text-[11px] sm:tracking-[0.14em]">
+              Loaded
+            </p>
+            <p className="mt-1.5 text-[21px] leading-none font-semibold tabular-nums text-foreground sm:text-[26px]">
+              {orders.length}
+            </p>
+            <p className="mt-1.5 text-[11.5px] text-muted-foreground sm:text-[12.5px]">Newest 200 orders</p>
           </div>
         </div>
       )}

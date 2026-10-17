@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { VerdictBadge } from '../components/app/verdict-badge'
 import { StatusBadge } from '../components/app/status-badge'
 import { EmptyState, NeedsSetup } from '../components/States'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { dateTime, money, normalizePhone, phone } from '../lib/format'
@@ -58,6 +59,12 @@ export function Orders() {
   const [product, setProduct] = useState('')
   const [filterStoreId, setFilterStoreId] = useState('')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
+  /**
+   * On a phone the filter panel starts collapsed. Stacked, its fields filled the
+   * entire first screen, so a merchant opening Orders saw filters instead of
+   * orders. Desktop keeps it open — there is room, and it belongs in that row.
+   */
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -257,8 +264,15 @@ export function Orders() {
       )}
 
       {/* Filters. Date range narrows the query; the rest narrow what is already
-          loaded, so the summary line below says exactly what is on. */}
-      <div className="rounded-[16px] border border-border bg-card p-6">
+          loaded, so the summary line below says exactly what is on.
+          Collapsed on phones — see mobileFiltersOpen. The toggle lives below so
+          it stays reachable whether the panel is open or shut. */}
+      <div
+        className={cn(
+          'rounded-[var(--r-card)] border border-border bg-card p-4 sm:p-6',
+          !mobileFiltersOpen && 'max-sm:hidden',
+        )}
+      >
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex min-w-[150px] flex-col gap-2">
             <span className="text-[13px] font-medium text-muted-foreground">Order date</span>
@@ -400,7 +414,21 @@ export function Orders() {
 
       {/* Status filter, what is showing, and refresh. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {/* Mobile-only: open or close the filter panel above. The label says
+              how many filters are on, so a collapsed panel never hides the fact
+              that the list is being narrowed. */}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 gap-2 px-3 sm:hidden"
+            aria-expanded={mobileFiltersOpen}
+            onClick={() => setMobileFiltersOpen((v) => !v)}
+          >
+            <SlidersHorizontal className="size-4" />
+            {mobileFiltersOpen ? 'Hide filters' : narrowed ? 'Filters on' : 'Filters'}
+          </Button>
+          <div className="inline-flex flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1">
           {(['all', 'pending', 'accepted', 'refused'] as StatusFilter[]).map((s) => (
             <button
               key={s}
@@ -415,6 +443,7 @@ export function Orders() {
               <span className="rounded-full bg-muted px-2 text-[12px] tabular-nums">{counts[s]}</span>
             </button>
           ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-[12.5px] text-muted-foreground" aria-live="polite">
