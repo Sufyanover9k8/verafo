@@ -10,6 +10,7 @@ import {
   MapPin,
   MessageSquare,
   MoreHorizontal,
+  PanelLeft,
   Package,
   Pencil,
   Plus,
@@ -64,6 +65,9 @@ import {
 } from '../lib/ai'
 import { useToast } from '../lib/toast'
 import type { AnalyzeReport, ChatMessage, ChatRow, FileSpec } from '../lib/types'
+
+/** Remembers whether the conversation rail is collapsed. */
+const RAIL_KEY = 'verafo.chatRailOpen'
 
 const FALLBACK_SUGGESTIONS = [
   'Should I ship an order to a buyer in my network?',
@@ -278,8 +282,24 @@ export function Chat() {
   const [quickOpen, setQuickOpen] = useState(false)
   /** On phones the rail is an overlay drawer; on desktop it is a column you can
    *  hide. One piece of state, steer the interaction by breakpoint at the moment
-   *  the control is used, so a desktop toggle can never leave no way back. */
-  const [railOpen, setRailOpen] = useState(true)
+   *  the control is used, so a desktop toggle can never leave no way back.
+   *
+   *  Remembered across reloads: a merchant who collapses it to get a wider
+   *  transcript should not have to collapse it again on every visit. */
+  const [railOpen, setRailOpen] = useState(() => {
+    try {
+      return localStorage.getItem(RAIL_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(RAIL_KEY, railOpen ? '1' : '0')
+    } catch {
+      /* storage unavailable — the rail still works, it just will not persist */
+    }
+  }, [railOpen])
   const [searchQuery, setSearchQuery] = useState('')
   const [manageMode, setManageMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -1174,7 +1194,18 @@ export function Chat() {
        * `h-*` makes both columns definite, so each scrolls inside its own box
        * and the composer stays on screen.
        */}
-      <div className="grid h-[calc(100dvh-var(--v-topbar-h)-9rem)] min-h-[30rem] gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      {/*
+        * The rail is a real column that COLLAPSES, not one that turns empty.
+        * `hidden` alone left the 300px track in place, so hiding the list gave
+        * the transcript nothing back and the page still felt cramped. Dropping
+        * the track hands the full width to the conversation.
+        */}
+      <div
+        className={cn(
+          'grid h-[calc(100dvh-var(--v-topbar-h)-8rem)] min-h-[30rem] gap-4',
+          railOpen ? 'lg:grid-cols-[18rem_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)]',
+        )}
+      >
         {/* ── Conversation rail: a column on desktop, a drawer on phones ── */}
         <aside
           className={cn(
@@ -1327,24 +1358,32 @@ export function Chat() {
                             if (isNarrow()) setRailOpen(false)
                           }}
                         >
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="truncate text-[13.5px] font-semibold text-foreground">
+                          <span className="flex items-baseline justify-between gap-2">
+                            <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground">
                               {c.title}
                             </span>
-                            <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
                               {timeAgo(c.last_message_at ?? c.created_at)}
                             </span>
                           </span>
-                          <span
-                            className={cn(
-                              'mt-0.5 block truncate text-[12px]',
-                              empty ? 'text-muted-foreground/70 italic' : 'text-muted-foreground',
-                            )}
-                          >
-                            {c.last_message ?? 'Empty — not asked yet'}
-                          </span>
-                          {c.phone && (
-                            <span className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-primary-text">
+                          {/*
+                           * The preview is for scanning inactive chats. Showing
+                           * it on the open one repeated what is already filling
+                           * the pane beside it, which is what made this column
+                           * read as a wall of text.
+                           */}
+                          {!active && (
+                            <span
+                              className={cn(
+                                'mt-0.5 block truncate text-[12px]',
+                                empty ? 'text-muted-foreground/70 italic' : 'text-muted-foreground',
+                              )}
+                            >
+                              {c.last_message ?? 'Empty — not asked yet'}
+                            </span>
+                          )}
+                          {c.phone && !active && (
+                            <span className="mt-1 inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
                               {c.phone}
                             </span>
                           )}
@@ -1463,6 +1502,9 @@ export function Chat() {
                 </div>
 
                 <div className="flex items-center gap-1">
+                  {/* Collapses the conversation list, giving its width to the
+                      transcript. The panel icon reads as "toggle the side
+                      panel" in a way a speech bubble did not. */}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1472,7 +1514,7 @@ export function Chat() {
                     aria-pressed={railOpen}
                     onClick={() => setRailOpen((v) => !v)}
                   >
-                    <MessageSquare className="size-4" />
+                    <PanelLeft className="size-4" />
                   </Button>
                   <Button
                     variant="ghost"
