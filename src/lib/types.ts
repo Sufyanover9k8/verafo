@@ -88,6 +88,9 @@ export interface OrderRow {
   address: string | null
   city: string | null
   ordered_at: string | null
+  /** Set when the order is hidden from the product. The row is never deleted. */
+  deleted_at?: string | null
+  deleted_by?: string | null
   stores?: { name: string } | null
   outcomes?: { status: OutcomeStatus | null; resolved_at: string | null; refusal_reason: string | null } | null
 }

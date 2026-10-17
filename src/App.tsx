@@ -29,6 +29,7 @@ const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m
 const StoreDashboard = lazy(() => import('./pages/StoreDashboard').then((m) => ({ default: m.StoreDashboard })))
 const Stores = lazy(() => import('./pages/Stores').then((m) => ({ default: m.Stores })))
 const AddStore = lazy(() => import('./pages/AddStore').then((m) => ({ default: m.AddStore })))
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })))
 
 function RouteFallback() {
   return (
@@ -76,6 +77,7 @@ export function App() {
           {isAdmin && <Route path="/stores" element={<Stores />} />}
           {isAdmin && <Route path="/stores/add" element={<AddStore />} />}
           {isAdmin && <Route path="/stores/:id" element={<StoreDashboard />} />}
+          {isAdmin && <Route path="/admin" element={<Admin />} />}
           <Route path="/chat" element={<Chat />} />
           <Route path="/import" element={<BulkImport />} />
           <Route path="/settings" element={<Settings />} />

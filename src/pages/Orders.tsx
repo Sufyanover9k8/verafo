@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Download, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
+import {
+  Check,
+  Download,
+  EyeOff,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldAlert,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { StatStrip, type StatItem } from '../components/app/stat-strip'
@@ -11,10 +23,20 @@ import { StatusBadge } from '../components/app/status-badge'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
 import { SORT_OPTIONS, sortOrders, type SortKey } from '../lib/ui/order-sort'
+import { countHiddenOrders, setOrdersHidden, softDeleteReady } from '../lib/ui/order-visibility'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -80,15 +102,39 @@ export function Orders() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
 
+  /**
+   * Hiding, not deleting.
+   *
+   * `canHide` is false until the database says the column exists, so the whole
+   * feature disappears politely on a database where the migration has not run —
+   * rather than every order query failing on a missing column.
+   */
+  const [canHide, setCanHide] = useState(false)
+  const [hiddenView, setHiddenView] = useState(false)
+  const [hiddenCount, setHiddenCount] = useState(0)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [confirmHide, setConfirmHide] = useState<Row[] | null>(null)
+  const [hiding, setHiding] = useState(false)
+  /** Delete orders is a mode: the tick boxes only exist while it is on. */
+  const [selectMode, setSelectMode] = useState(false)
+
   const load = useCallback(async () => {
     if (!supabase) return
     setLoading(true)
     setLoadError(false)
+    const allowHide = await softDeleteReady()
+    setCanHide(allowHide)
+
     let query = supabase
       .from('orders')
       .select(
         '*, stores(name), buyers(risk_score, total_orders, total_accepted, total_refused), outcomes(status, resolved_at, refusal_reason)',
       )
+    // Hidden orders are out of the product everywhere; the Hidden view is the
+    // one place they come back, so a mistake is always recoverable.
+    if (allowHide) {
+      query = hiddenView ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null)
+    }
     if (store) query = query.eq('store_id', store.id)
     else if (scopeStoreIds) query = query.in('store_id', scopeStoreIds)
     if (isAdmin && filterStoreId) query = query.eq('store_id', filterStoreId)
@@ -102,8 +148,10 @@ export function Orders() {
     } else {
       setRows((data ?? []) as unknown as Row[])
     }
+    if (allowHide) setHiddenCount(await countHiddenOrders())
+    setSelected(new Set())
     setLoading(false)
-  }, [toast, store, scopeStoreIds, isAdmin, filterStoreId, dateFrom, dateTo])
+  }, [toast, store, scopeStoreIds, isAdmin, filterStoreId, dateFrom, dateTo, hiddenView])
 
   useEffect(() => {
     void load()
@@ -242,8 +290,53 @@ export function Orders() {
     }
   }
 
-  function exportCsv() {
-    const out = shownRows.map((o) => ({
+  /* ── Hiding (never deleting) ─────────────────────────────── */
+
+  /** One place for both directions, so the messaging cannot drift from the act. */
+  async function applyHidden(ids: string[], hidden: boolean) {
+    if (!supabase || hiding || ids.length === 0) return
+    setHiding(true)
+    const res = await setOrdersHidden(ids, hidden)
+    setHiding(false)
+    if (res.error) {
+      toast.push({ kind: 'error', title: hidden ? 'Could not hide' : 'Could not restore', detail: res.error })
+      return
+    }
+    setConfirmHide(null)
+    setSelected(new Set())
+    // A finished delete leaves the mode: the tick boxes are not part of the page.
+    if (hidden) setSelectMode(false)
+    toast.push({
+      kind: 'success',
+      title: hidden
+        ? `${res.changed} order${res.changed === 1 ? '' : 's'} deleted`
+        : `${res.changed} order${res.changed === 1 ? '' : 's'} restored`,
+      detail: hidden ? 'Removed from this list.' : 'Back in the order book.',
+    })
+    // Restoring the last hidden order would leave an empty screen behind, so step
+    // back to the list the user was on.
+    if (!hidden && hiddenView && hiddenCount <= ids.length) setHiddenView(false)
+    void load()
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected((prev) =>
+      prev.size === shownRows.length ? new Set() : new Set(shownRows.map((o) => o.id)),
+    )
+  }
+
+  const allShownSelected = shownRows.length > 0 && selected.size === shownRows.length
+
+  function exportCsv() {    const out = shownRows.map((o) => ({
       buyer_phone: o.buyer_phone,
       store: o.stores?.name ?? '',
       product: o.product_name || o.product_category || '',
@@ -274,20 +367,68 @@ export function Orders() {
             : 'Every order across your stores, with its buyer risk and outcome.'
         }
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-11 gap-2 px-4 md:h-9"
-            onClick={exportCsv}
-            disabled={filtered.length === 0}
-          >
-            <Download className="size-4" /> Export CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* The entry point. Nothing tickable exists until this is pressed. */}
+            {canHide && !hiddenView && (
+              <Button
+                variant={selectMode ? 'default' : 'outline'}
+                size="sm"
+                className="h-11 gap-2 px-4 md:h-9"
+                aria-pressed={selectMode}
+                onClick={() => {
+                  setSelectMode((v) => !v)
+                  setSelected(new Set())
+                }}
+              >
+                {selectMode ? <X className="size-4" /> : <Trash2 className="size-4" />}
+                {selectMode ? 'Cancel' : 'Delete orders'}
+              </Button>
+            )}
+            {/* Only offered when there is something in it, so nobody lands on an
+                empty screen wondering what it is. */}
+            {canHide && (hiddenView || hiddenCount > 0) && (
+              <Button
+                variant={hiddenView ? 'default' : 'outline'}
+                size="sm"
+                className="h-11 gap-2 px-4 md:h-9"
+                aria-pressed={hiddenView}
+                onClick={() => setHiddenView((v) => !v)}
+              >
+                {hiddenView ? <RotateCcw className="size-4" /> : <EyeOff className="size-4" />}
+                {hiddenView ? 'Back to orders' : `Hidden (${hiddenCount})`}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 gap-2 px-4 md:h-9"
+              onClick={exportCsv}
+              disabled={filtered.length === 0}
+            >
+              <Download className="size-4" /> Export CSV
+            </Button>
+          </div>
         }
       />
 
-      {/* What is in the book right now, before any filtering. */}
-      {!loading && !loadError && rows.length > 0 && (
+      {/* Shown only when the database is missing the migration. No explanation
+          of the storage model — just what to run. */}
+      {isAdmin && !canHide && !loading && (
+        <div className="flex items-start gap-2.5 rounded-[var(--r-card)] border border-risk-watch/40 bg-risk-watch-soft p-4 text-[12.5px] leading-relaxed text-risk-watch-strong">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>
+            Run{' '}
+            <code className="rounded bg-background/60 px-1 py-0.5 font-mono text-[11.5px]">
+              supabase/order-soft-delete.sql
+            </code>{' '}
+            in the Supabase SQL editor, then press Refresh.
+          </span>
+        </div>
+      )}
+
+      {/* What is in the book right now, before any filtering. Hidden orders are
+          not part of the book, so the strip would only confuse in that view. */}
+      {!hiddenView && !loading && !loadError && rows.length > 0 && (
         <StatStrip
           items={[
             { label: 'Orders loaded', value: counts.all.toLocaleString('en-PK'), hint: 'Newest 500' },
@@ -491,6 +632,42 @@ export function Orders() {
         </div>
       </div>
 
+      {/* Selection bar: the second half of Delete orders. It is on screen the
+          whole time the mode is on, so the way out is always visible. */}
+      {canHide && (selectMode || hiddenView) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[var(--r-card)] border border-border bg-muted px-4 py-3">
+          <p className="text-[13px] font-medium text-foreground" aria-live="polite">
+            {selected.size > 0
+              ? `${selected.size} selected`
+              : hiddenView
+                ? 'Select the orders you want to restore'
+                : 'Select the orders you want to delete'}
+          </p>
+          <div className="ms-auto flex flex-wrap items-center gap-2">
+            {hiddenView ? (
+              <Button
+                className="h-11 gap-2 px-4 md:h-9"
+                disabled={hiding || selected.size === 0}
+                onClick={() => void applyHidden([...selected], false)}
+              >
+                {hiding ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+                Restore
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                className="h-11 gap-2 px-4 md:h-9"
+                disabled={hiding || selected.size === 0}
+                onClick={() => setConfirmHide(rows.filter((r) => selected.has(r.id)))}
+              >
+                {hiding ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                Delete{selected.size > 0 ? ` ${selected.size}` : ''}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* The table. Wide tables scroll inside this box, never the page. */}
       <div className="overflow-hidden rounded-[16px] border border-border bg-card">
         {loading ? (
@@ -522,7 +699,17 @@ export function Orders() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="ps-6">Buyer</TableHead>
+                  {(selectMode || hiddenView) && (
+                    <TableHead className="w-10 ps-6">
+                      <Checkbox
+                        className="rounded-[4px]"
+                        checked={allShownSelected}
+                        onCheckedChange={toggleAll}
+                        aria-label={allShownSelected ? 'Deselect every order' : 'Select every order shown'}
+                      />
+                    </TableHead>
+                  )}
+                  <TableHead className={selectMode || hiddenView ? undefined : 'ps-6'}>Buyer</TableHead>
                   <TableHead className="text-end">Amount</TableHead>
                   <TableHead>Risk</TableHead>
                   <TableHead>Status</TableHead>
@@ -554,7 +741,15 @@ export function Orders() {
                           : undefined
                       }
                     >
-                      <TableCell className="ps-6">
+                      <TableCell className={selectMode || hiddenView ? undefined : 'ps-6'}>
+                        {(selectMode || hiddenView) && (
+                          <Checkbox
+                            className="me-3 rounded-[4px] align-middle"
+                            checked={selected.has(o.id)}
+                            onCheckedChange={() => toggleSelected(o.id)}
+                            aria-label={`Select order ${phone(o.buyer_phone)}`}
+                          />
+                        )}
                         <Link
                           to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
                           className="font-mono text-[13px] font-medium text-primary-text hover:underline"
@@ -585,34 +780,75 @@ export function Orders() {
                         </TableCell>
                       )}
                       <TableCell className="pe-6">
-                        {s !== 'pending' ? (
-                          <span className="block text-end text-[13px] text-muted-foreground">—</span>
-                        ) : (
-                          <span className="flex flex-wrap justify-end gap-2">
+                        <span className="flex flex-nowrap items-center justify-end gap-2">
+                          {hiddenView ? (
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-11 gap-1.5 border-risk-safe/40 px-3 text-risk-safe-strong hover:bg-risk-safe-soft md:h-9"
-                              disabled={busy}
-                              onClick={() => void mark(o, 'accepted')}
+                              className="h-11 gap-1.5 px-3 md:h-9"
+                              disabled={hiding}
+                              onClick={() => void applyHidden([o.id], false)}
                             >
-                              {busy ? <RefreshCw className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}{' '}
-                              Accept
+                              <RotateCcw className="size-3.5" /> Restore
                             </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
-                              disabled={busy}
-                              onClick={() => void mark(o, 'refused')}
-                            >
-                              {busy ? <RefreshCw className="size-3.5 animate-spin" /> : <X className="size-3.5" />}{' '}
-                              Refuse
-                            </Button>
-                          </span>
-                        )}
+                          ) : (
+                            <>
+                              {canHide && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-11 text-muted-foreground hover:bg-risk-high-soft hover:text-risk-high-strong md:size-9"
+                                  title="Delete order"
+                                  aria-label={`Delete order ${phone(o.buyer_phone)}`}
+                                  disabled={hiding}
+                                  onClick={() => setConfirmHide([o])}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              )}
+                              {s === 'pending' ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-11 gap-1.5 border-risk-safe/40 px-3 text-risk-safe-strong hover:bg-risk-safe-soft md:h-9"
+                                    disabled={busy}
+                                    onClick={() => void mark(o, 'accepted')}
+                                  >
+                                    {busy ? (
+                                      <RefreshCw className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <Check className="size-3.5" />
+                                    )}{' '}
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-11 gap-1.5 border-risk-high/40 px-3 text-risk-high-strong hover:bg-risk-high-soft md:h-9"
+                                    disabled={busy}
+                                    onClick={() => void mark(o, 'refused')}
+                                  >
+                                    {busy ? (
+                                      <RefreshCw className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <X className="size-3.5" />
+                                    )}{' '}
+                                    Refuse
+                                  </Button>
+                                </>
+                              ) : (
+                                !canHide && (
+                                  <span className="text-[13px] text-muted-foreground">—</span>
+                                )
+                              )}
+                            </>
+                          )}
+                        </span>
                       </TableCell>
                     </TableRow>
                   )
@@ -622,6 +858,36 @@ export function Orders() {
           </div>
         )}
       </div>
+
+      {/* Confirmation, nothing more. */}
+      <Dialog
+        open={confirmHide !== null && confirmHide.length > 0}
+        onOpenChange={(open) => !open && setConfirmHide(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              Delete {confirmHide?.length === 1 ? 'this order' : `${confirmHide?.length ?? 0} orders`}?
+            </DialogTitle>
+            <DialogDescription>
+              {confirmHide?.length === 1 ? 'It' : 'They'} will be removed from Verafo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setConfirmHide(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="h-11 gap-2"
+              disabled={hiding}
+              onClick={() => void applyHidden((confirmHide ?? []).map((r) => r.id), true)}
+            >
+              {hiding ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   )
 }

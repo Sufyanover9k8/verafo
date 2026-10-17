@@ -40,6 +40,7 @@ import {
 import { useIsAdmin } from '../lib/admin'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
+import { softDeleteReady } from '../lib/ui/order-visibility'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 
@@ -258,6 +259,8 @@ export function BuyerMap() {
       .select('buyer_phone, price, quantity, city, product_name, product_category, ordered_at, outcomes(status)')
       .order('ordered_at', { ascending: false })
       .limit(2000)
+    // Refusal insights are a product surface, so hidden orders stay out of them.
+    if (await softDeleteReady()) ordersQuery = ordersQuery.is('deleted_at', null)
     if (scope) ordersQuery = ordersQuery.eq('store_id', scope.id)
     const ordersRes = await ordersQuery
 

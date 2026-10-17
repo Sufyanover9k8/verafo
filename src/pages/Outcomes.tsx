@@ -12,6 +12,8 @@ import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
 import { formatScore } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
+import { notificationsChanged } from '../lib/notifications'
+import { softDeleteReady } from '../lib/ui/order-visibility'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { OrderRow, OutcomeStatus } from '../lib/types'
@@ -81,6 +83,8 @@ export function Outcomes() {
     let query = supabase
       .from('orders')
       .select('*, stores(name), buyers(risk_score, total_orders), outcomes(status, resolved_at, refusal_reason)')
+    // A hidden order is out of the product; there is nothing to decide on it.
+    if (await softDeleteReady()) query = query.is('deleted_at', null)
     if (store) query = query.eq('store_id', store.id)
     const { data, error } = await query.order('ordered_at', { ascending: false }).limit(200)
     if (error) {
@@ -127,6 +131,7 @@ export function Outcomes() {
       // the app treats as resolved-but-unknown.
       const { error } = await supabase.from('outcomes').delete().eq('order_id', orderId)
       if (error) throw error
+      notificationsChanged()
       return
     }
     const { error } = await supabase
@@ -136,6 +141,9 @@ export function Outcomes() {
         { onConflict: 'order_id' },
       )
     if (error) throw error
+    // The row in the bell is written by a database trigger; this only tells the
+    // bell to re-read so it is current before anyone clicks it.
+    notificationsChanged()
   }
 
   async function mark(order: OrderRow, status: 'accepted' | 'refused') {

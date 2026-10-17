@@ -25,6 +25,7 @@ import { money, phone, timeAgo } from '@/lib/format'
 import { greetingForName } from '@/lib/greeting'
 import { hasEnoughData, toneFromScore, type VerdictTone } from '@/lib/risk'
 import { confirmOrderMessage } from '@/lib/ui'
+import { softDeleteReady } from '@/lib/ui/order-visibility'
 import { useAutoRefresh, useNowTicker } from '@/lib/ui/use-auto-refresh'
 import { useSession } from '@/lib/session'
 import { isConfigured, supabase } from '@/lib/supabase'
@@ -121,6 +122,8 @@ export function Dashboard() {
       .select('*, stores(name), outcomes(status, resolved_at)')
       .order('ordered_at', { ascending: false })
       .limit(500)
+    // Hidden orders are out of the product, so they are out of its numbers.
+    if (await softDeleteReady()) ordersQuery = ordersQuery.is('deleted_at', null)
     if (store) ordersQuery = ordersQuery.eq('store_id', store.id)
     else if (scopeStoreIds) ordersQuery = ordersQuery.in('store_id', scopeStoreIds)
 
@@ -631,6 +634,21 @@ export function Dashboard() {
         </div>
       )}
 
+      {/* Setup first, while it is unfinished.
+          A merchant who has not connected a store or marked an outcome yet has
+          nothing to read a verdict from, so the nudge used to sit below the
+          answer and got scrolled past. It now leads the page, in the brand
+          colour, and removes itself the moment every step is done. Hidden in the
+          all-stores network view: an admin reading the whole network is not
+          "finishing setting up" one store. */}
+      {!(isAdmin && !store) && (
+        <FirstRunChecklist
+          hasStore={Boolean(store) || orders.length > 0}
+          hasScoredOrder={earlySignals.anyScored}
+          hasOutcome={earlySignals.anyOutcome}
+        />
+      )}
+
       {/* The answer, first: one briefing line, then the verdict card. */}
       {!loading && !ordersError && (
         <p className="text-[15px] font-medium text-foreground">
@@ -676,19 +694,6 @@ export function Dashboard() {
           </Button>
         </div>
       </VerdictCard>
-
-      {/* Setup nudges live BELOW the answer, so the verdict is the first thing
-          on the page. Hidden in the all-stores network view: an admin reading
-          the whole network is not "finishing setting up" one store.
-          "Store connected" is ticked when the store has orders — orders are
-          proof the connection works, even before the profile is filled in. */}
-      {!(isAdmin && !store) && (
-        <FirstRunChecklist
-          hasStore={Boolean(store) || orders.length > 0}
-          hasScoredOrder={earlySignals.anyScored}
-          hasOutcome={earlySignals.anyOutcome}
-        />
-      )}
 
       {/* Who needs you, and how risky the book is. */}
       <div className="grid gap-5 lg:grid-cols-2">

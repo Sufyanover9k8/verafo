@@ -10,6 +10,7 @@ import {
   PlusSquare,
   Search,
   Settings,
+  ShieldCheck,
   Store,
   UploadCloud,
 } from 'lucide-react'
@@ -58,6 +59,8 @@ export const NAV_SECTIONS: NavSection[] = [
         : []),
       { to: '/orders/pending', label: 'Outcomes', icon: ClipboardCheck },
       { to: '/stores', label: 'Stores', icon: Store, adminOnly: true },
+      // Broadcast messages to the merchants. Verafo-team only.
+      { to: '/admin', label: 'Admin', icon: ShieldCheck, adminOnly: true },
     ],
   },
   {

@@ -22,6 +22,7 @@ import { dateTime, money, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts } from '../lib/storeStats'
+import { softDeleteReady } from '../lib/ui/order-visibility'
 import { useToast } from '../lib/toast'
 import type { DailySalesRow, OrderRow, OutcomeStatus, StoreOverview } from '../lib/types'
 import type { RangeDays } from '../components/RangeFilter'
@@ -46,12 +47,14 @@ export function StoreDashboard() {
     if (!supabase || !id) return
     const cutoff = new Date(Date.now() - (range - 1) * 86400000)
     cutoff.setHours(0, 0, 0, 0)
+    const allowHide = await softDeleteReady()
     const [overviewRes, salesRes, ordersRes, storeRes] = await Promise.all([
       supabase.rpc('store_overview'),
       supabase.rpc('daily_sales', { p_store_id: id, p_days: range }),
-      supabase
-        .from('orders')
-        .select('*, stores(name), outcomes(status, resolved_at)')
+      (allowHide
+        ? supabase.from('orders').select('*, stores(name), outcomes(status, resolved_at)').is('deleted_at', null)
+        : supabase.from('orders').select('*, stores(name), outcomes(status, resolved_at)')
+      )
         .eq('store_id', id)
         .gte('ordered_at', cutoff.toISOString())
         .order('ordered_at', { ascending: false })

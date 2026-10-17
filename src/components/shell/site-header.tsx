@@ -1,8 +1,6 @@
-import { useState, type FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { Monitor, Moon, Search, Sun } from 'lucide-react'
 import { isConfigured } from '@/lib/supabase'
-import { normalizePhone } from '@/lib/format'
 import { useTheme, type Theme } from '@/lib/theme'
 import { useCommandPalette } from '@/components/layout/palette'
 import { NAV_SECTIONS, SETTINGS_ITEM } from '@/components/layout/nav'
@@ -14,37 +12,9 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
-
-/** Type a phone number, press Enter, get the verdict. Always one keystroke away. */
-function QuickCheck() {
-  const navigate = useNavigate()
-  const [value, setValue] = useState('')
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    const p = normalizePhone(value)
-    if (p.length < 6) return
-    navigate(`/lookup?phone=${encodeURIComponent(p)}`)
-    setValue('')
-  }
-
-  return (
-    <form onSubmit={submit} role="search" className="relative hidden lg:block">
-      <Search className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        type="tel"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Check a buyer by phone"
-        aria-label="Check a buyer by phone number"
-        className="h-9 w-56 border-topbar-border bg-transparent ps-8 font-mono text-[13px] text-topbar-foreground placeholder:text-topbar-muted focus-visible:border-topbar-foreground focus-visible:outline-none focus-visible:ring-0 dark:bg-transparent"
-      />
-    </form>
-  )
-}
+import { NotificationBell } from './notification-bell'
 
 function ThemeMenu() {
   const { theme, resolved, setTheme } = useTheme()
@@ -101,7 +71,8 @@ export function SiteHeader() {
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
         {sectionOf?.label && <span className="hidden text-topbar-muted sm:inline">{sectionOf.label}</span>}
         {sectionOf?.label && <span className="hidden text-topbar-muted/70 sm:inline">/</span>}
-        <span className="truncate font-medium text-topbar-foreground">{current?.label ?? 'Dashboard'}</span>      </nav>
+        <span className="truncate font-medium text-topbar-foreground">{current?.label ?? 'Dashboard'}</span>
+      </nav>
 
       <div className="ms-auto flex items-center gap-2">
         <Button
@@ -117,7 +88,7 @@ export function SiteHeader() {
             Ctrl K
           </kbd>
         </Button>
-        <QuickCheck />
+
         <span
           className="hidden items-center gap-1.5 rounded-full border border-topbar-border bg-topbar-chip px-2.5 py-1 text-xs font-medium text-topbar-foreground xl:inline-flex"
           title={isConfigured ? 'Connected to Verafo' : 'Supabase is not configured'}
@@ -125,6 +96,7 @@ export function SiteHeader() {
           <span className={`size-1.5 rounded-full ${isConfigured ? 'bg-success' : 'bg-warning'}`} />
           {isConfigured ? 'Live' : 'Setup needed'}
         </span>
+        <NotificationBell />
         <ThemeMenu />
       </div>
     </header>

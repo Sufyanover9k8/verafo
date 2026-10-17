@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Check, X } from 'lucide-react'
+import { Check, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatPKR } from '@/lib/ui'
 import { readPref, writePref } from '@/lib/ui/prefs'
@@ -36,19 +36,32 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
   if (allDone || hidden) return null
 
   const doneCount = items.filter((i) => i.done).length
+  /** The first thing still missing: the only step offered as a filled button. */
+  const nextStep = items.find((i) => !i.done)
 
   return (
-    <div className="rounded-[var(--r-card)] border border-border bg-card p-5">
+    /* Brand-coloured and at the top of the page: while setup is unfinished there
+       is nothing to read a verdict from, so this is the block that should win
+       the merchant's attention. It removes itself once every step is done. */
+    <section
+      aria-label="Finish setting up"
+      className="rounded-[var(--r-card)] border border-primary/40 bg-primary/[0.06] p-5"
+    >
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-[15px] font-semibold text-foreground">Finish setting up</h2>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">
-            {doneCount} of {items.length} done. Verafo gets sharper with each step.
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary text-primary-foreground">
+            <Sparkles className="size-4" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="text-[16px] font-semibold text-foreground">Finish setting up</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              {doneCount} of {items.length} done — Verafo gets sharper with each step.
+            </p>
+          </div>
         </div>
         <button
           type="button"
-          className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-border px-3 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:bg-muted md:h-8"
+          className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:bg-muted md:h-8"
           onClick={() => {
             writePref(CHECKLIST_HIDDEN_KEY, '1')
             setHidden(true)
@@ -58,25 +71,49 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
         </button>
       </div>
 
-      <ul className="flex flex-col divide-y divide-border">
+      {/* How far along, in one line. */}
+      <div
+        className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-primary/15"
+        role="progressbar"
+        aria-valuenow={doneCount}
+        aria-valuemin={0}
+        aria-valuemax={items.length}
+        aria-label={`${doneCount} of ${items.length} setup steps done`}
+      >
+        <span
+          className="block h-full rounded-full bg-primary transition-[width] duration-500"
+          style={{ width: `${Math.round((doneCount / items.length) * 100)}%` }}
+        />
+      </div>
+
+      <ul className="flex flex-col divide-y divide-primary/15">
         {items.map((i) => (
           <li key={i.label} className="flex min-h-11 flex-wrap items-center justify-between gap-3 py-3">
             <span className="flex items-center gap-2.5 text-[14px]">
               <span
                 className={cn(
                   'grid size-5 shrink-0 place-items-center rounded-full border',
-                  i.done ? 'border-risk-safe bg-risk-safe-soft text-risk-safe-strong' : 'border-border text-transparent',
+                  i.done
+                    ? 'border-risk-safe bg-risk-safe-soft text-risk-safe-strong'
+                    : 'border-primary/40 bg-card text-transparent',
                 )}
                 aria-hidden="true"
               >
                 <Check className="size-3" />
               </span>
-              <span className={i.done ? 'text-muted-foreground line-through' : 'text-foreground'}>{i.label}</span>
+              <span className={i.done ? 'text-muted-foreground line-through' : 'font-medium text-foreground'}>
+                {i.label}
+              </span>
             </span>
             {!i.done && (
               <Link
                 to={i.to}
-                className="inline-flex h-11 items-center rounded-[10px] border border-border px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted md:h-8"
+                className={cn(
+                  'inline-flex h-11 items-center rounded-[10px] px-3.5 text-[12.5px] font-semibold transition-colors md:h-8',
+                  i.label === nextStep?.label
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    : 'border border-border bg-card text-foreground hover:bg-muted',
+                )}
               >
                 {i.cta}
               </Link>
@@ -84,7 +121,7 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   )
 }
 

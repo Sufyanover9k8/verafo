@@ -18,6 +18,7 @@ import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { aiJson, classifyAiThrow } from '../lib/ai'
 import { hasFingerprint } from '../lib/ui/fingerprint'
 import { embedBuyerNow } from '../lib/ui/auto-embed'
+import { softDeleteReady } from '../lib/ui/order-visibility'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -142,6 +143,9 @@ export function Lookup() {
       // identity, no store identity, no order detail, no vector. The merchant
       // still gets the answer for any number they already know.
       let ordersQuery = supabase.from('orders').select('*, stores(name), outcomes(status, resolved_at, refusal_reason)').eq('buyer_phone', normalized)
+      // Hidden orders stay out of the history too; the data is still there for
+      // the model, just not shown to anyone.
+      if (await softDeleteReady()) ordersQuery = ordersQuery.is('deleted_at', null)
       if (store) ordersQuery = ordersQuery.eq('store_id', store.id)
 
       const [lookupRes, ordersRes] = await Promise.all([

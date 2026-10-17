@@ -19,6 +19,13 @@ api_version = "2025-01"
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
+  # Handled by: /app/routes/webhooks.app.subscriptions_update.tsx
+  # Read-only: records which App Pricing plan the shop is on, so the
+  # dashboard can show it. Never creates or changes a subscription.
+  [[webhooks.subscriptions]]
+  topics = ["app_subscriptions/update"]
+  uri = "/webhooks/app/subscriptions_update"
+
   # Verafo ingestion + outcome signals
   # Handled by: /app/routes/webhooks.orders.create.tsx
   [[webhooks.subscriptions]]
