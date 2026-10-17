@@ -14,6 +14,12 @@ export interface Buyer {
   embedding?: number[] | null
   feature_vector?: number[] | null
   updated_at?: string | null
+  /**
+   * Whether a fingerprint exists at all. The vector itself is never sent to
+   * the browser, but UI needs to tell "has one" from "does not" — a badge
+   * cannot infer that from an absent vector without always saying "no".
+   */
+  has_fingerprint?: boolean | null
   /** Distinct stores this buyer has ordered from. Aggregated, no identity. */
   store_count?: number | null
 }

@@ -29,6 +29,12 @@ interface NetworkLookupRow {
   total_refused: number | null
   store_count: number | null
   first_seen: string | null
+  /**
+   * Whether the buyer has an AI fingerprint stored. A flag, not the vector:
+   * before this existed the page hard-coded "no fingerprint", so the badge
+   * reported a constant instead of the buyer's state.
+   */
+  has_fingerprint?: boolean | null
 }
 
 type SearchState =
@@ -161,8 +167,12 @@ export function Lookup() {
         total_refused: network.total_refused ?? 0,
         risk_score: Number(network.risk_score ?? 0.5),
         store_count: network.store_count ?? 0,
-        // No embedding is requested or received, so the AI actions stay hidden.
-        embedding: null,
+        /*
+         * The vector itself never reaches the browser, so `embedding` stays
+         * empty — but the server now reports whether one exists. Without that
+         * flag the badge could only ever say "no fingerprint yet".
+         */
+        has_fingerprint: Boolean(network.has_fingerprint),
       }
 
       const orders = (ordersRes.data ?? []) as unknown as OrderRow[]
@@ -542,12 +552,15 @@ export function Lookup() {
                   <Sparkles className="size-4" aria-hidden="true" />
                 </span>
                 <h3 className="text-[15px] font-semibold text-foreground">Ask Verafo about this buyer</h3>
-                {buyer.embedding ? (
+                {buyer.has_fingerprint ? (
                   <span className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-risk-safe/40 bg-risk-safe-soft px-2.5 py-1 text-[12.5px] font-medium text-risk-safe-strong">
                     <Fingerprint className="size-3.5" /> fingerprint embedded
                   </span>
                 ) : (
-                  <span className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[12.5px] font-medium text-muted-foreground">
+                  <span
+                    className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[12.5px] font-medium text-muted-foreground"
+                    title="A fingerprint is the buyer's AI similarity vector. Explanations and lookups work without one; only the 'similar buyers' comparison needs it."
+                  >
                     <Fingerprint className="size-3.5" /> no fingerprint yet
                   </span>
                 )}
