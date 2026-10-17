@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { supabase } from '../lib/supabase'
+import { claimShopifyStore } from '../lib/stores'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -39,6 +40,31 @@ export function Onboarding() {
     }
     setSaving(true)
     setError(null)
+
+    /*
+     * If the Shopify app was installed before the merchant signed up, it has
+     * already created the store row — with no owner. Linking to it here is what
+     * makes their orders visible; inserting instead would hit the unique index
+     * on stores.shopify_domain and fail.
+     */
+    if (domain.trim()) {
+      const claim = await claimShopifyStore(domain)
+      if (claim.ok) {
+        setSaving(false)
+        toast.push({
+          kind: 'success',
+          title: claim.alreadyOwned ? 'Store already linked' : 'Shopify store linked',
+          detail: `${claim.storeName ?? clean} — your orders are on the dashboard.`,
+        })
+        reload()
+        return
+      }
+      if (claim.reason === 'already_owned_by_another') {
+        setSaving(false)
+        setError(claim.message)
+        return
+      }
+    }
 
     const payload: Record<string, string> = { name: clean }
     if (email) payload.owner_email = email

@@ -10,6 +10,7 @@ import { EmptyState, NeedsSetup } from '../components/States'
 import { Reveal } from '../components/Reveal'
 import { cn } from '@/lib/utils'
 import { useIsAdmin } from '../lib/admin'
+import { claimShopifyStore } from '../lib/stores'
 import { normalizePhone, phone } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
@@ -50,6 +51,34 @@ export function AddStore() {
       return
     }
     setSaving(true)
+
+    /*
+     * If the Shopify app already created a store row for this domain, LINK to
+     * it rather than inserting. Without this the insert collides with the
+     * unique index on stores.shopify_domain, and the merchant is left with a
+     * store full of orders they cannot see.
+     */
+    if (domain.trim()) {
+      const claim = await claimShopifyStore(domain)
+      if (claim.ok) {
+        setSaving(false)
+        toast.push({
+          kind: 'success',
+          title: claim.alreadyOwned ? 'Already linked' : 'Shopify store linked',
+          detail: `${claim.storeName ?? cleanName} — orders will appear on your dashboard.`,
+        })
+        navigate('/stores')
+        return
+      }
+      // Owned by someone else: stop, rather than create a confusing duplicate.
+      if (claim.reason === 'already_owned_by_another') {
+        setSaving(false)
+        toast.push({ kind: 'error', title: 'Could not link this store', detail: claim.message })
+        return
+      }
+      // `not_found` is the normal case for a new store, so fall through.
+    }
+
     const payload: Record<string, string> = { name: cleanName }
     if (category) payload.category = category
     if (domain.trim()) payload.shopify_domain = domain.trim()
@@ -172,7 +201,10 @@ export function AddStore() {
                   onChange={(e) => setDomain(e.target.value)}
                   placeholder="your-store.myshopify.com"
                 />
-                <span className={hintClass}>Optional — links this brand to its Shopify shop.</span>
+                <span className={hintClass}>
+                  Optional — links this brand to its Shopify shop. If the Shopify app is already
+                  installed for this domain, the store is linked to your account instead of duplicated.
+                </span>
               </div>
 
               <div className="flex flex-col gap-2">
