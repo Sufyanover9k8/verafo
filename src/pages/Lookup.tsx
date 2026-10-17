@@ -16,6 +16,7 @@ import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
 import { computeVerdict, riskFactors, toneFromScore, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { aiJson, classifyAiThrow } from '../lib/ai'
+import { hasFingerprint } from '../lib/ui/fingerprint'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -170,7 +171,9 @@ export function Lookup() {
         /*
          * The vector itself never reaches the browser, so `embedding` stays
          * empty — but the server now reports whether one exists. Without that
-         * flag the badge could only ever say "no fingerprint yet".
+         * flag the badge could only ever say "no fingerprint yet". The flag is
+         * authoritative when present; see the direct check in `search` for the
+         * case where the SQL that adds it has not been applied.
          */
         has_fingerprint: Boolean(network.has_fingerprint),
       }
@@ -190,6 +193,19 @@ export function Lookup() {
         await supabase.from('lookups').insert({ buyer_phone: normalized, owner_email: email })
         void loadRecents()
       }
+
+      /*
+       * Confirm the fingerprint directly from the buyers row.
+       *
+       * `buyer_network_lookup.has_fingerprint` is authoritative, but that column
+       * only exists once supabase/lookup-fingerprint-flag.sql has been applied.
+       * Until then the badge would read a permanently-false default. Asking the
+       * table for the one boolean settles it today, and RLS keeps the answer
+       * honest per caller. If neither source can answer, the flag stays false
+       * rather than claiming a fingerprint we cannot see.
+       */
+      const direct = await hasFingerprint(normalized)
+      if (direct !== null) buyer.has_fingerprint = direct
 
       setState({ kind: 'found', buyer, orders, similar })
     },
