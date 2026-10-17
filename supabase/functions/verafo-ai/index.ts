@@ -918,38 +918,67 @@ function shortMoney(n: number): string {
  * Returns [] when the caller is not authenticated or owns nothing. Callers
  * MUST treat [] as "deny", never as "no filter".
  */
-async function authorizeCaller(req: Request): Promise<{ email: string; storeIds: string[] }> {
+async function authorizeCaller(
+  req: Request,
+): Promise<{ email: string; storeIds: string[]; reason?: string }> {
   const header = req.headers.get("authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token) return { email: "", storeIds: [] };
+  if (!token) return { email: "", storeIds: [], reason: "no Authorization header" };
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
-  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   let email = "";
   try {
     const res = await fetch(`${url}/auth/v1/user`, {
-      headers: { apikey: anon || service, Authorization: `Bearer ${token}` },
+      headers: { apikey: anon || service || "", Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return { email: "", storeIds: [] };
+    if (!res.ok) return { email: "", storeIds: [], reason: `auth rejected the token (${res.status})` };
     const user = await res.json();
     email = String(user?.email ?? "").toLowerCase();
-  } catch {
-    return { email: "", storeIds: [] };
+  } catch (err) {
+    return { email: "", storeIds: [], reason: `auth lookup failed: ${String(err)}` };
   }
-  if (!email) return { email: "", storeIds: [] };
+  if (!email) return { email: "", storeIds: [], reason: "the signed-in user has no email" };
+
+  /*
+   * Ownership lookup.
+   *
+   * CASE IS LOAD-BEARING. RLS decides what a merchant may see with
+   * `lower(coalesce(owner_email, '')) = verafo_current_email()`, which is
+   * case-INsensitive. An `eq` here is case-SENSITIVE, so a store saved as
+   * "Owner@Example.com" was visible in the app (RLS said yes) while this lookup
+   * returned nothing — and every private tool then refused with "your account is
+   * not linked to any store", even though the merchant was looking at their own
+   * store on screen. `ilike` matches the way RLS matches.
+   */
+  if (!service) {
+    return {
+      email,
+      storeIds: [],
+      reason: "the function cannot read store ownership (SUPABASE_SERVICE_ROLE_KEY is not set)",
+    };
+  }
 
   try {
     const res = await fetch(
-      `${url}/rest/v1/stores?select=id&owner_email=eq.${encodeURIComponent(email)}`,
+      `${url}/rest/v1/stores?select=id&owner_email=ilike.${encodeURIComponent(email)}`,
       { headers: { apikey: service, Authorization: `Bearer ${service}` } },
     );
-    if (!res.ok) return { email, storeIds: [] };
+    if (!res.ok) {
+      return { email, storeIds: [], reason: `store lookup failed (${res.status})` };
+    }
     const rows: unknown = await res.json();
-    return { email, storeIds: asRows<BuyerIdRow>(rows).map((r) => String(r.id)) };
-  } catch {
-    return { email, storeIds: [] };
+    const storeIds = asRows<BuyerIdRow>(rows).map((r) => String(r.id));
+    if (storeIds.length > 0) return { email, storeIds };
+    return {
+      email,
+      storeIds: [],
+      reason: `no store has owner_email = ${email}`,
+    };
+  } catch (err) {
+    return { email, storeIds: [], reason: `store lookup threw: ${String(err)}` };
   }
 }
 
@@ -1611,11 +1640,25 @@ async function toolRefusalReasons(supabase: Db, _args: unknown, _storeIds: strin
  * Aggregate/network tools are intentionally NOT gated: cross-store aggregate
  * intelligence is an allowed product feature.
  */
-function requireOwnStores(storeIds: string[]): { error: string } | null {
+/**
+ * Why the caller owns no stores, captured once per request.
+ *
+ * Threading it through every tool signature would be noise across sixty call
+ * sites, and the value is per-request state — safe here because the whole
+ * handler runs before the request settles. It exists so a denial can say WHAT
+ * went wrong instead of a blanket "your account is not linked to any store",
+ * which was read as a product limitation when the real cause was a lookup bug.
+ */
+let requestScopeReason: string | undefined;
+
+function requireOwnStores(storeIds: string[], reason?: string): { error: string } | null {
   if (!storeIds || storeIds.length === 0) {
+    const why = reason ?? requestScopeReason;
     return {
       error:
-        "Not allowed: this question needs order-level detail, and your account is not linked to any store. Ask about aggregate figures instead, or use a store you own.",
+        "Not allowed: this question needs order-level detail, and no store is linked to the signed-in account" +
+        (why ? ` (${why})` : "") +
+        ". Say plainly that the data could not be read, and do not invent a reason beyond this.",
     };
   }
   return null;
@@ -2674,7 +2717,8 @@ const supabase = createClient(
     );
     // PRIVACY: the service role bypasses RLS, so identify the caller here and
     // hand the owned store ids to every tool that returns private data.
-    const { storeIds } = await authorizeCaller(req);
+    const { storeIds, reason: scopeReason } = await authorizeCaller(req);
+    requestScopeReason = scopeReason;
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) {
       return json({ error: "OPENAI_API_KEY is not set on this function" }, 500);
