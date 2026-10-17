@@ -2636,6 +2636,15 @@ async function embedBuyerVector(
     input: text,
   });
   const vector = res.data[0].embedding as number[];
+  /*
+   * Write to the STORED spelling. Stored numbers are not normalized, so an
+   * `.eq("phone", <caller's spelling>)` matches nothing — and a Supabase
+   * UPDATE that matches zero rows returns NO error, so the vector was silently
+   * discarded while the caller was told "ok". `findBuyer` already resolves the
+   * spelling; reuse it instead of trusting the input.
+   */
+  const found = await findBuyer(supabase, phone);
+  const target = found?.phone ?? phone;
   const { error } = await supabase
     .from("buyers")
     .update({
@@ -2643,7 +2652,7 @@ async function embedBuyerVector(
       feature_vector: fv.vector,
       updated_at: new Date().toISOString(),
     })
-    .eq("phone", phone);
+    .eq("phone", target);
   if (error) throw new Error(error.message);
   return vector;
 }
@@ -2747,6 +2756,15 @@ const supabase = createClient(
         input: text,
       });
       const vector = res.data[0].embedding;
+      /*
+       * Same trap as embedBuyerVector: the UPDATE must target the STORED
+       * spelling, or it silently matches zero rows and reports success. Then
+       * read the row back — a zero-row update and a successful one are
+       * indistinguishable from the client's side, and telling a merchant
+       * "fingerprint refreshed" when nothing was saved is worse than an error.
+       */
+      const found = await findBuyer(supabase, phone);
+      if (!found) return json({ error: "no buyer found for that number" }, 404);
       const { error } = await supabase
         .from("buyers")
         .update({
@@ -2754,10 +2772,32 @@ const supabase = createClient(
           feature_vector: fv.vector,
           updated_at: new Date().toISOString(),
         })
-        .eq("phone", phone);
+        .eq("phone", found.phone);
       if (error) throw new Error(error.message);
+
+      const { data: verify, error: verifyErr } = await supabase
+        .from("buyers")
+        .select("phone, embedding, updated_at")
+        .eq("phone", found.phone)
+        .maybeSingle();
+      if (verifyErr) throw new Error(verifyErr.message);
+      const stored = asOne<{ phone?: string; embedding?: unknown; updated_at?: string }>(verify);
+      const saved = Boolean(stored && stored.embedding != null);
+      if (!saved) {
+        // Never claim success we cannot see in the database.
+        return json(
+          {
+            error:
+              "The fingerprint was computed but did not persist. The embedding column may be missing or reject the vector (check pgvector is enabled on public.buyers).",
+          },
+          500,
+        );
+      }
+
       return json({
         ok: true,
+        has_embedding: true,
+        stored_phone: found.phone,
         summary: text,
         feature_labels: fv.labels,
         feature_vector: fv.vector,
