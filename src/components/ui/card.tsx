@@ -9,7 +9,12 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
         // gap-5 / py-5 / rounded-lg: one step tighter than the shadcn defaults,
         // which at a 14px type scale left the cards looking inflated and ate
         // vertical room the page did not need.
-        'flex flex-col gap-5 rounded-lg border bg-card py-5 text-card-foreground shadow-sm',
+        // `min-w-0` is load-bearing, not cosmetic: a card is a grid/flex child,
+        // and those default to `min-width: auto`. Wide content inside — a map, a
+        // chart, a long table — then forces the whole column past the viewport
+        // instead of letting it shrink, which is what pushed the Sales-by-city
+        // bars beyond the card edge on a phone.
+        'flex min-w-0 flex-col gap-5 rounded-lg border bg-card py-5 text-card-foreground shadow-sm',
         className
       )}
       {...props}

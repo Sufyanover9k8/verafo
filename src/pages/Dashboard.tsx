@@ -716,13 +716,22 @@ export function Dashboard() {
               <ul className="-mx-2 m-0 list-none divide-y divide-border p-0">
                 {attention.map(({ order, buyer }) => (
                   <li key={order.id} className="py-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    {/*
+                      * Stacked on phones. Side by side, the number, its risk
+                      * badge and three action buttons fought for ~360px: the
+                      * phone wrapped onto three lines and the badge sat on top
+                      * of the Call button. Two rows — identity above, actions
+                      * below — stays readable and keeps the buttons full-size.
+                      */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
                       <Link
                         to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
                         className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-[10px] px-2 transition-colors hover:bg-muted/60"
                       >
                         <div className="min-w-0">
-                          <div className="font-mono text-[13px] font-medium">{phone(order.buyer_phone)}</div>
+                          <div className="truncate font-mono text-[13px] font-medium whitespace-nowrap">
+                            {phone(order.buyer_phone)}
+                          </div>
                           <div className="truncate text-[13px] text-muted-foreground">
                             {order.product_name || order.product_category || 'Order'}
                           </div>
@@ -896,7 +905,7 @@ export function Dashboard() {
               emptyText="No city data yet. Add a city when logging orders."
               skeletonHeight={280}
             >
-              <div className="overflow-hidden rounded-[10px] border">
+              <div className="min-w-0 overflow-hidden rounded-[10px] border">
                 <GeoMap cities={cityStats} height={240} />
               </div>
               <ul className="m-0 list-none space-y-3 p-0">

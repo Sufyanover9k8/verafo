@@ -123,6 +123,31 @@ function reportKind(content: string): ReportKind {
 const FACT_RE = /^(Verdict|Recommendation|Confidence):/
 const REPORT_LINE_RE = /^\[(Analyze|Trends|Suggestions)\]/
 
+/**
+ * Inline text with **bold** honoured.
+ *
+ * The model writes markdown emphasis ("**Week 35**: 67 orders…") and this view
+ * rendered it literally, so merchants read the asterisks. Only bold is
+ * supported — that is all the answers use, and anything richer belongs in a
+ * markdown renderer rather than a regex.
+ */
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.length > 4 && part.startsWith('**') && part.endsWith('**') ? (
+          <strong key={i} className="font-semibold text-foreground">
+            {renderMentions(plain(part.slice(2, -2)))}
+          </strong>
+        ) : (
+          <span key={i}>{renderMentions(plain(part))}</span>
+        ),
+      )}
+    </>
+  )
+}
+
 /** Bullets become one list; "Verdict: …" lines become labelled facts. */
 function AnswerBody({ text }: { text: string }) {
   const lines = text.split('\n').filter((l) => l.trim() && !REPORT_LINE_RE.test(l))
@@ -136,7 +161,7 @@ function AnswerBody({ text }: { text: string }) {
         {bullets.map((b, i) => (
           <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed text-foreground">
             <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
-            <span className="min-w-0">{renderMentions(plain(b))}</span>
+            <span className="min-w-0"><RichText text={b} /></span>
           </li>
         ))}
       </ul>,
@@ -155,13 +180,13 @@ function AnswerBody({ text }: { text: string }) {
       blocks.push(
         <p key={`f-${blocks.length}`} className="m-0 text-[14px] leading-relaxed">
           <strong className="font-semibold text-foreground">{line.slice(0, idx)}:</strong>
-          <span className="text-muted-foreground">{plain(line.slice(idx + 1))}</span>
+          <span className="text-muted-foreground"><RichText text={line.slice(idx + 1)} /></span>
         </p>,
       )
     } else {
       blocks.push(
         <p key={`p-${blocks.length}`} className="m-0 text-[14px] leading-relaxed text-foreground">
-          {renderMentions(plain(line))}
+          <RichText text={line} />
         </p>,
       )
     }
