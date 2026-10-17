@@ -212,19 +212,32 @@ export async function recordShopifyOrder(
   return { created: true };
 }
 
-/** Mark an ingested Shopify order as refused (cancelled) or accepted (fulfilled). */
+/**
+ * Mark an ingested Shopify order as refused (cancelled) or accepted (fulfilled).
+ *
+ * OUT-OF-ORDER DELIVERY. Shopify does not guarantee webhook ordering, so a
+ * fulfilment can arrive before the `orders/create` that creates the Verafo row.
+ * This used to return `{skipped: "order not found"}` and the route answered 200
+ * — telling Shopify the message was handled — so the outcome was dropped and the
+ * order stayed `pending` for good, skewing that buyer's refusal rate and score.
+ *
+ * `notFound` lets the route answer 5xx so Shopify retries; by then the create has
+ * almost always arrived. A create skipped for having no phone will keep failing
+ * and Shopify stops on its own after its retry window.
+ */
 export async function setOutcomeForShopifyOrder(
   shopifyOrderId: string,
   status: "accepted" | "refused",
   reason?: string | null,
-): Promise<{ updated: boolean; skipped?: string }> {
+): Promise<{ updated: boolean; notFound?: boolean; skipped?: string }> {
   const supabase = getSupabase();
-  const { data: order } = await supabase
+  const { data: order, error: findErr } = await supabase
     .from("orders")
     .select("id")
     .eq("shopify_order_id", shopifyOrderId)
     .maybeSingle();
-  if (!order) return { updated: false, skipped: "order not found" };
+  if (findErr) throw new Error(`could not look up the order: ${findErr.message}`);
+  if (!order) return { updated: false, notFound: true, skipped: "order not found yet" };
 
   const { error } = await supabase
     .from("outcomes")

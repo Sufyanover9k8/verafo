@@ -12,6 +12,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const reason =
         payload.cancel_reason ?? payload.cancelled_reason ?? null;
       const result = await setOutcomeForShopifyOrder(id, "refused", reason);
+      if (result.notFound) {
+        // Same out-of-order case as orders/fulfilled: retry rather than drop.
+        console.warn(`orders/cancelled arrived before its create for ${shop}; requesting retry`);
+        return new Response(null, { status: 500 });
+      }
       if (result.skipped) {
         console.log(`orders/cancelled skipped for ${shop}: ${result.skipped}`);
       }

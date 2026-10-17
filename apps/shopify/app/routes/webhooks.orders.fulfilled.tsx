@@ -10,6 +10,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const id = String(payload.id ?? "");
     if (id) {
       const result = await setOutcomeForShopifyOrder(id, "accepted");
+      if (result.notFound) {
+        // The orders/create has not landed yet. Ask Shopify to retry instead of
+        // acknowledging and dropping the outcome for good.
+        console.warn(`orders/fulfilled arrived before its create for ${shop}; requesting retry`);
+        return new Response(null, { status: 500 });
+      }
       if (result.skipped) {
         console.log(`orders/fulfilled skipped for ${shop}: ${result.skipped}`);
       }
