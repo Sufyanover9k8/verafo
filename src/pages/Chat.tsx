@@ -322,6 +322,13 @@ export function Chat() {
    *  transcript should not have to collapse it again on every visit. */
   const [railOpen, setRailOpen] = useState(() => {
     try {
+      /*
+       * On a phone the rail is a full-height overlay drawer, not a column. An
+       * open drawer covers the entire conversation, so a saved desktop
+       * preference must not carry over and land the page with its own chat
+       * hidden behind the list. Start closed on small screens.
+       */
+      if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) return false
       return localStorage.getItem(RAIL_KEY) !== '0'
     } catch {
       return true
@@ -329,6 +336,9 @@ export function Chat() {
   })
   useEffect(() => {
     try {
+      // Only remember the choice where it means "collapsed column". Writing it
+      // from a phone would overwrite the desktop preference.
+      if (window.matchMedia('(max-width: 1023px)').matches) return
       localStorage.setItem(RAIL_KEY, railOpen ? '1' : '0')
     } catch {
       /* storage unavailable — the rail still works, it just will not persist */
@@ -1264,7 +1274,10 @@ export function Chat() {
         */}
       <div
         className={cn(
-          'grid h-[calc(100dvh-var(--v-topbar-h)-8rem)] min-h-[30rem] gap-4',
+          // On phones the chrome above is just the title now, so this reserves
+          // less than the desktop offset and hands the transcript the ~48px it
+          // was giving away.
+          'grid h-[calc(100dvh-var(--v-topbar-h)-5rem)] min-h-[26rem] gap-4 sm:h-[calc(100dvh-var(--v-topbar-h)-8rem)] sm:min-h-[30rem]',
           railOpen ? 'lg:grid-cols-[18rem_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)]',
         )}
       >
@@ -1581,7 +1594,7 @@ export function Chat() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-11 md:size-9"
+                    className="size-11 max-sm:hidden md:size-9"
                     title="Copy chat"
                     aria-label="Copy chat"
                     onClick={() => void copyChat()}
@@ -1591,7 +1604,7 @@ export function Chat() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-11 md:size-9"
+                    className="size-11 max-sm:hidden md:size-9"
                     title="Export chat (.txt)"
                     aria-label="Export chat"
                     onClick={exportChat}
@@ -1956,11 +1969,13 @@ export function Chat() {
         </section>
       </div>
 
-      {/* Phones: the rail is an overlay drawer rather than a second column. */}
+      {/* Phones: the rail is an overlay drawer rather than a second column.
+          `bottom-28` clears the composer — at `bottom-20` this sat on top of the
+          send button and made the primary action unreachable. */}
       {!railOpen && (
         <button
           type="button"
-          className="fixed end-4 bottom-20 z-40 inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-teal lg:hidden"
+          className="fixed end-4 bottom-28 z-40 inline-flex h-11 items-center gap-2 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground shadow-teal lg:hidden"
           onClick={() => setRailOpen(true)}
         >
           <MessageSquare className="size-4" /> Chats
