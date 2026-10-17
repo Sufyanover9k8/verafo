@@ -32,7 +32,16 @@ export interface AiFailure {
 
 const SESSION_RE = /row-level security|violates row-level|permission denied|JWT|PGRST301|42501|not authenticated/i
 
-/** Headers for a call to an edge function, including the signed-in token. */
+/**
+ * Headers for a call to an edge function, including the signed-in token.
+ *
+ * The token is refreshed when it is close to expiring. `getSession()` happily
+ * returns a token that has already lapsed, and the edge function verifies the
+ * bearer token against Supabase Auth before it will attribute the call to a
+ * user — so a stale token makes every private tool answer "no store is linked
+ * to the signed-in account", which reads as a permissions problem rather than
+ * an expired session. Refreshing here turns that into a correct answer.
+ */
 export async function aiHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra }
   if (supabaseKey) headers.apikey = supabaseKey
@@ -40,9 +49,16 @@ export async function aiHeaders(extra?: Record<string, string>): Promise<Record<
   if (supabase) {
     try {
       const { data } = await supabase.auth.getSession()
-      token = data.session?.access_token ?? null
+      const session = data.session
+      token = session?.access_token ?? null
+      // Refresh when it has expired or expires within the next two minutes.
+      const expiresAtMs = (session?.expires_at ?? 0) * 1000
+      if (session && expiresAtMs - Date.now() < 120_000) {
+        const { data: refreshed } = await supabase.auth.refreshSession()
+        token = refreshed.session?.access_token ?? token
+      }
     } catch {
-      /* fall back to the publishable key */
+      /* fall back to whatever token we have, or the publishable key */
     }
   }
   if (supabaseKey) headers.Authorization = `Bearer ${token ?? supabaseKey}`

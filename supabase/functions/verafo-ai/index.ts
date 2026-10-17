@@ -934,7 +934,19 @@ async function authorizeCaller(
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { apikey: anon || service || "", Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return { email: "", storeIds: [], reason: `auth rejected the token (${res.status})` };
+    if (!res.ok) {
+      // 401/403 here means the bearer token was not accepted — an expired or
+      // missing session — not that the account lacks a store. Say so, because
+      // the two used to arrive as the same empty list.
+      return {
+        email: "",
+        storeIds: [],
+        reason:
+          res.status === 401 || res.status === 403
+            ? `the session token was rejected (${res.status}) — sign in again`
+            : `auth lookup failed (${res.status})`,
+      };
+    }
     const user = await res.json();
     email = String(user?.email ?? "").toLowerCase();
   } catch (err) {
@@ -1656,9 +1668,10 @@ function requireOwnStores(storeIds: string[], reason?: string): { error: string 
     const why = reason ?? requestScopeReason;
     return {
       error:
-        "Not allowed: this question needs order-level detail, and no store is linked to the signed-in account" +
-        (why ? ` (${why})` : "") +
-        ". Say plainly that the data could not be read, and do not invent a reason beyond this.",
+        "STORE SCOPE FAILED: this question needs order-level detail, but no store could be linked to the signed-in account." +
+        (why ? ` Reason from the server: ${why}.` : "") +
+        " Reply with one short sentence saying the data could not be read and quoting that reason word for word. " +
+        "Do not guess at a different cause, and do not offer alternative analysis.",
     };
   }
   return null;
@@ -3104,7 +3117,15 @@ const supabase = createClient(
                   args: summarizeArgs(args),
                   label: TOOL_LABELS[tc.function.name] ?? tc.function.name,
                 });
-                result = await runAgentTool(tc.function.name, args, supabase, openai);
+                // `storeIds` MUST be forwarded. Without it the parameter
+                // defaults to [], the privacy gate reads that as "owns
+                // nothing", and every private tool refuses — while the caller's
+                // real stores, already resolved by authorizeCaller above, were
+                // silently discarded. That is what produced "your account is
+                // not linked to any store" for a merchant looking at their own
+                // store, and it is why the answer looked like a permissions
+                // problem rather than a bug.
+                result = await runAgentTool(tc.function.name, args, supabase, openai, storeIds);
                 emit("tool_result", {
                   name: tc.function.name,
                   summary: summarizeTool(tc.function.name, result),
