@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ListChecks, Loader2, RefreshCw, Undo2, X } from 'lucide-react'
+import { Check, ListChecks, Loader2, RefreshCw, Search, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { VerdictBadge, bandEvidence } from '../components/app/verdict-badge'
@@ -23,6 +23,17 @@ interface Row extends OrderRow {
   buyers?: { risk_score: number | null; total_orders: number | null } | null
 }
 
+/**
+ * The subscriber number of a phone, for matching.
+ *
+ * Digits only, reduced to the last ten - the same rule the database uses in
+ * verafo_phone_key. A merchant correcting an outcome knows the number, not
+ * which spelling it was stored under.
+ */
+function phoneKey(v: string | null | undefined): string {
+  const digits = String(v ?? '').replace(/\D/g, '')
+  return digits.length > 10 ? digits.slice(-10) : digits
+}
 /** How long the row stays faded after a mark, so the change is visible. */
 const EXIT_MS = 260
 
@@ -35,6 +46,8 @@ export function Outcomes() {
   const [tab, setTab] = useState<Tab>('pending')
   const [working, setWorking] = useState<string | null>(null)
   const [leaving, setLeaving] = useState<Record<string, boolean>>({})
+  /** Phone typed into the correction search. */
+  const [phoneQuery, setPhoneQuery] = useState('')
   /** Rows ticked for a bulk accept/refuse. */
   const [selected, setSelected] = useState<Set<string>>(new Set())
   /**
@@ -91,7 +104,14 @@ export function Outcomes() {
 
   const pending = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending')
   const resolved = orders.filter((o) => o.outcomes && o.outcomes.status !== 'pending').slice(0, 50)
-  const visible = tab === 'pending' ? pending : resolved
+  /*
+   * A phone search deliberately IGNORES the tab. A merchant correcting an
+   * outcome knows the number, not which list the order is in — searching only
+   * the visible tab would hide exactly the row they came to fix.
+   */
+  const searchKey = phoneKey(phoneQuery)
+  const searched = searchKey ? orders.filter((o) => phoneKey(o.buyer_phone).includes(searchKey)) : null
+  const visible = searched ?? (tab === 'pending' ? pending : resolved)
 
   /**
    * Write one outcome. The single path every action goes through, so a manual
@@ -287,6 +307,41 @@ export function Outcomes() {
         </div>
       )}
 
+      {/* Correct an outcome by number. The merchant knows the phone, not which
+          list the order is in, so this search spans both tabs. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <Search
+            className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={phoneQuery}
+            onChange={(e) => setPhoneQuery(e.target.value)}
+            placeholder="Find a buyer's orders by phone..."
+            aria-label="Search orders by phone number"
+            className="h-11 w-full rounded-[10px] border border-input bg-card ps-8 pe-9 font-mono text-[14px] text-foreground placeholder:font-sans placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--teal)] md:h-10"
+          />
+          {phoneQuery && (
+            <button
+              type="button"
+              onClick={() => setPhoneQuery('')}
+              aria-label="Clear phone search"
+              className="absolute end-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+        {searched && (
+          <p className="text-[12.5px] text-muted-foreground" aria-live="polite">
+            {searched.length} order{searched.length === 1 ? '' : 's'} for that number
+            {searched.length > 0 ? ' - change the outcome below' : ''}
+          </p>
+        )}
+      </div>
+
       <div className="inline-flex flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1">
         {tabs.map((t) => (
           <button
@@ -431,7 +486,13 @@ export function Outcomes() {
         ) : visible.length === 0 ? (
           <EmptyState
             icon={tab === 'pending' ? 'checkmark-done' : 'time'}
-            title={tab === 'pending' ? 'No pending orders' : 'No resolved orders yet'}
+            title={
+              searched
+                ? 'No orders for that number'
+                : tab === 'pending'
+                  ? 'No pending orders'
+                  : 'No resolved orders yet'
+            }
             detail={
               tab === 'pending'
                 ? 'Everything is resolved. Log a new order to get it queued here.'
