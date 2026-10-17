@@ -93,6 +93,26 @@ describe('cityRefusalRates', () => {
     expect(cityRefusalRates(orders).map((r) => r.name)).toEqual(['Big', 'Small'])
   })
 
+  it('publishes a ranked list from a small sample, flagged rather than hidden', () => {
+    // The bug this guards: MIN_SAMPLE (10) applied per group emptied both
+    // "Cities that refuse most" and "Products that refuse most" on a book with
+    // 82 resolved orders spread thin — totals showed refusals and the ranking
+    // beside them was empty.
+    const orders = [...city('Sialkot', 4, 3), ...city('Karachi', 30, 10)]
+    const rows = cityRefusalRates(orders)
+    const sialkot = rows.find((r) => r.name === 'Sialkot')
+    expect(sialkot).toBeDefined()
+    // ...and the row still admits it is thin rather than posing as a figure.
+    expect(sialkot!.confident).toBe(false)
+    expect(rows.find((r) => r.name === 'Karachi')!.confident).toBe(true)
+  })
+
+  it('still refuses a group with fewer than three resolved orders', () => {
+    // Two resolved orders is an anecdote, not a rate. `city(name, accepted, refused)`.
+    const orders = [...city('Quetta', 1, 1), ...city('Karachi', 30, 10)]
+    expect(cityRefusalRates(orders).map((r) => r.name)).toEqual(['Karachi'])
+  })
+
   it('skips orders with no city', () => {
     expect(cityRefusalRates([...city('Lahore', 20, 0), order({ city: null })])).toHaveLength(1)
   })

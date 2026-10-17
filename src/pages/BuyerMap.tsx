@@ -27,6 +27,7 @@ import { RISK, formatScore, riskLevel } from '../lib/risk'
 import {
   cityRefusalRates,
   formatRate,
+  MIN_LIST_SAMPLE,
   MIN_SAMPLE,
   productRefusalRates,
   rateOf,
@@ -36,6 +37,7 @@ import {
   type NamedRate,
   type ScoredOrder,
 } from '../lib/ui/analytics'
+import { useIsAdmin } from '../lib/admin'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
 import { useStoreScope } from '../lib/store'
@@ -214,6 +216,13 @@ function RateRow({ g, what }: { g: NamedRate; what: 'city' | 'product' }) {
         {g.refused} refused of {sampleLabel(g)} · {money(g.value ?? 0)} ordered
         {what === 'city' ? ' from this city' : ' of this product'}
       </p>
+      {/* Published from a small sample: say so beside the number rather than
+          hiding the whole ranking, which is what an empty list did before. */}
+      {!g.confident && (
+        <p className="text-[11.5px] text-risk-watch-strong">
+          Small sample — treat this rate as a hint, not a figure.
+        </p>
+      )}
     </li>
   )
 }
@@ -222,6 +231,7 @@ export function BuyerMap() {
   const navigate = useNavigate()
   const toast = useToast()
   const { store: scope } = useStoreScope()
+  const { admin } = useIsAdmin()
   const [buyers, setBuyers] = useState<BuyerRow[]>([])
   const [orders, setOrders] = useState<OrderLite[]>([])
   const [loading, setLoading] = useState(true)
@@ -482,32 +492,37 @@ export function BuyerMap() {
         }
       />
 
-      {/* ── How the score is decided. Verafo has no user-authored rules; the
-             scoring rule is fixed and lives in the database, so this states it
-             rather than offering controls that would not change anything. */}
-      <Card className="gap-0 p-5">
-        <h2 className="text-[15px] font-semibold text-foreground">How a buyer is scored</h2>
-        <p className="mt-1.5 max-w-3xl text-[13.5px] text-muted-foreground">
-          Verafo scores buyers with a fixed rule evaluated in the database — there is nothing to configure here.
-          Below {MIN_SAMPLE} resolved orders a group is not shown as a rate at all, and an unscored buyer is always
-          UNKNOWN, never safe.
-        </p>
-        <ul className="mt-3 flex flex-col gap-2 text-[13.5px] text-foreground">
-          <li className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-semibold">Thresholds</span>
-            <span className="text-muted-foreground">
-              below 0.45 LOW RISK · 0.45–0.65 MEDIUM RISK · above 0.65 HIGH RISK
-            </span>
-          </li>
-          <li className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-semibold">Signals</span>
-            <span className="text-muted-foreground">
-              refusal rate pulled toward 0.50 until 3+ resolved orders · new address +0.05 · phone first seen today
-              +0.05 · 5+ accepted across 2+ stores −0.20
-            </span>
-          </li>
-        </ul>
-      </Card>
+      {/*
+        * Internal scoring documentation. A merchant does not need Verafo's
+        * threshold arithmetic or signal weights — it invites them to second-guess
+        * a score they cannot change, and it reads as a spec leak. Administrators
+        * keep it because it explains why a store's numbers look the way they do.
+        */}
+      {admin && (
+        <Card className="gap-0 p-5">
+          <h2 className="text-[15px] font-semibold text-foreground">How a buyer is scored</h2>
+          <p className="mt-1.5 max-w-3xl text-[13.5px] text-muted-foreground">
+            Verafo scores buyers with a fixed rule evaluated in the database — there is nothing to configure here.
+            Below {MIN_LIST_SAMPLE} resolved orders a group is not shown as a rate at all, and an unscored buyer is
+            always UNKNOWN, never safe.
+          </p>
+          <ul className="mt-3 flex flex-col gap-2 text-[13.5px] text-foreground">
+            <li className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-semibold">Thresholds</span>
+              <span className="text-muted-foreground">
+                below 0.45 LOW RISK · 0.45–0.65 MEDIUM RISK · above 0.65 HIGH RISK
+              </span>
+            </li>
+            <li className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-semibold">Signals</span>
+              <span className="text-muted-foreground">
+                refusal rate pulled toward 0.50 until 3+ resolved orders · new address +0.05 · phone first seen today
+                +0.05 · 5+ accepted across 2+ stores −0.20
+              </span>
+            </li>
+          </ul>
+        </Card>
+      )}
 
       {/* ── The map ── */}
       <Card className="gap-0 overflow-hidden">
@@ -720,8 +735,8 @@ export function BuyerMap() {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-[17px] font-semibold text-foreground">Where returns come from</h2>
           <p className="text-[12px] text-muted-foreground">
-            From your latest {scored.length.toLocaleString('en-PK')} orders. A rate is published only from{' '}
-            {MIN_SAMPLE} or more resolved orders.
+            From your latest {scored.length.toLocaleString('en-PK')} orders. City and product rates publish from{' '}
+            {MIN_LIST_SAMPLE} resolved orders; anything under {MIN_SAMPLE} is marked as a small sample.
           </p>
         </div>
 
@@ -754,7 +769,7 @@ export function BuyerMap() {
                 error={loadError}
                 onRetry={() => void load()}
                 empty={cities.length === 0}
-                emptyText={`No city has ${MIN_SAMPLE} resolved orders yet, so no rate is published.`}
+                emptyText={`No city has ${MIN_LIST_SAMPLE} resolved orders yet, so no rate is published.`}
                 skeletonHeight={220}
               >
                 <ul className="m-0 list-none divide-y divide-border p-0">
@@ -777,7 +792,7 @@ export function BuyerMap() {
                 error={loadError}
                 onRetry={() => void load()}
                 empty={products.length === 0}
-                emptyText={`No product has ${MIN_SAMPLE} resolved orders yet, so no rate is published.`}
+                emptyText={`No product has ${MIN_LIST_SAMPLE} resolved orders yet, so no rate is published.`}
                 skeletonHeight={220}
               >
                 <ul className="m-0 list-none divide-y divide-border p-0">

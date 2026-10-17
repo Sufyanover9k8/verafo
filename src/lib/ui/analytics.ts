@@ -26,6 +26,19 @@ export interface ScoredOrder {
 /** The smallest group Verafo will quote a rate for. Below this it says so. */
 export const MIN_SAMPLE = 10
 
+/**
+ * The minimum for a RANKED LIST (worst cities, worst products).
+ *
+ * MIN_SAMPLE is the right bar for a headline rate — "your refusal rate is 54%"
+ * must not rest on four orders. Applied per group it is far too strict for a
+ * ranking, though: 82 resolved orders spread over a dozen cities leaves every
+ * individual city under 10, so both lists rendered empty on a book that
+ * plainly had refusals. A ranking publishes from MIN_LIST_SAMPLE and marks
+ * rows that are still below the confident threshold, so a small sample shows
+ * its size instead of hiding the whole list.
+ */
+export const MIN_LIST_SAMPLE = 3
+
 export interface Rate {
   /** Resolved orders only (accepted + refused). */
   resolved: number
@@ -124,9 +137,9 @@ function groupRates(
   return opts.limit ? rows.slice(0, opts.limit) : rows
 }
 
-/** Cities ranked by refusal rate. Only cities with enough resolved orders. */
+/** Cities ranked by refusal rate. Publishes from MIN_LIST_SAMPLE. */
 export function cityRefusalRates(orders: ScoredOrder[], limit = 8): NamedRate[] {
-  return groupRates(orders, (o) => normaliseCity(o.city), { limit })
+  return groupRates(orders, (o) => normaliseCity(o.city), { limit, minResolved: MIN_LIST_SAMPLE })
 }
 
 /** Products ranked by refusal rate, using the product name then category. */
@@ -134,7 +147,7 @@ export function productRefusalRates(orders: ScoredOrder[], limit = 8): NamedRate
   return groupRates(
     orders,
     (o) => (o.product_name ?? '').trim() || (o.product_category ?? '').trim() || null,
-    { limit },
+    { limit, minResolved: MIN_LIST_SAMPLE },
   )
 }
 
