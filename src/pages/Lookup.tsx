@@ -17,6 +17,7 @@ import { computeVerdict, riskFactors, toneFromScore, type VerdictTone } from '..
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { aiJson, classifyAiThrow } from '../lib/ai'
 import { hasFingerprint } from '../lib/ui/fingerprint'
+import { embedBuyerNow } from '../lib/ui/auto-embed'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -206,6 +207,25 @@ export function Lookup() {
        */
       const direct = await hasFingerprint(normalized)
       if (direct !== null) buyer.has_fingerprint = direct
+
+      /*
+       * If this buyer has no fingerprint, build one now rather than making the
+       * merchant press "Refresh fingerprint". Do it after the page is populated
+       * and patch the badge when it lands, so opening a profile never waits on
+       * an OpenAI call.
+       */
+      if (direct === false) {
+        void embedBuyerNow(normalized).then(async (ok) => {
+          if (!ok) return
+          const confirmed = await hasFingerprint(normalized)
+          if (confirmed !== true) return
+          setState((prev) =>
+            prev.kind === 'found' && prev.buyer.phone === normalized
+              ? { ...prev, buyer: { ...prev.buyer, has_fingerprint: true } }
+              : prev,
+          )
+        })
+      }
 
       setState({ kind: 'found', buyer, orders, similar })
     },

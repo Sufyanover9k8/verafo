@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LayoutTickContext } from '@/lib/motion'
+import { sweepMissingFingerprints } from '@/lib/ui/auto-embed'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
 import { SiteHeader } from './site-header'
@@ -37,6 +38,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     const id = setTimeout(() => setLayoutTick((t) => t + 1), 220)
     return () => clearTimeout(id)
   }, [open])
+
+  /*
+   * Background housekeeping: give buyers who have no AI fingerprint one.
+   *
+   * Fingerprints used to be built only when a merchant pressed a button, so new
+   * buyers sat with "no fingerprint yet" indefinitely. This is deliberately
+   * deferred and unsupervised — it must never compete with the first paint, and
+   * a failure here is not the merchant's problem. The function caps each call,
+   * so it makes progress across sessions rather than blocking on a big book.
+   */
+  useEffect(() => {
+    const id = setTimeout(() => void sweepMissingFingerprints(), 4000)
+    return () => clearTimeout(id)
+  }, [])
 
   function onOpenChange(next: boolean) {
     setOpen(next)

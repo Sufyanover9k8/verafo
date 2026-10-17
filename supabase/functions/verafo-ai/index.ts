@@ -2805,6 +2805,70 @@ const supabase = createClient(
       });
     }
 
+    /*
+     * Backfill fingerprints for buyers who have none.
+     *
+     * Embeddings used to be created only when someone pressed "Refresh
+     * fingerprint" (one buyer) or "Rebuild vectors" (the map), so a buyer
+     * added today stayed without one indefinitely and every such buyer showed
+     * "no fingerprint yet". The client calls this opportunistically so new
+     * buyers acquire a fingerprint without anyone asking.
+     *
+     * SCOPE: only buyers who have an order in the caller's own stores, so one
+     * merchant's session cannot spend OpenAI credit embedding another
+     * merchant's book.
+     *
+     * BUDGET: capped per call. OpenAI bills per embedding and edge functions
+     * have a wall-clock limit, so this makes progress and stops; the next call
+     * continues where it left off.
+     */
+    if (action === "embed_pending") {
+      const denied = requireOwnStores(storeIds, requestScopeReason);
+      if (denied) return json({ ok: false, ...denied }, 403);
+
+      const BATCH = 25;
+      // Buyers of MY stores only, so the scope is provable from one query.
+      const { data: myOrders, error: mineErr } = await supabase
+        .from("orders")
+        .select("buyer_phone")
+        .in("store_id", storeIds)
+        .limit(5000);
+      if (mineErr) throw new Error(mineErr.message);
+      const mine = new Set(
+        asRows<{ buyer_phone?: string }>(myOrders).map((o) => String(o.buyer_phone ?? "")),
+      );
+
+      const { data: pendingRows, error: pendErr } = await supabase
+        .from("buyers")
+        .select("phone, embedding")
+        .is("embedding", null)
+        .order("total_orders", { ascending: false })
+        .limit(BATCH * 4);
+      if (pendErr) throw new Error(pendErr.message);
+
+      const todo = asRows<{ phone?: string; embedding?: unknown }>(pendingRows)
+        .map((b) => String(b.phone ?? ""))
+        .filter((p) => p && mine.has(p))
+        .slice(0, BATCH);
+
+      if (todo.length === 0) {
+        return json({ ok: true, embedded: 0, remaining: 0 });
+      }
+
+      let embedded = 0;
+      await mapLimit(todo, 5, async (buyerPhone) => {
+        try {
+          await embedBuyerVector(supabase, openai, buyerPhone, storeIds);
+          embedded++;
+        } catch {
+          /* one bad buyer must not stop the batch */
+        }
+        return null;
+      });
+
+      return json({ ok: true, embedded, attempted: todo.length });
+    }
+
     if (action === "embed_map") {
       // The map below does an O(n^3) eigendecomposition on the buyer Gram
       // matrix (classical MDS). Left unbounded, that blows the edge
