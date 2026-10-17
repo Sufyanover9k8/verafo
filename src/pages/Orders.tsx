@@ -12,7 +12,7 @@ import { EmptyState, NeedsSetup } from '../components/States'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { dateTime, money, normalizePhone, phone } from '../lib/format'
+import { dateTime, money, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
 import { SORT_OPTIONS, sortOrders, type SortKey } from '../lib/ui/order-sort'
 import { isConfigured, supabase } from '../lib/supabase'
@@ -21,6 +21,19 @@ import { useToast } from '../lib/toast'
 import type { OrderRow, OutcomeStatus } from '../lib/types'
 
 type StatusFilter = 'all' | 'pending' | 'accepted' | 'refused'
+
+/**
+ * The subscriber number of a phone, for matching.
+ *
+ * Digits only, reduced to the last ten — the same rule the database uses in
+ * `verafo_phone_key`. That is what makes "+92 300 1234028", "03001234028" and
+ * "3001234028" one value, so a search cannot miss a row because of the way the
+ * number happened to be stored.
+ */
+function phoneKey(v: string | null | undefined): string {
+  const digits = String(v ?? '').replace(/\D/g, '')
+  return digits.length > 10 ? digits.slice(-10) : digits
+}
 
 interface Row extends OrderRow {
   buyers?: {
@@ -107,15 +120,37 @@ export function Orders() {
   }
 
   const filtered = useMemo(() => {
-    const q = normalizePhone(term)
+    /*
+     * PHONE MATCHING IS BY SUBSCRIBER NUMBER, NOT BY STRING.
+     *
+     * The stored value is whatever spelling the order arrived with —
+     * "+923001234028" from an import, "03001234028" from a form, "3001234028"
+     * from a spreadsheet. Comparing the typed digits against the stored digits
+     * as strings therefore missed every row whose spelling differed, which is
+     * why searching a number that was plainly on screen returned nothing.
+     *
+     * Both sides are reduced to the last ten digits — the same key the database
+     * uses (verafo_phone_key) — so any spelling of the same number matches, and
+     * a partial like "1234028" still finds it.
+     */
+    const q = phoneKey(term)
     const c = city.trim().toLowerCase()
     const p = product.trim().toLowerCase()
+    // City and product may be typed with stray spacing; trim before comparing.
     return rows.filter((o) => {
       const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
       if (status !== 'all' && s !== status) return false
-      if (q && !normalizePhone(o.buyer_phone).includes(q)) return false
-      if (c && !(o.city ?? '').toLowerCase().includes(c)) return false
-      if (p && !`${o.product_name ?? ''} ${o.product_category ?? ''}`.toLowerCase().includes(p)) return false
+      if (q && !phoneKey(o.buyer_phone).includes(q)) return false
+      if (c && !(o.city ?? '').trim().toLowerCase().includes(c)) return false
+      // Stored under its own heading so the address is searchable too.
+      if (
+        p &&
+        !`${o.product_name ?? ''} ${o.product_category ?? ''} ${o.stores?.name ?? ''} ${o.address ?? ''}`
+          .toLowerCase()
+          .includes(p)
+      ) {
+        return false
+      }
       return true
     })
   }, [rows, status, term, city, product])
