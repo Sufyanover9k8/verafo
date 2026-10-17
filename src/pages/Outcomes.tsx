@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Loader2, RefreshCw, Undo2, X } from 'lucide-react'
+import { Check, ListChecks, Loader2, RefreshCw, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { VerdictBadge, bandEvidence } from '../components/app/verdict-badge'
@@ -37,6 +37,11 @@ export function Outcomes() {
   const [leaving, setLeaving] = useState<Record<string, boolean>>({})
   /** Rows ticked for a bulk accept/refuse. */
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  /**
+   * Checkboxes are hidden until asked for. A tick box on every row made the
+   * list read as a form; the everyday job is scanning outcomes, not selecting.
+   */
+  const [selectMode, setSelectMode] = useState(false)
   /**
    * The last outcome change, so a mis-click can be taken back.
    *
@@ -194,6 +199,7 @@ export function Outcomes() {
     }
     setWorking(null)
     setSelected(new Set())
+    setSelectMode(false)
     setLastAction(null)
 
     if (failed.length === 0) {
@@ -294,21 +300,38 @@ export function Outcomes() {
         ))}
       </div>
 
-      {/* Entry point for bulk work: without this a merchant has to tick every
-          row by hand before the bulk bar ever appears. */}
+      {/* Bulk entry point. The checkboxes themselves only exist in select mode,
+          so the default screen stays a plain list. */}
       {tab === 'pending' && pending.length > 0 && (
-        <div className="flex flex-wrap items-center justify-end gap-2 text-[12.5px]">
-          <button
+        <div className="flex flex-wrap items-center justify-end gap-3 text-[12.5px]">
+          {selectMode && (
+            <button
+              type="button"
+              className="font-medium text-primary-text hover:underline"
+              onClick={() =>
+                setSelected((s) =>
+                  s.size === pending.length ? new Set() : new Set(pending.map((o) => o.id)),
+                )
+              }
+            >
+              {selected.size === pending.length ? 'Clear selection' : `Select all ${pending.length}`}
+            </button>
+          )}
+          <Button
             type="button"
-            className="font-medium text-primary-text hover:underline"
-            onClick={() =>
-              setSelected((s) =>
-                s.size === pending.length ? new Set() : new Set(pending.map((o) => o.id)),
-              )
-            }
+            variant={selectMode ? 'default' : 'outline'}
+            size="sm"
+            className="h-9 gap-1.5 px-3"
+            onClick={() => {
+              setSelectMode((on) => {
+                if (on) setSelected(new Set())
+                return !on
+              })
+            }}
           >
-            {selected.size === pending.length ? 'Clear selection' : `Select all ${pending.length}`}
-          </button>
+            <ListChecks className="size-3.5" />
+            {selectMode ? 'Done' : 'Bulk select'}
+          </Button>
         </div>
       )}
 
@@ -337,7 +360,7 @@ export function Outcomes() {
 
       {/* Bulk bar. Only appears once something is ticked, so the default screen
           stays as quiet as it was. */}
-      {tab === 'pending' && selected.size > 0 && (
+      {selectMode && tab === 'pending' && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--r-card)] border border-border bg-card px-4 py-3">
           <span className="text-[13px] font-medium text-foreground">
             {selected.size} of {pending.length} selected
@@ -453,7 +476,7 @@ export function Outcomes() {
                   )}
                 >
                   <div className="flex items-start gap-3">
-                    {status === 'pending' && (
+                    {selectMode && status === 'pending' && (
                       <input
                         type="checkbox"
                         className="mt-1.5 size-4 shrink-0 accent-[var(--teal)]"
@@ -496,11 +519,10 @@ export function Outcomes() {
 
                   <div className="shrink-0">
                     {/*
-                     * Accept/Refuse are shown on RESOLVED rows too, because a
-                     * wrong outcome has to be correctable where it is seen.
-                     * The button matching the current outcome is disabled and
-                     * visually active, so the row always states its own result
-                     * and the other button is the edit.
+                     * Accept stays green and Refuse stays red on a PENDING row —
+                     * that colour is the affordance. On a RESOLVED row the
+                     * outcome already chosen keeps its colour and the other
+                     * button goes neutral, so the edit option reads as secondary.
                      */}
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -509,8 +531,8 @@ export function Outcomes() {
                         size="sm"
                         className={cn(
                           'h-11 gap-1.5 px-3 md:h-9',
-                          status === 'accepted'
-                            ? 'border-risk-safe/50 bg-risk-safe-badge-bg text-risk-safe-badge opacity-100'
+                          status === 'pending' || status === 'accepted'
+                            ? 'border-risk-safe/50 bg-risk-safe-badge-bg text-risk-safe-badge hover:bg-risk-safe-badge-hover hover:text-risk-safe-badge'
                             : 'border-border text-muted-foreground hover:text-foreground',
                         )}
                         disabled={busy || status === 'accepted'}
@@ -531,8 +553,8 @@ export function Outcomes() {
                         size="sm"
                         className={cn(
                           'h-11 gap-1.5 px-3 md:h-9',
-                          status === 'refused'
-                            ? 'border-risk-high/50 bg-risk-high-badge-bg text-risk-high-badge opacity-100'
+                          status === 'pending' || status === 'refused'
+                            ? 'border-risk-high/50 bg-risk-high-badge-bg text-risk-high-badge hover:bg-risk-high-badge-hover hover:text-risk-high-badge'
                             : 'border-border text-muted-foreground hover:text-foreground',
                         )}
                         disabled={busy || status === 'refused'}
