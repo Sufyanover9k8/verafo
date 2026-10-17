@@ -64,6 +64,8 @@ import {
   type AiFailure,
 } from '../lib/ai'
 import { useToast } from '../lib/toast'
+import { useSession } from '../lib/session'
+import { useIsAdmin } from '../lib/admin'
 import type { AnalyzeReport, ChatMessage, ChatRow, FileSpec } from '../lib/types'
 
 /** Remembers whether the conversation rail is collapsed. */
@@ -255,6 +257,9 @@ function StarterGrid({ onPick, disabled }: { onPick: (prompt: string) => void; d
 
 export function Chat() {
   const toast = useToast()
+  // Who is asking decides which conversations exist for them.
+  const { email } = useSession()
+  const { admin } = useIsAdmin()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const [chats, setChats] = useState<ChatRow[]>([])
@@ -349,19 +354,36 @@ export function Chat() {
   }, [chats, searchQuery])
 
   const loadChats = useCallback(async () => {
-    if (!supabase) return
-    try {
-      const { data, error } = await supabase
+    const client = supabase
+    if (!client) return
+    const base = () =>
+      client
         .from('chats')
         .select('*')
         .order('last_message_at', { ascending: false, nullsFirst: false })
-      if (error) throw error
-      setChats(data ?? [])
+    try {
+      /*
+       * Conversations are private to their owner. RLS enforces this once
+       * supabase/chat-privacy.sql has been applied; filtering here as well
+       * means a policy that is ever mis-applied cannot turn one merchant's
+       * transcripts into another's list. Admins see everything, for support.
+       *
+       * If `owner_email` does not exist yet the query errors with 42703 —
+       * fall back to the unfiltered read rather than breaking the page before
+       * the migration is run. RLS still applies to that read.
+       */
+      const wantsFilter = !admin && Boolean(email)
+      let res = await (wantsFilter ? base().eq('owner_email', email!) : base())
+      if (res.error && (res.error.code === '42703' || /owner_email/.test(res.error.message))) {
+        res = await base()
+      }
+      if (res.error) throw res.error
+      setChats(res.data ?? [])
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       toast.push({ kind: 'error', title: 'Could not load chats', detail: message })
     }
-  }, [toast])
+  }, [toast, admin, email])
 
   const loadMessages = useCallback(async (chatId: string) => {
     if (!supabase) return

@@ -2739,7 +2739,11 @@ const supabase = createClient(
     );
     // PRIVACY: the service role bypasses RLS, so identify the caller here and
     // hand the owned store ids to every tool that returns private data.
-    const { storeIds, reason: scopeReason } = await authorizeCaller(req);
+    const { email: callerEmail, storeIds, reason: scopeReason } = await authorizeCaller(req);
+    // Admins may read and extend any conversation; merchants only their own.
+    const callerIsAdmin = Boolean(
+      callerEmail && (await supabase.from("verafo_admins").select("email").eq("email", String(callerEmail).toLowerCase()).maybeSingle()).data,
+    );
     requestScopeReason = scopeReason;
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) {
@@ -3035,6 +3039,35 @@ const supabase = createClient(
       if (!rawPrompt) return json({ error: "prompt is required" }, 400);
       const mentionPhone = body.phone ? String(body.phone) : null;
       const chatId = body.chat_id ? String(body.chat_id) : null;
+
+      /*
+       * PRIVACY: this function writes with the SERVICE ROLE, so RLS cannot stop
+       * it appending to a chat that belongs to someone else. `chat_id` comes
+       * straight from the request body, so ownership is checked here before the
+       * transcript is read or extended.
+       *
+       * If chats.owner_email does not exist yet (supabase/chat-privacy.sql not
+       * applied), the check cannot be made and is skipped rather than breaking
+       * chat — the RLS policies are the real fix, this is the service-role
+       * backstop for when they ARE in place.
+       */
+      if (chatId) {
+        const { data: chatRow, error: chatErr } = await supabase
+          .from("chats")
+          .select("id, owner_email")
+          .eq("id", chatId)
+          .maybeSingle();
+        if (chatErr && !/owner_email|42703/.test(chatErr.message)) {
+          throw new Error(chatErr.message);
+        }
+        if (!chatErr) {
+          const owner = String((chatRow as { owner_email?: string } | null)?.owner_email ?? "").toLowerCase();
+          const caller = String(callerEmail ?? "").toLowerCase();
+          if (owner && caller && owner !== caller && !callerIsAdmin) {
+            return json({ error: "That conversation belongs to another account." }, 403);
+          }
+        }
+      }
 
       return sse(async (emit) => {
         emit("phase", { phase: "understanding", label: "Understanding your question" });
