@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { phone } from '../lib/format'
+import { resolveBuyerPhone } from '../lib/ui/buyer-key'
 import { parseOrderCsv, type ParsedOrder } from '../lib/ui/order-csv'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
@@ -346,19 +347,26 @@ export function BulkImport() {
         continue
       }
       try {
+        /*
+         * Join the buyer row already on file when this number exists under a
+         * different spelling. Without this an import can fork a second history
+         * for the same customer, each with its own risk score.
+         */
+        const buyerPhone = await resolveBuyerPhone(r.phone)
+
         // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row
         // to exist so orders.buyer_phone has something to point at. The real
         // totals/score are written by the recompute trigger, which (unlike a
         // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
         const { error: buyerErr } = await supabase
           .from('buyers')
-          .upsert({ phone: r.phone }, { onConflict: 'phone', ignoreDuplicates: true })
+          .upsert({ phone: buyerPhone }, { onConflict: 'phone', ignoreDuplicates: true })
         if (buyerErr) throw buyerErr
 
         const { data: order, error: orderErr } = await supabase
           .from('orders')
           .insert({
-            buyer_phone: r.phone,
+            buyer_phone: buyerPhone,
             store_id: res.storeId,
             product_category: r.category || null,
             product_name: r.product || null,

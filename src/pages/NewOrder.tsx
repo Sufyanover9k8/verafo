@@ -10,6 +10,7 @@ import { VerdictInline } from '../components/verdict/VerdictInline'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { Reveal } from '../components/Reveal'
 import { normalizePhone, phone } from '../lib/format'
+import { resolveBuyerPhone } from '../lib/ui/buyer-key'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -170,17 +171,25 @@ export function NewOrder() {
 
     setSubmitting(true)
     try {
+      /*
+       * Join the buyer that already exists rather than forking a second row.
+       * Stored numbers are not normalized (Shopify writes 03445974567, imports
+       * write +923445974567), so writing the typed spelling would create a
+       * separate buyer with its own history and its own risk score.
+       */
+      const buyerPhone = await resolveBuyerPhone(normalizedPhone)
+
       // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row to
       // exist so orders.buyer_phone has something to point at. The real
       // totals/score are written by the recompute trigger, which (unlike a
       // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
       const { error: buyerErr } = await supabase
         .from('buyers')
-        .upsert({ phone: normalizedPhone }, { onConflict: 'phone', ignoreDuplicates: true })
+        .upsert({ phone: buyerPhone }, { onConflict: 'phone', ignoreDuplicates: true })
       if (buyerErr) throw buyerErr
 
       const { error: orderErr } = await supabase.from('orders').insert({
-        buyer_phone: normalizedPhone,
+        buyer_phone: buyerPhone,
         store_id: storeId,
         product_category: category,
         product_name: productName.trim() || null,
