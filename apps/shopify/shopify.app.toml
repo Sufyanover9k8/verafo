@@ -1,65 +1,47 @@
-# This file stores configurations for your Shopify app.
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = ""
+client_id = "ec17a432659bf1af629483bf28a50a25"
+name = "Verafo"
+application_url = "https://get-verafo.vercel.app"
+embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_orders, write_orders, read_customers"
+scopes = "read_customers,read_orders,read_products,write_customers,write_order_edits,write_orders,write_payment_customizations"
 
 [webhooks]
-api_version = "2025-01"
+api_version = "2026-10"
 
-  # Handled by: /app/routes/webhooks.app.uninstalled.tsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/create"
+  topics = [ "orders/create" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/data_request"
+  compliance_topics = [ "customers/data_request" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/redact"
+  compliance_topics = [ "customers/redact" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/shop/redact"
+  compliance_topics = [ "shop/redact" ]
+
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
-  topics = ["app/uninstalled"]
+  topics = [ "app/uninstalled" ]
 
-  # Handled by: /app/routes/webhooks.app.scopes_update.tsx
-  [[webhooks.subscriptions]]
-  topics = [ "app/scopes_update" ]
-  uri = "/webhooks/app/scopes_update"
+[auth]
+redirect_urls = [
+  "https://get-verafo.vercel.app/auth/callback",
+  "https://get-verafo.vercel.app/auth/shopify/callback",
+  "https://get-verafo.vercel.app/api/auth/callback"
+]
 
-  # Handled by: /app/routes/webhooks.app.subscriptions_update.tsx
-  # Read-only: records which App Pricing plan the shop is on, so the
-  # dashboard can show it. Never creates or changes a subscription.
-  [[webhooks.subscriptions]]
-  topics = ["app_subscriptions/update"]
-  uri = "/webhooks/app/subscriptions_update"
-
-  # Verafo ingestion + outcome signals
-  # Handled by: /app/routes/webhooks.orders.create.tsx
-  [[webhooks.subscriptions]]
-  topics = ["orders/create"]
-  uri = "/webhooks/orders/create"
-
-  # Handled by: /app/routes/webhooks.orders.cancelled.tsx
-  [[webhooks.subscriptions]]
-  topics = ["orders/cancelled"]
-  uri = "/webhooks/orders/cancelled"
-
-  # Handled by: /app/routes/webhooks.orders.fulfilled.tsx
-  [[webhooks.subscriptions]]
-  topics = ["orders/fulfilled"]
-  uri = "/webhooks/orders/fulfilled"
-
-  # Webhooks can have filters
-  # Only receive webhooks for product updates with a product price >= 10.00
-  # See: https://shopify.dev/docs/apps/build/webhooks/customize/filters
-  # [[webhooks.subscriptions]]
-  # topics = ["products/update"]
-  # uri = "/webhooks/products/update"
-  # filter = "variants.price:>=10.00"
-
-  # Mandatory compliance topic for public apps only
-  # See: https://shopify.dev/docs/apps/build/privacy-law-compliance
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/customers/data_request"
-  # compliance_topics = ["customers/data_request"]
-
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/customers/redact"
-  # compliance_topics = ["customers/redact"]
-
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/shop/redact"
-  # compliance_topics = ["shop/redact"]
+[pos]
+embedded = false

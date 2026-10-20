@@ -544,11 +544,17 @@ export function Outcomes() {
                       : undefined
                   }
                   className={cn(
+                    // flex-1 on the text wrapper is what pins the buttons to a
+                    // single right edge: it absorbs the leftover width, so the
+                    // action group starts at the same x on every row regardless
+                    // of how long the product name is. On a phone the group gets
+                    // basis-full, which puts it on its own line at full size
+                    // instead of crushing the text into a 40px column.
                     'flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 transition-opacity sm:px-6',
                     leaving[o.id] && 'opacity-40',
                   )}
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
                     {selectMode && status === 'pending' && (
                       <input
                         type="checkbox"
@@ -565,7 +571,10 @@ export function Outcomes() {
                         aria-label={`Select ${phone(o.buyer_phone)} for a bulk outcome`}
                       />
                     )}
-                  <div className="min-w-[13rem] flex-1">
+                  {/* flex-1 on the facts, not on this wrapper: it eats the spare
+                      width, so the buttons start at the same x on every row.
+                      Removed once and the column zig-zagged with the text. */}
+                  <div className="min-w-0 flex-1 sm:min-w-[13rem]">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
@@ -590,7 +599,7 @@ export function Outcomes() {
                     </p>
                   </div>
 
-                  <div className="shrink-0">
+                  <div className="flex basis-full justify-end self-center sm:basis-auto">
                     {/*
                      * Three states, three looks, so the row's current outcome is
                      * unmistakable:
@@ -599,7 +608,7 @@ export function Outcomes() {
                      *   refused   → "Refused"  FILLED red,   "Change to Accepted" neutral
                      * Filled, saturated fills are the outcome; outline is the edit.
                      */}
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-nowrap justify-end gap-2">
                       <Button
                         type="button"
                         variant="outline"
