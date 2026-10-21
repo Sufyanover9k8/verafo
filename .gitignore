@@ -6,9 +6,16 @@ dist
 
 .vercel
 .env*
+# The template has no secrets in it and belongs in the repo.
+!.env.example
 dev-*.log
 dev-*.txt
 supabase/.temp/
 
 # Local QA artefacts (browser screenshots and probes). Never shipped.
 _qa/
+
+# A generated, frontend-only copy of the app for handover (see ui-only/README.md).
+# It is built from src/ and the root config; delete this line if you ever want it
+# tracked in git.
+ui-only/

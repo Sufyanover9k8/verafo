@@ -250,6 +250,11 @@ function query(table: string) {
       // Emulate the per-user RLS policy: a merchant only ever sees their own
       // rows, an admin also sees everyone's (that is what feeds "recently sent").
       if (table === 'notifications' && !IS_ADMIN) filters.push((r) => r.owner_email === EMAIL)
+      // `?nostore` renders the true first-run state: a signed-in merchant who
+      // owns nothing yet, so the app shows onboarding instead of the dashboard.
+      if (table === 'stores' && typeof location !== 'undefined' && location.search.includes('nostore')) {
+        filters.push(() => false)
+      }
       return q
     },
     eq: (c: string, v: any) => (filters.push((r) => r[c] === v), q),
@@ -354,6 +359,35 @@ function rpc(name: string, args: any = {}) {
   }
   if (name === 'search_stores') return Promise.resolve({ data: STORES.map((s) => ({ id: s.id, name: s.name, shopify_domain: s.shopify_domain, last_order_at: null })), error: null })
   if (name === 'verafo_daily_digest') return Promise.resolve({ data: 0, error: null })
+  if (name === 'verafo_claimable_stores') {
+    // One ownerless Shopify store, so the claim banner and the Settings panel
+    // have something real to render.
+    return Promise.resolve({
+      data: [
+        {
+          id: 's-shopify-orphan',
+          name: 'demo-store.myshopify.com',
+          shopify_domain: 'demo-store.myshopify.com',
+          orders: 7,
+          last_order_at: new Date(now - 2 * 3600_000).toISOString(),
+        },
+      ],
+      error: null,
+    })
+  }
+  if (name === 'verafo_claim_store') {
+    const d = String(args.p_domain ?? '')
+      .toLowerCase()
+      .trim()
+    if (!d) return Promise.resolve({ data: { ok: false, reason: 'no_domain' }, error: null })
+    if (!d.endsWith('.myshopify.com')) {
+      return Promise.resolve({ data: { ok: false, reason: 'not_found' }, error: null })
+    }
+    return Promise.resolve({
+      data: { ok: true, store_id: 's-shopify-orphan', store_name: d, already_owned: false },
+      error: null,
+    })
+  }
   if (name === 'verafo_set_orders_hidden') {
     // Hiding is a flag, exactly like the real function: no row is removed, so
     // the preview can be used to prove a hidden order is recoverable.

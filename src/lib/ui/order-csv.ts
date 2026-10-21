@@ -183,20 +183,19 @@ export function toIso(v: string): string | null {
 }
 
 /**
- * Shopify's delivery outcome, in Verafo's words.
+ * Shopify's delivery outcome. Per the Bulk Import SOP, there isn't one.
  *
- * A cancelled order is a refusal. A fulfilled one was delivered, so it counts
- * as accepted. Anything else has no outcome yet — and we do not invent one
- * from the financial status, which says nothing about delivery.
+ * A Shopify export says what was ordered, never what happened at the door:
+ * `Fulfilled` means the parcel *left the warehouse*, and `Cancelled` usually
+ * means the seller cancelled it. Neither is a buyer receiving or refusing. The
+ * courier export supplies the real outcome, matched back onto these orders, and
+ * anything still unmatched stays unknown.
+ *
+ * So Shopify rows import as `pending` (unknown) — deliberately, even though it
+ * looks like missing data. A wrong "accepted" would train the risk model on a
+ * delivery that never happened, which is worse than an honest blank.
  */
-function outcomeFrom(
-  fulfilledAt: string,
-  cancelledAt: string,
-): { outcome: Outcome; resolvedAt: string | null } {
-  const cancelled = toIso(cancelledAt)
-  if (cancelled) return { outcome: 'refused', resolvedAt: cancelled }
-  const fulfilled = toIso(fulfilledAt)
-  if (fulfilled) return { outcome: 'accepted', resolvedAt: fulfilled }
+function shopifyOutcome(): { outcome: Outcome; resolvedAt: string | null } {
   return { outcome: 'pending', resolvedAt: null }
 }
 
@@ -205,10 +204,26 @@ function num(v: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-/** An outcome written in the file itself, in Verafo's words. */
+/**
+ * An outcome written in the file itself.
+ *
+ * Verafo's own words first, then the words merchants and couriers actually use.
+ * Only unambiguous ones are here: "delivered" cannot mean anything but accepted,
+ * "rto" cannot mean anything but refused. Anything else returns null — an import
+ * must never invent a delivery that did not happen, and "no outcome" is honest.
+ */
 function statedOutcome(v: string): Outcome | null {
   const s = v.trim().toLowerCase()
-  return s === 'accepted' || s === 'refused' || s === 'pending' ? s : null
+  if (!s) return null
+  if (s === 'accepted' || s === 'refused' || s === 'pending') return s
+  if (/(^|\b)(delivered|received|completed|paid|collected)(\b|$)/.test(s)) return 'accepted'
+  if (/(^|\b)(refused|returned|return|rto|undeliverable|undelivered|cancelled|canceled|rejected)(\b|$)/.test(s)) {
+    return 'refused'
+  }
+  if (/(^|\b)(in transit|intransit|shipped|dispatched|out for delivery|processing|on hold|pending)(\b|$)/.test(s)) {
+    return 'pending'
+  }
+  return null
 }
 
 /**
@@ -247,6 +262,64 @@ function buildColumns(header: string[]): Map<string, number> {
   return col
 }
 
+/**
+ * Overlay a mapping that came from somewhere other than the alias table —
+ * today that is the model in `ai-column-map.ts`, reading a spreadsheet this
+ * parser has never seen ("Shipping Number", "Order Status", "Amount Paid").
+ *
+ * The mapping only ever names fields; every value is still read, cleaned and
+ * validated here. That is the point: a wrong guess produces an empty column or
+ * a skipped row, never a wrong price.
+ */
+export interface CsvMap {
+  /** field → header as it appears in the file */
+  columns: Record<string, string | undefined>
+  /** lowercased cell value → outcome */
+  status?: Record<string, Outcome>
+}
+
+function applyMap(header: string[], col: Map<string, number>, map?: CsvMap): Map<string, number> {
+  if (!map) return col
+  const byHeader = new Map(header.map((h, i) => [matchKey(h), i]))
+  for (const [field, name] of Object.entries(map.columns)) {
+    if (!name) continue
+    const idx = byHeader.get(matchKey(name))
+    // Only real headers, and only fields the rest of the parser understands.
+    if (idx !== undefined && MAP_FIELDS.has(field) && !col.has(field)) col.set(field, idx)
+  }
+  return col
+}
+
+const MAP_FIELDS = new Set([
+  'phone',
+  'phone_alt',
+  'product',
+  'category',
+  'price',
+  'quantity',
+  'city',
+  'address',
+  'store',
+  'ordered_at',
+  'outcome',
+  'resolved_at',
+  'email',
+  'reference',
+])
+
+/**
+ * The status column of a stranger's file, read through the mapping it came with.
+ * "Delivered" → accepted, "RTO" → refused, "In transit" → pending. Only values
+ * the model actually saw in the file are in the map, so an unknown word falls
+ * back to the built-in vocabulary rather than to a guess.
+ */
+function mappedOutcome(value: string, map?: CsvMap): Outcome | null {
+  if (!map?.status) return null
+  const key = value.trim().toLowerCase()
+  if (!key) return null
+  return map.status[key] ?? null
+}
+
 /** First non-empty value among several possible columns. */
 function firstOf(get: (k: string) => string, keys: string[]): string {
   for (const k of keys) {
@@ -263,14 +336,14 @@ function firstOf(get: (k: string) => string, keys: string[]): string {
  * The caller decides which store the file belongs to (a merchant has exactly
  * one), and only complains when it genuinely cannot tell.
  */
-export function parseOrderCsv(text: string): ParseResult {
+export function parseOrderCsv(text: string, map?: CsvMap): ParseResult {
   const cells = parseCsv(text)
   if (cells.length === 0) {
     return { orders: [], headers: [], format: null, errors: ['File is empty'], skipped: 0 }
   }
 
   const rawHeaders = cells[0].map((h) => h.trim())
-  const col = buildColumns(rawHeaders)
+  const col = applyMap(rawHeaders, buildColumns(rawHeaders), map)
   const normalised = new Set(rawHeaders.map(matchKey))
 
   /*
@@ -280,7 +353,13 @@ export function parseOrderCsv(text: string): ParseResult {
    * The line-item columns are what make a Shopify export unmistakable.
    */
   const isShopify = normalised.has('lineitemname') || (normalised.has('createdat') && normalised.has('name'))
-  const format: ParseResult['format'] = isShopify ? 'shopify' : normalised.has('phone') ? 'verafo' : null
+  // A mapped file is neither Shopify's nor Verafo's: it is its own shape, and
+  // it has already been understood.
+  const format: ParseResult['format'] = isShopify
+    ? 'shopify'
+    : normalised.has('phone') || map
+      ? 'verafo'
+      : null
 
   if (format === null) {
     return {
@@ -329,8 +408,11 @@ export function parseOrderCsv(text: string): ParseResult {
      * overwrite it with "pending". Each format uses its own source.
      */
     const derived = isShopify
-      ? outcomeFrom(get('fulfilled_at'), get('cancelled_at'))
-      : { outcome: statedOutcome(get('outcome')), resolvedAt: toIso(get('resolved_at')) }
+      ? shopifyOutcome()
+      : {
+          outcome: mappedOutcome(get('outcome'), map) ?? statedOutcome(get('outcome')),
+          resolvedAt: toIso(get('resolved_at')),
+        }
     const quantity = Math.max(1, parseInt(get('quantity'), 10) || 1)
     const unit = num(get('price'))
 

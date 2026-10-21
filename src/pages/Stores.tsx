@@ -71,15 +71,28 @@ export function Stores() {
 
   async function handleDelete(store: StoreOverview) {
     if (!supabase) return
-    setDeletingId(store.id)
-    const detach = await supabase.from('orders').update({ store_id: null }).eq('store_id', store.id)
-    if (!detach.error) {
-      await supabase.from('stores').delete().eq('id', store.id)
+    /*
+     * A store with orders is never deleted. Deleting it detaches its orders
+     * (`store_id = null`), and a detached order belongs to no dashboard at all
+     * — not the merchant's, not the admin's. It simply disappears, with no
+     * error, which is the worst possible outcome: 20 orders vanished that way
+     * once already. Empty stores (duplicates, install artefacts) still delete.
+     */
+    if ((store.orders ?? 0) > 0) {
+      setPendingDelete(null)
+      toast.push({
+        kind: 'error',
+        title: 'This store still has orders',
+        detail: `${store.orders} order${store.orders === 1 ? '' : 's'} belong to it. Deleting the store would detach them and hide them from every dashboard.`,
+      })
+      return
     }
+    setDeletingId(store.id)
+    const { error } = await supabase.from('stores').delete().eq('id', store.id)
     setDeletingId(null)
     setPendingDelete(null)
-    if (detach.error) {
-      toast.push({ kind: 'error', title: 'Could not delete store', detail: detach.error.message })
+    if (error) {
+      toast.push({ kind: 'error', title: 'Could not delete store', detail: error.message })
       return
     }
     toast.push({ kind: 'success', title: 'Store deleted', detail: store.name })
@@ -269,21 +282,22 @@ export function Stores() {
         </>
       )}
 
-      {/* Deleting a store detaches its orders, so it is spelled out and confirmed. */}
+      {/* Only empty stores can be deleted — see handleDelete. A store with
+          orders is refused, because detaching them hides the orders from every
+          dashboard with no error at all. */}
       <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete “{pendingDelete?.name}”?</DialogTitle>
             <DialogDescription>
-              The store is removed from the network. Orders that belong to it are kept but detached, so they will no
-              longer appear under any store. This cannot be undone.
+              The store is removed from the network. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-start gap-2.5 rounded-[10px] border border-risk-high/40 bg-risk-high-soft p-3 text-[12.5px] text-risk-high-strong">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>
-              {pendingDelete?.orders ?? 0} order{pendingDelete?.orders === 1 ? '' : 's'} will be detached from this
-              store.
+              {pendingDelete?.orders ?? 0} order{pendingDelete?.orders === 1 ? '' : 's'} belong to this store. A store
+              with orders cannot be deleted.
             </span>
           </div>
           <DialogFooter>

@@ -9,6 +9,7 @@ import {
   Palette,
   Server,
   ShieldCheck,
+  Store,
   Trash2,
   User,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ import { CardState } from '../components/app/card-state'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { Reveal } from '../components/Reveal'
+import { ShopifyClaimCard } from '../components/app/shopify-claim-card'
 import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
 import { NeedsSetup } from '../components/States'
 import { Button } from '@/components/ui/button'
@@ -425,6 +427,15 @@ export function Settings() {
             />
           </Section>
         )}
+
+        {/*
+          * Connect the store Shopify created. An ownerless store is invisible to
+          * every query in this app, so a merchant whose orders are landing in
+          * one sees nothing at all and cannot tell why. This is the way back.
+          */}
+        <Section icon={Store} eyebrow="Shopify store">
+          <ShopifyClaimCard variant="panel" />
+        </Section>
 
         <Section icon={Server} eyebrow="Connection">
           <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-border bg-muted/40 p-4">

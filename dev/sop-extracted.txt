@@ -1,0 +1,598 @@
+VERAFO
+Bulk Import SOP
+Upload any courier or Shopify CSV. GPT understands the columns, plain code cleans every row, the seller confirms, nothing is saved wrong.
+
+For: Sufyan Khan and Laveeza Fatima (internal engineering reference)
+Date: 21 October 2026
+Stack: React, Supabase (Edge Functions), OpenAI gpt-4o-mini
+
+1. The idea in one page
+Courier exports and Shopify exports all contain the same information under different column names. Billing Phone, Customer Phone and Consignee Phone are the same thing. The goal is a Bulk Import page that accepts any of them without breaking.
+The golden split
+Job
+Who does it
+Why
+Work out which column is phone, status, amount, date
+GPT (headers and 5 masked sample rows only)
+Needs reasoning, tiny cost
+Work out what status words mean (Returned to shipper, RTO)
+Rules first, GPT for leftovers
+Most words are known, GPT only for new ones
+Clean phones, dates, amounts on every row
+Plain code
+Must be exact. GPT can change a digit silently
+Rows code cannot parse
+Needs review list
+Never guess, never crash
+
+Why GPT never touches the rows
+A 9,000 row file through GPT is slow and costs real money.
+GPT can silently change one digit of a phone number, which corrupts the shared buyer graph.
+Sending every buyer's phone and address to OpenAI is exactly the data sellers worry about.
+Promise to the seller
+We cannot promise zero errors. We can promise two things: the import never crashes, and it never silently saves a wrong value. Anything uncertain goes to a Needs review list with a reason.
+2. One-time setup
+A1. Get the OpenAI key
+Go to platform.openai.com, then API keys, then Create new secret key.
+Name it verafo-prod. Copy it once. You cannot view it again.
+Billing: add a card and set a monthly spend limit (for example $10).
+A2. Store it as a secret
+Open a terminal in the project folder.
+Run: supabase secrets set OPENAI_API_KEY=sk-xxxx
+Never put the key in a .env file pushed to GitHub, and never in any VITE_ variable. Those ship to the browser.
+A3. Create the tables (Supabase SQL Editor)
+create table csv_mappings (
+  fingerprint text primary key,
+  column_map jsonb not null,
+  status_map jsonb not null,
+  created_at timestamptz default now()
+);
+alter table csv_mappings enable row level security;
+ 
+alter table orders add column import_key text;
+create unique index orders_store_key on orders(store_id, import_key);
+
+A4. Create and deploy the Edge Function
+Run: supabase functions new map-csv
+Paste the map-csv code from Appendix B into supabase/functions/map-csv/index.ts.
+Run: supabase functions deploy map-csv
+Test it in the dashboard: Edge Functions, map-csv, Invoke, with a sample body.
+A5. Install the browser libraries
+papaparse (CSV parsing).
+xlsx (Excel parsing). Get the current build from cdn.sheetjs.com, because the npm version is out of date.
+3. What happens on every upload
+Step 1: Read the file Seller drops a file. Detect the type from the first bytes, not the extension. Decode the text, find the real header row, and parse everything as text. Reject files over 25 MB or 50,000 rows with a clear message.
+Step 2: Detect Shopify If the headers include Lineitem name, Financial Status and Fulfillment Status, it is a Shopify export. Use the hard coded mapping. No GPT call, no cost.
+Step 3: Check the cache Build a fingerprint from the lowercased, trimmed, sorted headers and hash it. Look it up in csv_mappings. If found, skip to Step 6.
+Step 4: Match columns First try the alias dictionary. If phone or status is still unresolved, sniff the values (a column where 60 percent or more of values are valid phones). Only then call GPT with the headers and 5 masked sample rows. Mask phones, cut other values to 40 characters, drop name and address columns.
+Step 5: Match statuses Run the keyword rules on each unique status value. Send only the values the rules could not classify (maximum 50) to GPT. Unsure always becomes unknown.
+Step 6: Confidence gate If phone or status is missing, or GPT confidence is under 0.8, stop. Show dropdowns so the seller picks the column.
+Step 7: Preview and Confirm Show the column mapping, the status mapping, total rows, unique buyers, invalid phones and unknown statuses. Buttons: Confirm import and Fix mapping. Nothing is saved before Confirm.
+Step 8: Clean every row Run cleanRows(). Phones go through normalizePK, dates through parseDate, amounts through parseAmount, statuses through the status map. A bad row goes to the review list, it never throws.
+Step 9: Save in batches Upsert in batches of 500 with 3 retries. Duplicate re-uploads are ignored through import_key. Failed chunks are reported to the seller.
+Step 10: Embeddings in the background For buyers with 3 or more orders, call the embed-buyers function. Show 'Scores ready in a few minutes'. Never make the seller wait.
+Step 11: Result screen Show 'X orders imported, Y buyers, Z rows need review' with a download button for the review rows.
+4. Two files: Shopify plus courier
+Shopify knows what was ordered. The courier knows what happened at the door. Verafo needs both.
+The Shopify file creates the orders. Every Shopify order is imported with outcome unknown.
+The courier file supplies the outcome. It updates existing orders. It does not create new ones.
+Match in this order: Shopify Name with the courier Order ID (strip the #), then the CN # tracking number, then phone plus date plus value.
+Anything unmatched stays unknown. Unknown orders feed preference data only, never refusal training.
+Why Fulfilled never means accepted
+Shopify marks an order Fulfilled the moment it ships. It says nothing about what happened at the door. Cancelled usually means the seller cancelled. Do not map Fulfillment Status, Financial Status, Refunded Amount or Cancelled at to accepted or refused.
+5. Variations the importer handles
+Layer
+Variation
+How it is handled
+File
+.csv, .xlsx, .xls, .txt, .tsv
+Detected from the first bytes
+File
+UTF-8 with BOM, UTF-16, Windows-1252
+Strict UTF-8 first, then fall back
+File
+Comma, semicolon, tab, pipe separators
+Auto detected
+File
+Title rows above the headers
+Score the first 20 rows, pick the real header row
+File
+Footer total rows, blank rows
+Dropped
+File
+Duplicate headers (Shopify has two Phone columns)
+Renamed Phone and Phone_1
+File
+Several Excel sheets
+Use the sheet with the most rows
+File
+Wrong type, over 25 MB, empty
+Friendly message, no crash
+Columns
+Billing Phone, Consignee Phone, CN #, COD Amount (PKR)
+Alias dictionary first, so GPT is not called for known names
+Columns
+Unknown or Urdu headers
+Value sniffing, then GPT, then seller dropdown
+Phone
+0300..., +92300..., 92300..., 0092300..., 300..., 092300...
+Normalized to 03XXXXXXXXX
+Phone
+Spaces, dashes, brackets, dots, Urdu digits
+Handled
+Phone
+Excel 3001234567.0
+Handled
+Phone
+Two numbers in one cell
+First valid one is used
+Phone
+Scientific notation 3.0E+9, landline, too short, too long
+Review list with a reason, never guessed
+Dates
+ISO, 19/10/2026, 19-Oct-2026, Oct 19 2026, am/pm, Excel serial
+Parsed
+Dates
+Day first versus month first
+Defaults to Pakistan day first, switches if the file proves otherwise
+Amounts
+Rs. 1,200, PKR1200, 1,200.50
+Parsed
+Amounts
+1.200,00 style
+Rejected, not misread
+Status
+Delivered, RTO, Returned to shipper, Not Delivered
+Keyword rules, negatives checked first
+Status
+Return in process
+Pending until the return is final
+Status
+Anything unclear
+GPT on unique values only, otherwise unknown
+Shopify
+One order across several rows
+Grouped by Name
+Shopify
+Payment Method
+Used to keep COD orders only
+Rows
+One bad row
+Caught per row, goes to review
+Rows
+Same file uploaded twice
+Unique import_key, no duplicates
+Rows
+Network or insert failure
+3 retries, then failed chunk is reported
+6. What the real files showed
+Leopards courier export
+Verafo field
+Leopards column
+Note
+phone
+Consignee Phone
+Matched by the value check as well as the name
+status
+Status
+Seen values so far: Delivered, Returned to shipper
+order_value
+COD Amount (PKR)
+
+order_date
+Booked Packet Date #
+
+outcome_date
+Delivery / Return Date #
+Added to the field list
+tracking_number
+CN #
+Tier 2 match key
+order_id
+Order ID
+Best match key to Shopify Name
+city, address, buyer_name
+Destination City, Consignee Address, Consignee Name
+
+
+Important: in the template file received, Consignee Phone, CN #, COD Amount and Order ID were all empty. Only the dates and Status had values. A real seller export must be checked before relying on this mapping. Confirm what Leopards puts in Order ID (for example #SC1001) so it can be matched to the Shopify Name column.
+Shopify (Sanicore) export
+Phone columns: Shipping Phone, Phone and a second Phone column. Values appear as 3002815363, +923177770716 and 923218210110, so all three formats occur in one file.
+Several rows contain only an order number, an email and a line item, with no phone, address or payment method. These are the extra line item rows of an order and must be grouped by Name, not imported as separate orders.
+Some rows have no Payment Method value or show Bank Deposit. Keep only Cash on Delivery (COD) for refusal training.
+Fulfilled, voided and pending statuses are not delivery outcomes. Import as unknown.
+Risk Level is Shopify's own fraud score. Ignore it or store it as a weak feature later.
+Read every column as text so leading zeros survive.
+7. Test before going live
+This code has not been run against real exports. Treat this list as required, not optional.
+[ ]  Upload a real Leopards, PostEx and TCS export, plus a Shopify export. Check the column mapping and status mapping.
+[ ]  Phones: 0300..., +92300..., 92300..., 0092300..., 300..., two numbers in one cell.
+[ ]  A file saved from Excel where phones lost their zero, and one with 3.0E+9.
+[ ]  A file with 3 title rows above the headers and a Total row at the bottom.
+[ ]  A semicolon separated file, and an .xlsx with 2 sheets.
+[ ]  A file with a UTF-8 BOM, and one with Urdu headers.
+[ ]  Mixed date formats, including 10/19/2026.
+[ ]  A file with statuses never seen before. They must land as unknown.
+[ ]  An empty file, a PDF renamed to .csv, and a 30 MB file.
+[ ]  Upload the same file twice. No duplicate rows.
+[ ]  Check OpenAI usage. It should be a few calls per upload, not per row.
+8. Rules that never change
+GPT sees headers, masked samples and status values only. Never full rows.
+Code cleans the data. GPT only labels.
+Unsure means unknown. A wrong label is worse than no label.
+The seller always confirms before anything is saved.
+Never send names, emails, addresses or phone numbers to GPT. Shopify exports are full of them.
+Add one line to the privacy policy and merchant terms: column headers and sample values are processed by a third party AI service.
+Keep a monthly spend limit on the OpenAI key. Rotate the key if it ever leaks.
+Cap the request size: at most 60 headers and 5 sample rows per call.
+When exporting the Needs review CSV, prefix cells starting with =, +, - or @ with a single quote so Excel cannot run them as formulas.
+Run prepareImport in a Web Worker for big files so the page does not freeze.
+Cost
+One import is two small gpt-4o-mini calls, a fraction of a cent. Known couriers and Shopify files make no call at all.
+
+Appendix A. import-core.js (browser code)
+Save as src/lib/import-core.js. Install papaparse and xlsx first.
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
+ 
+export class UserError extends Error {}
+const MAX_BYTES = 25 * 1024 * 1024, MAX_ROWS = 50000;
+const clean = v => String(v ?? "").trim();
+ 
+/* ---------- 1. READ ANY FILE -> rows of text ---------- */
+export async function readAnyFile(file) {
+  if (file.size > MAX_BYTES) throw new UserError("File is over 25 MB. Split it and upload in parts.");
+  const buf = await file.arrayBuffer();
+  const b = new Uint8Array(buf.slice(0, 4));
+  const isXlsx = b[0] === 0x50 && b[1] === 0x4b;   // "PK" zip
+  const isXls = b[0] === 0xd0 && b[1] === 0xcf;    // old Excel
+  if (isXlsx || isXls) return readExcel(buf);
+  if (!/\.(csv|txt|tsv)$/i.test(file.name) && !/csv|text/.test(file.type))
+    throw new UserError("Upload a .csv or .xlsx file.");
+  return readCsv(buf);
+}
+function decode(buf) {
+  const u = new Uint8Array(buf);
+  if (u[0] === 0xff && u[1] === 0xfe) return new TextDecoder("utf-16le").decode(u);
+  if (u[0] === 0xfe && u[1] === 0xff) return new TextDecoder("utf-16be").decode(u);
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(u).replace(/^\uFEFF/, ""); }
+  catch { return new TextDecoder("windows-1252").decode(u); }
+}
+function readCsv(buf) {
+  const res = Papa.parse(decode(buf), {
+    header: false, skipEmptyLines: "greedy", dynamicTyping: false,  // never let it turn phones into numbers
+    delimitersToGuess: [",", ";", "\t", "|"],
+  });
+  return res.data.map(r => r.map(clean));
+}
+function readExcel(buf) {
+  const wb = XLSX.read(buf, { type: "array", raw: false });   // raw:false = text as displayed
+  let best = [];
+  for (const name of wb.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: false, defval: "", blankrows: false });
+    if (rows.length > best.length) best = rows;
+  }
+  return best.map(r => r.map(clean));
+}
+ 
+/* ---------- 2. FIND HEADER ROW, BUILD OBJECTS ---------- */
+const HEADER_WORDS = /phone|mobile|contact|cell|status|order|name|city|address|amount|cod|price|total|date|tracking|cn|awb|consignee/i;
+function findHeaderRow(rows) {
+  let best = { i: 0, score: -1 };
+  rows.slice(0, 20).forEach((r, i) => {
+    const filled = r.filter(Boolean);
+    if (filled.length < 3) return;
+    const score = filled.filter(c => c.length < 40 && HEADER_WORDS.test(c)).length * 2 + filled.length * 0.1;
+    if (score > best.score) best = { i, score };
+  });
+  return best.i;
+}
+export function toObjects(rows) {
+  const hi = findHeaderRow(rows), seen = {};
+  const headers = rows[hi].map((h, i) => {
+    const k = h || `column_${i + 1}`;
+    seen[k] = (seen[k] ?? -1) + 1;
+    return seen[k] ? `${k}_${seen[k]}` : k;   // Phone, Phone_1
+  });
+  const data = rows.slice(hi + 1)
+    .filter(r => r.some(c => c !== ""))
+    .filter(r => !/^(grand\s*)?total\b/i.test(r.find(Boolean) ?? ""))   // footer totals
+    .map(r => Object.fromEntries(headers.map((h, i) => [h, clean(r[i])])));
+  return { headers, data };
+}
+ 
+/* ---------- 3. COLUMN MATCHING (aliases first, GPT only if needed) ---------- */
+const norm = h => h.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g, "");
+const ALIASES = {
+  phone: ["shippingphone","phone","billingphone","customerphone","consigneephone","consigneecontact","consigneemobile","mobile","mobileno","mobilenumber","contact","contactno","contactnumber","cell","cellno","phoneno","phonenumber","customermobile","receiverphone","buyerphone","whatsapp","فون","موبائل"],
+  status: ["status","deliverystatus","orderstatus","shipmentstatus","parcelstatus","currentstatus","packetstatus","finalstatus","trackingstatus"],
+  order_value: ["codamount","codamountpkr","amount","orderamount","total","totalprice","collectamount","codvalue","invoiceamount","ordervalue","price"],
+  order_date: ["createdat","orderdate","bookingdate","bookeddate","bookedpacketdate","dateofbooking","booked"],
+  outcome_date: ["deliveryreturndate","deliverydate","deliveredat","returndate","lastactivitydate","statusdate"],
+  tracking_number: ["cn","cnno","trackingnumber","trackingno","tracking","awb","awbno","consignmentno","consignmentnumber","trackingid","cnnumber"],
+  order_id: ["orderid","orderno","ordernumber","ordernum","referenceno","reference","refno","orderref"],
+  city: ["destinationcity","shippingcity","consigneecity","city","billingcity","deliverycity"],
+  address: ["consigneeaddress","shippingaddress1","shippingstreet","address","deliveryaddress"],
+  buyer_name: ["consigneename","shippingname","customername","billingname","buyername"],
+};
+export function resolveColumns(headers, data) {
+  const cols = headers.map(h => ({ h, n: norm(h.replace(/_\d+$/, "")) }));
+  const map = {};
+  for (const [field, aliases] of Object.entries(ALIASES)) {
+    const hits = cols.map(c => ({ h: c.h, i: aliases.indexOf(c.n) })).filter(x => x.i >= 0)
+      .sort((a, b) => a.i - b.i).map(x => x.h);
+    map[field] = field === "phone" ? hits : hits[0] ?? null;
+  }
+  if (!map.phone.length) map.phone = sniffPhoneColumns(headers, data);
+  map.unresolved = ["phone", "status"].filter(f => (f === "phone" ? !map.phone.length : !map[f]));
+  return map;   // unresolved -> call GPT, then seller dropdown
+}
+function sniffPhoneColumns(headers, data) {
+  const sample = data.slice(0, 200);
+  return headers.filter(h => {
+    const v = sample.map(r => r[h]).filter(Boolean);
+    return v.length >= 3 && v.filter(x => normalizePK(x).value).length / v.length >= 0.6;
+  });
+}
+ 
+/* ---------- 4. SHOPIFY (fixed format, no GPT) ---------- */
+export const isShopify = headers => {
+  const s = headers.map(h => h.toLowerCase());
+  return ["lineitem name", "financial status", "fulfillment status"].every(x => s.includes(x));
+};
+export function groupShopify(data) {
+  const map = new Map();
+  for (const r of data) {
+    const key = clean(r["Name"]);
+    if (!key) continue;
+    const o = map.get(key) ?? { items: [] };
+    for (const [k, v] of Object.entries(r)) if (v !== "" && o[k] === undefined) o[k] = v;
+    if (r["Lineitem name"]) o.items.push({ name: r["Lineitem name"], qty: r["Lineitem quantity"] });
+    map.set(key, o);
+  }
+  return [...map.values()];
+}
+export const SHOPIFY_MAP = {
+  phone: ["Shipping Phone", "Phone", "Phone_1"], order_id: "Name", order_value: "Total",
+  order_date: "Created at", city: "Shipping City", address: "Shipping Address1",
+  buyer_name: "Shipping Name", status: null, tracking_number: null, outcome_date: null,
+};
+export const isCOD = v => /cod|cash\s*on\s*delivery|cash_on_delivery/i.test(v ?? "");
+ 
+/* ---------- 5. VALUE CLEANERS (exact, no GPT) ---------- */
+const toAscii = s => s.replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x660).replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x6f0);
+export function normalizePK(raw) {
+  const s = toAscii(clean(raw)).replace(/\.0+$/, "");   // Excel "3001234567.0"
+  if (!s) return { value: null, reason: "empty" };
+  if (/^\d+(\.\d+)?e[+-]?\d+$/i.test(s)) return { value: null, reason: "scientific_notation" };
+  const parts = s.split(/[,;/|\n&]|\s+(?:or|and|aur)\s+/i);
+  let reason = "no_digits";
+  for (const p of parts) { const r = single(p); if (r.value) return r; reason = r.reason; }
+  return { value: null, reason };
+}
+function single(p) {
+  let d = p.replace(/\D/g, "");
+  if (!d) return { value: null, reason: "no_digits" };
+  if (d.startsWith("0092")) d = d.slice(4);
+  else if (d.startsWith("92") && d.length >= 12) d = d.slice(2);
+  else if (d.startsWith("092") && d.length === 13) d = d.slice(3);
+  if (d.startsWith("0")) d = d.slice(1);
+  if (/^3\d{9}$/.test(d)) return { value: "0" + d };
+  if (/^[1-9]\d{7,9}$/.test(d) && !d.startsWith("3")) return { value: null, reason: "landline" };
+  return { value: null, reason: d.length < 10 ? "too_short" : "too_long_or_invalid" };
+}
+ 
+const MON = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+const mk = (y, mo, d, h = 0, mi = 0) => {
+  const t = new Date(Date.UTC(y, mo - 1, d, h, mi));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 16) : null;
+};
+export function detectDayFirst(values) {
+  let dayFirst = 0, monthFirst = 0;
+  for (const v of values.slice(0, 500)) {
+    const m = v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.]\d{2,4}/);
+    if (!m) continue;
+    if (+m[1] > 12) dayFirst++; else if (+m[2] > 12) monthFirst++;
+  }
+  return monthFirst <= dayFirst;   // default: Pakistan day-first
+}
+export function parseDate(raw, dayFirst = true) {
+  const s = clean(raw); let m;
+  if (!s) return null;
+  if (/^\d{5}(\.\d+)?$/.test(s) && +s > 25000 && +s < 70000)   // Excel serial
+    return new Date(Math.round((+s - 25569) * 864e5)).toISOString().slice(0, 16);
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2}))?/))) return mk(+m[1], +m[2], +m[3], +m[4] || 0, +m[5] || 0);
+  if ((m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?)?/i))) {
+    let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+    let d = dayFirst ? a : b, mo = dayFirst ? b : a;
+    if (mo > 12 && d <= 12) [d, mo] = [mo, d];
+    let h = +m[4] || 0; if (m[6]) h = (h % 12) + (m[6].toLowerCase() === "pm" ? 12 : 0);
+    return mk(y, mo, d, h, +m[5] || 0);
+  }
+  if ((m = s.match(/^(\d{1,2})[\s\-]([A-Za-z]{3,9})[\s\-,]+(\d{2,4})/))) {
+    const mo = MON[m[2].slice(0, 3).toLowerCase()]; let y = +m[3]; if (y < 100) y += 2000;
+    return mo ? mk(y, mo, +m[1]) : null;
+  }
+  if ((m = s.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})/))) {
+    const mo = MON[m[1].slice(0, 3).toLowerCase()];
+    return mo ? mk(+m[3], mo, +m[2]) : null;
+  }
+  return null;   // unparseable -> null, never a guess
+}
+export function parseAmount(raw) {
+  let s = clean(raw);
+  if (/\d\.\d{3},\d{2}$/.test(s)) return null;   // 1.200,00 style, do not misread
+  s = s.replace(/rs\.?|pkr|₨|\s/gi, "").replace(/,/g, "");
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  return n < 1e8 ? Math.round(n * 100) / 100 : null;
+}
+ 
+/* ---------- 6. STATUS: rules first, GPT only for leftovers ---------- */
+const REFUSED = /(not\s*delivered|undeliver|unable to deliver|return|rto|refus|reject|not\s*accept|customer (cancel|denied)|cancell?ed by (customer|consignee)|wapas|wapis)/i;
+const ACCEPTED = /\b(delivered|delivery complete|paid|cash collected|received by)\b/i;
+const PENDING = /(book|transit|dispatch|out for delivery|pick|arrived|at hub|processing|attempt|reschedul|on hold|pending|in progress|shipped|ready)/i;
+export function ruleStatus(raw) {
+  const s = clean(raw).toLowerCase();
+  if (!s) return "unknown";
+  if (/return(ed)?\s*(in\s*process|in\s*transit|initiated)|being return/.test(s)) return "pending";
+  if (REFUSED.test(s)) return "refused";
+  if (ACCEPTED.test(s)) return "accepted";
+  if (PENDING.test(s)) return "pending";
+  return "unknown";
+}
+export const unknownStatuses = (data, col) =>
+  [...new Set(data.map(r => clean(r[col]).toLowerCase()))].filter(v => v && ruleStatus(v) === "unknown").slice(0, 50); // send only these to GPT
+ 
+/* ---------- 7. CLEAN EVERY ROW, NEVER THROW ---------- */
+export function cleanRows(records, map, statusMap = {}, dayFirst = true) {
+  const good = [], review = [];
+  records.forEach((r, i) => {
+    try {
+      let phone = null, why = "no_phone_column";
+      for (const col of map.phone ?? []) {
+        const p = normalizePK(r[col]);
+        if (p.value) { phone = p.value; break; }
+        why = p.reason;
+      }
+      if (!phone) return review.push({ row: i + 1, reason: why, ...r });
+      const rawStatus = map.status ? clean(r[map.status]).toLowerCase() : "";
+      const outcome = statusMap[rawStatus] ?? ruleStatus(rawStatus);
+      const get = f => (map[f] ? r[map[f]] : "");
+      const order_id = clean(get("order_id")).replace(/^#/, "") || null;
+      const tracking = clean(get("tracking_number")) || null;
+      const value = parseAmount(get("order_value"));
+      const ordered_at = parseDate(get("order_date"), dayFirst);
+      good.push({
+        phone, outcome, order_id, tracking, value, ordered_at,
+        outcome_date: parseDate(get("outcome_date"), dayFirst),
+        city: clean(get("city")) || null,
+        is_cod: map.payment ? isCOD(r[map.payment]) : null,
+        import_key: order_id ?? tracking ?? `${phone}|${ordered_at}|${value}`,   // dedupe on re-upload
+      });
+    } catch (e) { review.push({ row: i + 1, reason: "unexpected_error", detail: String(e) }); }
+  });
+  return { good, review };
+}
+ 
+/* ---------- 8. ONE ENTRY POINT THAT NEVER THROWS ---------- */
+export async function prepareImport(file) {
+  try {
+    const rows = await readAnyFile(file);
+    if (rows.length < 2) throw new UserError("The file has no data rows.");
+    const { headers, data } = toObjects(rows);
+    if (!data.length) throw new UserError("We found headers but no orders.");
+    if (data.length > MAX_ROWS) throw new UserError(`Over ${MAX_ROWS} rows. Split the file.`);
+    const shopify = isShopify(headers);
+    const records = shopify ? groupShopify(data) : data;
+    const map = shopify ? { ...SHOPIFY_MAP, payment: "Payment Method", unresolved: [] } : resolveColumns(headers, data);
+    const dayFirst = detectDayFirst(records.map(r => clean(r[map.order_date] ?? "")));
+    return { ok: true, shopify, headers, records, map, dayFirst,
+             needGpt: { columns: map.unresolved, statuses: map.status ? unknownStatuses(records, map.status) : [] } };
+  } catch (e) {
+    return { ok: false, message: e instanceof UserError ? e.message : "We couldn't read this file. Export it again as CSV and retry." };
+  }
+}
+ 
+/* ---------- 9. SAVE WITH RETRY ---------- */
+export async function insertBatches(supabase, rows, size = 500) {
+  const failed = [];
+  for (let i = 0; i < rows.length; i += size) {
+    const chunk = rows.slice(i, i + size);
+    let ok = false;
+    for (let t = 0; t < 3 && !ok; t++) {
+      const { error } = await supabase.from("orders").upsert(chunk, { onConflict: "store_id,import_key", ignoreDuplicates: true });
+      if (!error) ok = true; else await new Promise(r => setTimeout(r, 500 * 2 ** t));
+    }
+    if (!ok) failed.push(...chunk);
+  }
+  return failed;   // show these to the seller
+}
+
+Appendix B. map-csv Edge Function
+Save as supabase/functions/map-csv/index.ts, then deploy. The OpenAI key is read from Supabase secrets.
+// supabase/functions/map-csv/index.ts
+Deno.serve(async (req) => {
+  const { task, headers, samples, statusValues } = await req.json();
+ 
+  const FIELDS = ["phone","order_value","order_date","outcome_date","status","city",
+                  "address","product","tracking_number","order_id","buyer_name"];
+ 
+  const prompts = {
+    columns: {
+      system: `You map CSV columns from Pakistani courier or store exports to a fixed schema.
+Fields: ${FIELDS.join(", ")}. Column names vary (e.g. "Billing Phone", "Customer Phone",
+"Consignee Phone" all mean phone). Use the sample values to decide, not just the name.
+Return null for fields with no matching column. Never invent a column.`,
+      user: JSON.stringify({ headers, samples }),
+      schema: {
+        type: "object",
+        properties: Object.fromEntries(FIELDS.map(f => [f, {
+          type: "object",
+          properties: { column: { type: ["string","null"] }, confidence: { type: "number" } },
+          required: ["column","confidence"], additionalProperties: false
+        }])),
+        required: FIELDS, additionalProperties: false
+      }
+    },
+    status: {
+      system: `Map each courier status text to exactly one of: accepted, refused, pending, unknown.
+accepted = delivered/paid. refused = returned, RTO, refused by customer, return to origin.
+pending = booked, in transit, out for delivery, awaiting pickup.
+unknown = cancelled by seller, unclear, or anything you are not sure about.
+When unsure use unknown. Wrong labels poison the model.`,
+      user: JSON.stringify({ statusValues }),
+      schema: {
+        type: "object",
+        properties: { mappings: { type: "array", items: {
+          type: "object",
+          properties: { value: { type: "string" }, outcome: { enum: ["accepted","refused","pending","unknown"] } },
+          required: ["value","outcome"], additionalProperties: false
+        }}},
+        required: ["mappings"], additionalProperties: false
+      }
+    }
+  };
+ 
+  const p = prompts[task];
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json",
+               Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini", temperature: 0,
+      messages: [{ role: "system", content: p.system }, { role: "user", content: p.user }],
+      response_format: { type: "json_schema", json_schema: { name: "result", strict: true, schema: p.schema } }
+    })
+  });
+  const json = await res.json();
+  if (!json.choices) return Response.json({ error: json }, { status: 500 });
+  return Response.json(JSON.parse(json.choices[0].message.content));
+});
+
+Appendix C. Calling it from React
+const maskPhone = v => String(v ?? "").replace(/\d(?=\d{3})/g, "x"); // keeps last 3 digits
+ 
+const prep = await prepareImport(file);
+if (!prep.ok) return showError(prep.message);
+ 
+// GPT only if the alias dictionary could not resolve something
+if (prep.needGpt.columns.length) {
+  const samples = prep.records.slice(0, 5).map(r =>
+    Object.fromEntries(Object.entries(r).map(([k, v]) =>
+      [k, /phone|contact|mobile|cell/i.test(k) ? maskPhone(v) : String(v).slice(0, 40)])));
+  const { data: mapping } = await supabase.functions.invoke("map-csv", {
+    body: { task: "columns", headers: prep.headers, samples }
+  });
+  // merge mapping into prep.map, then show the confidence gate
+}
+if (prep.needGpt.statuses.length) {
+  const { data } = await supabase.functions.invoke("map-csv", {
+    body: { task: "status", statusValues: prep.needGpt.statuses }
+  });
+  // build statusMap = Object.fromEntries(data.mappings.map(m => [m.value, m.outcome]))
+}
+ 
+// after the seller clicks Confirm:
+const { good, review } = cleanRows(prep.records, prep.map, statusMap, prep.dayFirst);
+const failed = await insertBatches(supabase, good.map(r => ({ ...r, store_id })));

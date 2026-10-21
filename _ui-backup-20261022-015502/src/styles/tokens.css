@@ -1,0 +1,522 @@
+/* ============================================================
+   tokens.css — Verafo design system
+   Single source of truth. Do not add raw values elsewhere.
+
+   COLOUR: every value below is copied verbatim from the Verafo
+   website stylesheet (https://verafo.com/styles.css), :root for
+   light and [data-theme="dark"] for dark. Nothing here is
+   approximated or re-derived. The brand rule from that file:
+   "teal #14B8A6 accent on white, ink #0A0F10".
+
+   The retired GoKwik-inspired blue/navy palette (#219EBC,
+   #1a7d96, #023047, #8ECAE6) is gone. The legacy token *names*
+   are kept and re-pointed at teal so the hand-written CSS
+   downstream complies without being rewritten.
+
+   Sections: 1 colour · 2 type · 3 space · 4 radius · 5 motion · 6 z-index
+   ============================================================ */
+
+/* ── LIGHT (default) ─────────────────────────────────────── */
+:root {
+  /* ── 1 · Colour — raw palette, copied verbatim ─────────
+     Brand rule: teal accent, ink text, a near-white page and a
+     tinted surface for quiet panels. Every value below is used
+     as given; the `-strong` shades further down are DERIVED for
+     text, because a fill colour rarely clears 4.5:1 as type. */
+  --teal-500: #14B8A6;
+  --teal-600: #0FA696;
+  --teal-700: #0F766E;
+  --ink: #0B1011;
+  --text: #4A575A;
+  --text-soft: #6E7C7F;   /* derived: muted labels on --bg */
+  --border-base: #D8D8D9;
+  --bg: #FCFDFD;
+  --bg-tint: #ECF8F8;
+  --banner: #DFF4F4;
+  --card-dark: #183434;
+  --card-dark-2: #234443;
+  --card-line: #20504D;
+  --warn: #FBD44F;
+  --warn-text: #6B5209;   /* derived: --warn as type is 1.5:1 */
+  --warn-bar: #D6AA3C;
+
+  --bg-2: #F6F8F8;
+  --bg-3: #EDF3F3;
+  --panel: #FFFFFF;
+  --panel-2: #F5F8F8;
+  --line: var(--border-base);
+  --line-2: #C4C6C8;
+
+  --teal: var(--teal-500);
+  --teal-bright: #2DD4BF;
+  --teal-deep: var(--teal-700);
+  --teal-glow: rgba(20, 184, 166, .26);
+
+  /* ── 1 · Colour — the teal navigation frame
+        The sidebar and the top bar are one continuous brand surface, so
+        they share ONE colour: --teal-nav, which is the site's own
+        --teal-700 (#0F766E) from the teal-500/600/700 ramp above.
+
+        Why the 700 rather than the 500 accent: #14B8A6 as a large fill
+        leaves neither black nor white text comfortably legible — white
+        measures only 2.49:1 on it. #0F766E keeps the same brand hue and
+        holds white at 5.47:1 and near-white at 4.64:1, so every label,
+        icon and group heading in the frame stays readable.
+
+        -fg/-fg-soft are the only text colours allowed on the frame;
+        -hover/-active are white washes (not darker tints) that lift a row
+        off the fill: a white wash barely moves the fill's luminance, so
+        the label keeps 4.6:1 on hover and 4.2:1 on the active row. */
+  --teal-nav: var(--teal-700);
+  --teal-nav-fg: #FFFFFF;              /* 5.47:1 on --teal-nav */
+  --teal-nav-fg-soft: #D6F2EE;         /* 4.64:1 on --teal-nav */
+  --teal-nav-hover: rgba(255, 255, 255, .09);
+  --teal-nav-active: rgba(255, 255, 255, .14);
+  --teal-nav-line: rgba(255, 255, 255, .22);
+  --teal-nav-bar: #2DD4BF;             /* active-row indicator, --teal-bright */
+  --teal-nav-chip: #0A5450;            /* dark fill for the user avatar */
+
+  --coral: #E11D48;
+  --amber: #D97706;
+  --purple: #7C3AED;
+
+  --ink-2: var(--text);
+  --ink-3: var(--text-soft);
+
+  --surface: #FFFFFF;
+  --field: #FFFFFF;
+  --tint: var(--bg-tint);
+  --tint-soft: #F2F8F7;
+  --tint-strong: var(--banner);
+  --tint-lav: #F5F3FF;
+  --head-glass: rgba(252, 253, 253, .86);
+  --nav-glass: rgba(252, 253, 253, .98);
+  --subnav-glass: rgba(252, 253, 253, .9);
+  --plate: #FFFFFF;
+  --ph: #9AA7A9;
+  --err-fg: #9F1239;
+  --err-bg: rgba(225, 29, 72, .08);
+
+  --btn-teal-1: #16C2AE;
+  --btn-teal-2: var(--teal-600);
+  --btn-teal-fg: #FFFFFF;
+  --shadow-rgb: 11, 16, 17;
+
+  /* ── 1 · Colour — surfaces ramp (legacy names, site values)
+        ink-900/800/700/600 are SURFACES. ink-100/050 are text. ── */
+  --v-ink-950: var(--bg);
+  --v-ink-900: var(--bg);
+  --v-ink-850: var(--bg-2);
+  --v-ink-800: var(--panel);
+  --v-ink-700: var(--bg-3);
+  --v-ink-600: var(--line-2);
+  --v-ink-500: rgba(10, 15, 16, .10);
+  --v-ink-400: var(--ink-3);
+  --v-ink-300: var(--ink-2);
+  --v-ink-200: var(--ink-2);
+  --v-ink-100: var(--ink);
+  --v-ink-050: var(--ink);
+
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted: var(--ink-3);
+
+  /* ── 1 · Colour — accent: the teal ramp replaces the old
+        blue "purple" ramp. 50→900 is light→dark. ─────────── */
+  --v-teal-50: var(--tint);
+  --v-teal-100: var(--tint-strong);
+  --v-teal-200: var(--teal-bright);
+  --v-teal-300: var(--teal-bright);
+  --v-teal-400: var(--teal);
+  --v-teal-500: var(--teal);
+  --v-teal-600: var(--btn-teal-2);
+  --v-teal-700: var(--teal-deep);
+  --v-teal-800: var(--teal-deep);
+  --v-teal-900: var(--ink);
+
+  /* Legacy ramp names — kept, re-pointed at teal. */
+  --v-purple-50: var(--v-teal-50);
+  --v-purple-100: var(--v-teal-100);
+  --v-purple-200: var(--v-teal-200);
+  --v-purple-300: var(--v-teal-300);
+  --v-purple-400: var(--v-teal-400);
+  --v-purple-500: var(--v-teal-500);
+  --v-purple-600: var(--v-teal-600);
+  --v-purple-700: var(--v-teal-700);
+  --v-purple-800: var(--v-teal-800);
+  --v-purple-900: var(--v-teal-900);
+
+  --cyan-primary: var(--teal);
+  --cyan-bright: var(--teal-bright);
+  --cyan-dim: var(--teal-deep);
+
+  /* ── 1 · Colour — semantic + risk ramp
+        The website's four levels (safe / medium / high / neutral).
+        `--v-*-strong` is the TEXT shade for that level: the bright
+        site shade fails 4.5:1 on light surfaces, so text uses the
+        deeper variant. Fills, icons and borders keep the site shade.
+        See the audit in the Stage 2 contrast table. ─────────── */
+  --v-safe: var(--teal-500);
+  --v-safe-strong: var(--teal-700);
+  --v-safe-bg: var(--bg-tint);
+
+  /* --warn is a BAR fill (1.5:1 as type), so its text shade is derived. */
+  --v-watch: var(--warn);
+  --v-watch-strong: var(--warn-text);
+  --v-watch-bg: rgba(251, 212, 79, .18);
+  --v-watch-bar: var(--warn-bar);
+
+  --v-risk: var(--coral);
+  --v-risk-strong: #BE123C;
+  --v-risk-bg: var(--err-bg);
+
+  --v-unknown: #3B82F6;
+  --v-unknown-strong: #1D4ED8;
+  --v-unknown-bg: rgba(59, 130, 246, .10);
+
+  /* ── 1 · Colour — risk BADGE ramp
+        A badge is type inside a pill, so it gets its own rung: a deeper
+        text shade and an opaque tinted fill, where the general `-strong`
+        and `-bg` above were pale enough that the pill barely separated
+        from the card behind it (1.06–1.13:1).
+
+        Text clears WCAG AA on its own fill, measured:
+        safe 10.1 · medium 5.3 · high 7.7 · neutral 7.4.
+        These are the shades the band pills use everywhere — a "SAFE" pill
+        is the same green on any screen. ─────────────────────── */
+  --v-safe-badge: #0B5F58;
+  --v-safe-badge-bg: #E4F5F3;
+  --v-watch-badge: #6B4E06;
+  --v-watch-badge-bg: #FEF8E9;
+  --v-risk-badge: #9F1239;
+  --v-risk-badge-bg: #FDEEF1;
+  --v-unknown-badge: #1E40AF;
+  --v-unknown-badge-bg: #EAF2FF;
+  /* One step deeper, so a badge-tinted button visibly answers a hover
+     instead of sitting flat on its own base fill. */
+  --v-safe-badge-hover: #D3EDE9;
+  --v-risk-badge-hover: #FADFE5;
+
+  /* Legacy semantic aliases */
+  --accent: var(--teal);
+  --accent-2: var(--teal-deep);
+  --accent-glow: var(--teal-glow);
+  --accent-soft: var(--tint);
+  --green: var(--v-safe);
+  --green-soft: var(--v-safe-bg);
+  --amber-soft: var(--v-watch-bg);
+  --red: var(--v-risk);
+  --red-soft: var(--v-risk-bg);
+
+  /* ── 2 · Type — families (site values, all three loaded) ── */
+  --v-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --v-font-serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --v-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ── 2 · Type — scale
+        Body sits at 14px. It was 15px, which with the 1.62 leading below made
+        every screen read as though the browser were zoomed in: the sidebar
+        rows, table text and card copy all ran large, so less of the page fit
+        and everything felt cramped despite the generous spacing. 14px is the
+        density a dashboard is normally read at, and it matches the sm/md
+        utilities the components already use, so body copy no longer prints
+        larger than the labels beside it. ── */
+  --t-display: 38px;      /* verdict numeral only */
+  --t-h1: clamp(24px, 3.2vw, 34px);  /* page titles */
+  --t-h2: clamp(18px, 2vw, 24px);  /* section headers */
+  --t-h3: 16.5px;         /* card titles */
+  --t-body: 14px;         /* body copy */
+  --t-body-sm: 13px;      /* secondary text */
+  --t-caption: 12.5px;    /* labels, helper text */
+  --t-micro: 11px;        /* eyebrows — uppercase, tracked */
+  --t-data: 13px;         /* identifiers, values (mono) */
+  --t-data-lg: 21px;      /* emphasised metrics (mono) */
+
+  /* ── 3 · Space — 4px scale ─────────────────────────────── */
+  --s-1: 4px;   --s-2: 8px;    --s-3: 12px;
+  --s-4: 16px;  --s-5: 20px;   --s-6: 24px;
+  --s-8: 32px;  --s-10: 40px;  --s-12: 48px;
+  --s-16: 64px; --s-20: 80px;  --s-24: 96px;
+
+  /* ── 4 · Radius ────────────────────────────────────────── */
+  --r-sm: 10px;   /* inputs, chips, non-primary buttons */
+  --r: 14px;      /* cards, panels */
+  --r-card: 12px; /* the dashboard's card radius, named so it is explicit */
+  --r-lg: 14px;   /* cards */
+  --r-xl: 16px;   /* the main hero only */
+  --r-pill: 100px;/* primary buttons only */
+  --r-full: 999px;
+
+  /* Legacy radius names kept, mapped onto the scale above */
+  --radius: var(--r);
+  --radius-sm: var(--r-sm);
+  --radius-xs: var(--r-sm);
+
+  /* ── 5 · Motion (site values — already identical) ──────── */
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --ease: cubic-bezier(.22, .61, .36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* ── 6 · Z-index ───────────────────────────────────────── */
+  --z-base: 0;  --z-sticky: 10;  --z-sidebar: 20;  --z-topbar: 30;
+  --z-dropdown: 40;  --z-modal-backdrop: 50;  --z-modal: 60;  --z-toast: 70;
+
+  /* ── Layout ────────────────────────────────────────────── */
+  --v-sidebar-w: 260px;
+  --v-sidebar-w-collapsed: 68px;
+  --v-topbar-h: 60px;
+  --v-content-max: 1200px;
+  --v-outline: var(--teal);
+  --v-focus-ring: 2px solid var(--teal);
+  --v-focus-offset: 3px;
+
+  /* ── 7 · Shadow (site values) ──────────────────────────── */
+  --sh-1: 0 1px 2px rgba(10, 15, 16, .06);
+  --sh-2: 0 2px 4px rgba(10, 15, 16, .04), 0 10px 24px -10px rgba(10, 15, 16, .12);
+  --sh-3: 0 4px 8px rgba(10, 15, 16, .04), 0 24px 48px -20px rgba(10, 15, 16, .18);
+  --sh-teal: 0 4px 12px -3px rgba(20, 184, 166, .35), 0 12px 32px -12px rgba(20, 184, 166, .4);
+
+  /* Legacy shadow names */
+  --shadow: var(--sh-1);
+  --shadow-sm: var(--sh-1);
+  --shadow-md: var(--sh-2);
+  --shadow-lg: var(--sh-3);
+
+  /* ── 8 · Gradient & glow (teal) ────────────────────────── */
+  --v-grad-brand: linear-gradient(135deg, var(--teal-bright), var(--teal));
+  --v-grad-accent: linear-gradient(120deg, var(--teal-bright), var(--teal));
+  --v-grad-safe: linear-gradient(120deg, var(--teal-bright), var(--teal) 55%, var(--teal-deep));
+  --v-grad-chip: linear-gradient(140deg, var(--tint), var(--tint-strong));
+  --v-grad-btn: linear-gradient(180deg, var(--btn-teal-1), var(--btn-teal-2));
+  --v-glow-soft: var(--sh-teal);
+  --v-glow-md: var(--sh-teal);
+  --v-glow-primary: 0 6px 16px -3px rgba(20, 184, 166, .45);
+  --v-glow-ring: 0 0 0 3px rgba(20, 184, 166, .14);
+  --v-hairline: linear-gradient(90deg, transparent 5%, var(--teal) 40%, var(--teal-deep) 60%, transparent 95%);
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(20, 184, 166, .10), transparent 62%),
+              radial-gradient(42% 42% at -8% 104%, rgba(20, 184, 166, .06), transparent 58%);
+  --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(45, 212, 191, .22), transparent 60%),
+                   radial-gradient(60% 50% at 100% 100%, rgba(20, 184, 166, .12), transparent 55%),
+                   var(--bg);
+
+  /* Legacy surface aliases */
+  --bg-deepest: var(--bg);
+  --bg-app: var(--bg);
+  --bg-surface: var(--bg-2);
+  --bg-card: var(--panel);
+  --border-hair: var(--line);
+  --border: var(--line-2);
+  --border-2: var(--line-2);
+  --glass: var(--panel);
+  --glass-strong: var(--head-glass);
+  --input-bg: var(--field);
+  --hover: rgba(10, 15, 16, .05);
+}
+
+/* ── DARK — copied verbatim from the website's [data-theme="dark"] ── */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0A0F10;
+  --bg-2: #0E1517;
+  --bg-3: #141D1F;
+  --panel: #0E1517;
+  --panel-2: #141D1F;
+  --line: rgba(255, 255, 255, .09);
+  --line-2: rgba(255, 255, 255, .17);
+
+  --teal: #2DD4BF;
+  --teal-deep: #5EEAD4;
+  --teal-glow: rgba(45, 212, 191, .34);
+
+  /* The navigation frame stays a brand teal in dark mode too: the brand
+     colour is constant, only the surfaces around it move. This shade is
+     chosen to sit clear of --bg #0A0F10 (2.5:1 separation, so the frame
+     still reads above the page) while holding white type at 6.8:1. */
+  --teal-nav: #0C574F;
+  --teal-nav-fg: #FFFFFF;
+  --teal-nav-fg-soft: #C9E9E5;
+  --teal-nav-hover: rgba(255, 255, 255, .08);
+  --teal-nav-active: rgba(255, 255, 255, .13);
+  --teal-nav-line: rgba(255, 255, 255, .20);
+  --teal-nav-bar: var(--teal-bright);
+  --teal-nav-chip: #0A3F3B;
+
+  --ink: #F2F6F6;
+  --ink-2: #A3B1B3;
+  --ink-3: #748386;
+
+  --surface: #111A1D;
+  --field: #0B1113;
+  --tint: rgba(45, 212, 191, .1);
+  --tint-soft: rgba(45, 212, 191, .06);
+  --tint-strong: rgba(45, 212, 191, .14);
+  --tint-lav: rgba(167, 139, 250, .12);
+  --head-glass: rgba(10, 15, 16, .86);
+  --nav-glass: rgba(10, 15, 16, .98);
+  --subnav-glass: rgba(10, 15, 16, .9);
+  --plate: #0E1517;
+  --ph: #6E7B7E;
+  --err-fg: #FCA5B5;
+  --err-bg: rgba(225, 29, 72, .16);
+
+  --btn-teal-1: #38DCC7;
+  --btn-teal-2: #20B7A4;
+  --btn-teal-fg: #04201C;
+  --shadow-rgb: 0, 0, 0;
+
+  --v-ink-500: rgba(255, 255, 255, .10);
+  --v-ink-400: var(--ink-3);
+
+  /* The bright site shades already clear 4.5:1 on the dark ramp
+     (measured 8.3–12.5 on --panel), so fill and text are the same. */
+  --v-safe: var(--teal);
+  --v-safe-strong: var(--teal-deep);
+  --v-safe-bg: var(--tint);
+
+  --v-watch: #FCD34D;
+  --v-watch-strong: #FCD34D;
+  --v-watch-bg: rgba(252, 211, 77, .12);
+
+  --v-risk: #FDA4AF;
+  --v-risk-strong: #FDA4AF;
+  --v-risk-bg: var(--err-bg);
+
+  --v-unknown: #93C5FD;
+  --v-unknown-strong: #93C5FD;
+  --v-unknown-bg: rgba(147, 197, 253, .12);
+
+  /* Risk badge ramp, dark. The bright site shades already read strongly on
+     a dark page, so text takes them directly; the fills stay near-opaque
+     and plainly darker than the badge type. Measured on their own fill:
+     safe 8.8 · medium 11.5 · high 9.3 · neutral 8.7. */
+  --v-safe-badge: #5EEAD4;
+  --v-safe-badge-bg: #0D2B28;
+  --v-watch-badge: #FCD34D;
+  --v-watch-badge-bg: #2B2411;
+  --v-risk-badge: #FDA4AF;
+  --v-risk-badge-bg: #2E1219;
+  --v-unknown-badge: #93C5FD;
+  --v-unknown-badge-bg: #131F33;
+  /* Hover lifts on the dark ramp rather than deepening. */
+  --v-safe-badge-hover: #14403B;
+  --v-risk-badge-hover: #431A23;
+
+  --v-teal-900: #F2F6F6;
+  --v-purple-900: var(--v-teal-900);
+  --v-teal-600: var(--btn-teal-2);
+  --v-purple-600: var(--v-teal-600);
+  --v-teal-700: var(--teal-deep);
+  --v-purple-700: var(--v-teal-700);
+  --v-teal-200: var(--teal-bright);
+  --v-purple-200: var(--v-teal-200);
+
+  --shadow: var(--sh-1);
+  --shadow-sm: var(--sh-1);
+  --shadow-md: var(--sh-2);
+  --shadow-lg: var(--sh-3);
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --sh-2: 0 2px 4px rgba(0, 0, 0, .3), 0 10px 24px -10px rgba(0, 0, 0, .6);
+  --sh-3: 0 4px 8px rgba(0, 0, 0, .3), 0 24px 48px -20px rgba(0, 0, 0, .75);
+  --sh-teal: 0 4px 12px -3px rgba(45, 212, 191, .3), 0 12px 32px -12px rgba(45, 212, 191, .35);
+
+  --v-glow-primary: 0 6px 16px -3px rgba(45, 212, 191, .4);
+  --v-glow-ring: 0 0 0 3px rgba(45, 212, 191, .16);
+  --v-grad-btn: linear-gradient(180deg, var(--btn-teal-1), var(--btn-teal-2));
+  --v-grad-chip: linear-gradient(140deg, var(--tint-strong), var(--tint-soft));
+  --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(45, 212, 191, .12), transparent 62%),
+              radial-gradient(42% 42% at -8% 104%, rgba(45, 212, 191, .06), transparent 58%);
+  --hover: rgba(255, 255, 255, .06);
+  --head-glass: rgba(10, 15, 16, .86);
+}
+
+/* ── Explicit light re-assertion.
+   :root already carries the light ramp, so this block only exists to
+   win over the dark block when data-theme="light" is set on <html>. */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #FCFDFD;
+  --bg-2: #F6F8F8;
+  --bg-3: #EDF3F3;
+  --panel: #FFFFFF;
+  --panel-2: #F5F8F8;
+  --line: var(--border-base);
+  --line-2: #C4C6C8;
+  --teal: var(--teal-500);
+  --teal-deep: var(--teal-700);
+  --teal-glow: rgba(20, 184, 166, .26);
+
+  /* Navigation frame — same brand teal as :root (see the note there). */
+  --teal-nav: var(--teal-700);
+  --teal-nav-fg: #FFFFFF;
+  --teal-nav-fg-soft: #D6F2EE;
+  --teal-nav-hover: rgba(255, 255, 255, .09);
+  --teal-nav-active: rgba(255, 255, 255, .14);
+  --teal-nav-line: rgba(255, 255, 255, .22);
+  --teal-nav-bar: #2DD4BF;
+  --teal-nav-chip: #0A5450;
+
+  --ink: #0B1011;
+  --ink-2: var(--text);
+  --ink-3: var(--text-soft);
+  --surface: #FFFFFF;
+  --field: #FFFFFF;
+  --tint: var(--bg-tint);
+  --tint-soft: #F2F8F7;
+  --tint-strong: var(--banner);
+  --tint-lav: #F5F3FF;
+  --plate: #FFFFFF;
+  --ph: #9AA7A9;
+  --err-fg: #9F1239;
+  --err-bg: rgba(225, 29, 72, .08);
+  --btn-teal-1: #16C2AE;
+  --btn-teal-2: var(--teal-600);
+  --btn-teal-fg: #FFFFFF;
+  --shadow-rgb: 11, 16, 17;
+  --v-ink-500: rgba(11, 16, 17, .10);
+  --v-safe: var(--teal-500);
+  --v-safe-strong: var(--teal-700);
+  --v-safe-bg: var(--bg-tint);
+  --v-watch: var(--warn);
+  --v-watch-strong: var(--warn-text);
+  --v-watch-bg: rgba(251, 212, 79, .18);
+  --v-watch-bar: var(--warn-bar);
+  --v-risk: var(--coral);
+  --v-risk-strong: #BE123C;
+  --v-risk-bg: var(--err-bg);
+  --v-unknown: #3B82F6;
+  --v-unknown-strong: #1D4ED8;
+  --v-unknown-bg: rgba(59, 130, 246, .10);
+  --v-safe-badge: #0B5F58;
+  --v-safe-badge-bg: #E4F5F3;
+  --v-watch-badge: #6B4E06;
+  --v-watch-badge-bg: #FEF8E9;
+  --v-risk-badge: #9F1239;
+  --v-risk-badge-bg: #FDEEF1;
+  --v-unknown-badge: #1E40AF;
+  --v-unknown-badge-bg: #EAF2FF;
+  --v-safe-badge-hover: #D3EDE9;
+  --v-risk-badge-hover: #FADFE5;
+  --v-teal-900: var(--ink);
+  --v-purple-900: var(--v-teal-900);
+  --v-teal-600: var(--btn-teal-2);
+  --v-purple-600: var(--v-teal-600);
+  --v-teal-700: var(--teal-deep);
+  --v-purple-700: var(--v-teal-700);
+  --v-teal-200: var(--teal-bright);
+  --v-purple-200: var(--v-teal-200);
+  --sh-1: 0 1px 2px rgba(10, 15, 16, .06);
+  --sh-2: 0 2px 4px rgba(10, 15, 16, .04), 0 10px 24px -10px rgba(10, 15, 16, .12);
+  --sh-3: 0 4px 8px rgba(10, 15, 16, .04), 0 24px 48px -20px rgba(10, 15, 16, .18);
+  --sh-teal: 0 4px 12px -3px rgba(20, 184, 166, .35), 0 12px 32px -12px rgba(20, 184, 166, .4);
+  --v-glow-primary: 0 6px 16px -3px rgba(20, 184, 166, .45);
+  --v-glow-ring: 0 0 0 3px rgba(20, 184, 166, .14);
+  --v-grad-btn: linear-gradient(180deg, var(--btn-teal-1), var(--btn-teal-2));
+  --v-grad-chip: linear-gradient(140deg, var(--tint), var(--tint-strong));
+  --hover: rgba(10, 15, 16, .05);
+}

@@ -16,6 +16,7 @@ import { RowActions } from '@/components/app/row-actions'
 import { CountUp } from '@/components/app/count-up'
 import { briefingLine } from '@/components/app/briefing-line'
 import { FirstRunChecklist, MoneyRiskCards } from '@/components/app/dashboard-extras'
+import { ShopifyClaimCard } from '@/components/app/shopify-claim-card'
 import { InsightCards } from '@/components/app/insight-cards'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -615,6 +616,11 @@ export function Dashboard() {
           </div>
         }
       />
+
+      {/* Orders arriving into a store nobody owns are invisible in this app —
+          not filtered, genuinely unreachable. Say so here, once, while it is
+          still true; the banner removes itself after the store is connected. */}
+      <ShopifyClaimCard variant="banner" />
 
       {/* The period at a glance, with real period-over-period movement. */}
       {!loading && !ordersError && orders.length > 0 && (

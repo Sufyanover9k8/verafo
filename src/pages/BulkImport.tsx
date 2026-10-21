@@ -19,12 +19,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils'
 import { phone } from '../lib/format'
 import { resolveBuyerPhone } from '../lib/ui/buyer-key'
-import { parseOrderCsv, type ParsedOrder } from '../lib/ui/order-csv'
+import { parseCsv, parseOrderCsv, type ParsedOrder } from '../lib/ui/order-csv'
+import { forgetColumnMap, mapColumnsWithAi, type ColumnMap } from '../lib/ui/ai-column-map'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { AiError, aiJson, classifyAiThrow } from '../lib/ai'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
+import { CourierImport } from './CourierImport'
 
 /**
  * The shape Verafo still accepts. A merchant with a Shopify store never needs
@@ -227,7 +229,48 @@ export function BulkImport() {
       })
   }, [role, myStores])
 
-  const parsed = useMemo(() => parseOrderCsv(text), [text])
+  /*
+   * A mapping the model worked out for a file this parser has never seen. It is
+   * only ever consulted after the deterministic parse has failed, and it maps
+   * NAMES to fields — every value is still read and validated by the parser.
+   */
+  const [aiMap, setAiMap] = useState<ColumnMap | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const parsed = useMemo(() => parseOrderCsv(text, aiMap ?? undefined), [text, aiMap])
+
+  /** The file is unreadable the ordinary way. Offer the AI reader. */
+  const unreadable = text.trim() !== '' && parsed.orders.length === 0 && !aiBusy
+
+  async function readWithAi() {
+    if (aiBusy) return
+    setAiBusy(true)
+    setAiError(null)
+    try {
+      const cells = parseCsv(text)
+      const map = await mapColumnsWithAi(cells)
+      if (!map) {
+        setAiError('Verafo could not find a phone column in this file. A buyer is identified by phone number, so one is required.')
+        return
+      }
+      setAiMap(map)
+      toast.push({
+        kind: 'success',
+        title: 'File understood',
+        detail: `${Object.keys(map.columns).length} columns matched${Object.keys(map.status).length > 0 ? `, ${Object.keys(map.status).length} status words read` : ''}.`,
+      })
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Verafo could not read this file.')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  function clearAiMap() {
+    if (parsed.headers.length > 0) forgetColumnMap(parsed.headers)
+    setAiMap(null)
+  }
 
   /**
    * Which store a row belongs to.
@@ -368,6 +411,7 @@ export function BulkImport() {
           .insert({
             buyer_phone: buyerPhone,
             store_id: res.storeId,
+            order_reference: r.reference || null,
             product_category: r.category || null,
             product_name: r.product || null,
             price: r.price,
@@ -375,7 +419,7 @@ export function BulkImport() {
             address: r.address || null,
             city: r.city || null,
             ordered_at: r.ordered_at ?? undefined,
-          })
+          } as any)
           .select('id')
           .single()
         if (orderErr) throw orderErr
@@ -579,6 +623,8 @@ export function BulkImport() {
           </Panel>
         )}
 
+        <CourierImport stores={stores.map((s) => ({ id: s.id, name: s.name }))} />
+
         <Panel
           icon={CloudUpload}
           title="Upload or paste"
@@ -640,6 +686,71 @@ export function BulkImport() {
                   <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> {e}
                 </p>
               ))}
+            </div>
+          )}
+
+          {/*
+            * The fallback that makes any spreadsheet importable. Shown only when
+            * the ordinary parser found nothing, so the deterministic path stays
+            * the default and the model is never in the way.
+            */}
+          {unreadable && !aiMap && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[10px] border border-border bg-muted px-3 py-2.5">
+              <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                Column names this unusual need a reader that adapts. Verafo can work out which column is
+                the phone, which is the price, and what words like &ldquo;Delivered&rdquo; or &ldquo;RTO&rdquo;
+                mean. Column names and a few masked sample values are sent to Verafo&rsquo;s AI; your file
+                never leaves this page.
+              </p>
+              <Button
+                type="button"
+                className="h-11 shrink-0 gap-2 px-4 md:h-9"
+                onClick={() => void readWithAi()}
+              >
+                <Sparkles className="size-4" /> Read this file with AI
+              </Button>
+            </div>
+          )}
+
+          {aiBusy && (
+            <p className="mt-3 flex items-center gap-2 text-[12.5px] text-muted-foreground" aria-live="polite">
+              <Loader2 className="size-3.5 animate-spin" /> Reading your columns…
+            </p>
+          )}
+
+          {aiError && (
+            <p role="alert" className="mt-3 rounded-[10px] border border-risk-high/50 bg-risk-high-badge-bg px-3 py-2 text-[12.5px] text-risk-high-badge">
+              {aiError}
+            </p>
+          )}
+
+          {/* What the model decided, in the merchant's terms — and reversible. */}
+          {aiMap && (
+            <div className="mt-3 flex flex-wrap items-start gap-3 rounded-[10px] border border-risk-safe/40 bg-risk-safe-soft px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-semibold text-risk-safe-strong">
+                  Read with AI — check this is right
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                  {Object.entries(aiMap.columns)
+                    .filter(([, header]) => Boolean(header))
+                    .map(([field, header]) => `${field} ← "${String(header)}"`)
+                    .join(' · ')}
+                  {Object.keys(aiMap.status).length > 0 ? (
+                    <>
+                      {' · '}
+                      {Object.keys(aiMap.status)
+                        .slice(0, 6)
+                        .map((word) => `"${word}" → ${aiMap.status[word]}`)
+                        .join(', ')}
+                    </>
+                  ) : null}
+                </p>
+                {aiMap.notes && <p className="mt-1 text-[12px] text-muted-foreground">{aiMap.notes}</p>}
+              </div>
+              <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 px-3 md:h-9" onClick={clearAiMap}>
+                Forget this reading
+              </Button>
             </div>
           )}
 

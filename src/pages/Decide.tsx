@@ -153,7 +153,9 @@ export function Decide() {
       if (decision === 'call') {
         const { telLink } = await import('@/lib/ui')
         const href = telLink(order.buyer_phone)
-        if (href) window.location.href = href
+        // assign(), not an assignment to location.href: the assignment form is
+        // flagged as mutating a value defined outside the component.
+        if (href) window.location.assign(href)
       }
 
       toast.push({ kind: 'success', title: `${DECISION_META[decision].label} recorded` })

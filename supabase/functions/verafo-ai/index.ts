@@ -904,6 +904,99 @@ function shortMoney(n: number): string {
   return n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n));
 }
 
+/** Constant-time string compare, so the shared secret cannot be discovered by
+ *  timing a series of guesses against it. */
+function secretsMatch(a: string, b: string): boolean {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) diff |= left[i] ^ right[i];
+  return diff === 0;
+}
+
+/**
+ * The `chats.owner_email` identity a conversation started in the Shopify app
+ * belongs to: one per shop, and deliberately NOT the merchant's verafo.com
+ * email. A chat opened inside the Shopify admin must never appear in — or
+ * grant its partner access to — an account-level transcript, and the reverse.
+ */
+function shopOwnerEmail(shop: string): string {
+  return `shop+${shop.trim().toLowerCase()}@verafo.shopify`;
+}
+
+/**
+ * SHOPIFY EMBEDDED-APP PATH.
+ *
+ * The app embedded in the Shopify admin is authenticated to Shopify, not to
+ * us: it holds no Supabase auth session, so it cannot present a user JWT and
+ * `authorizeCaller` would (correctly) deny it. This lets the app's SERVER call
+ * on one shop's behalf instead — it presents the shop's own domain plus a
+ * shared secret, and the store ids come from `stores.shopify_domain` rather
+ * than from a user's email.
+ *
+ * Trust model: the secret must equal VERAFO_CHAT_SECRET, which lives only in
+ * the Shopify app's server environment and never reaches a browser. A request
+ * without BOTH headers is not a shop call at all and returns null, leaving the
+ * JWT path untouched.
+ *
+ * A shop-scoped caller is never an admin, and its chats are owned by
+ * `shopOwnerEmail(shop)` — see the note there.
+ */
+async function authorizeShopCaller(
+  req: Request,
+): Promise<{ email: string; storeIds: string[]; reason?: string } | null> {
+  const presented = (req.headers.get("x-verafo-token") ?? "").trim();
+  const shop = (req.headers.get("x-verafo-shop") ?? "").trim().toLowerCase();
+  if (!presented && !shop) return null;
+
+  const secret = (Deno.env.get("VERAFO_CHAT_SECRET") ?? "").trim();
+  if (!secret) {
+    return {
+      email: "",
+      storeIds: [],
+      reason: "the function cannot verify a shop call (VERAFO_CHAT_SECRET is not set)",
+    };
+  }
+  if (!presented || !shop) {
+    return {
+      email: "",
+      storeIds: [],
+      reason: "a shop-scoped call needs both the x-verafo-shop and x-verafo-token headers",
+    };
+  }
+  if (!secretsMatch(presented, secret)) {
+    return { email: "", storeIds: [], reason: "the shop token was rejected" };
+  }
+
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!service) {
+    return {
+      email: "",
+      storeIds: [],
+      reason: "the function cannot read store ownership (SUPABASE_SERVICE_ROLE_KEY is not set)",
+    };
+  }
+
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/stores?select=id&shopify_domain=ilike.${encodeURIComponent(shop)}`,
+      { headers: { apikey: service, Authorization: `Bearer ${service}` } },
+    );
+    if (!res.ok) {
+      return { email: "", storeIds: [], reason: `store lookup failed (${res.status})` };
+    }
+    const storeIds = asRows<BuyerIdRow>(await res.json()).map((r) => String(r.id));
+    if (storeIds.length === 0) {
+      return { email: "", storeIds: [], reason: `no store is linked to ${shop}` };
+    }
+    return { email: shopOwnerEmail(shop), storeIds };
+  } catch (err) {
+    return { email: "", storeIds: [], reason: `store lookup threw: ${String(err)}` };
+  }
+}
+
 /**
  * PRIVACY: verify who is calling, and find the stores they own.
  *
@@ -921,6 +1014,11 @@ function shortMoney(n: number): string {
 async function authorizeCaller(
   req: Request,
 ): Promise<{ email: string; storeIds: string[]; reason?: string }> {
+  // A shop-scoped call from the Shopify app short-circuits the JWT path. It
+  // returns null for ordinary calls, so the dashboard flow is unchanged.
+  const shopCaller = await authorizeShopCaller(req);
+  if (shopCaller) return shopCaller;
+
   const header = req.headers.get("authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) return { email: "", storeIds: [], reason: "no Authorization header" };
@@ -929,7 +1027,9 @@ async function authorizeCaller(
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  let email = "";
+  // Assigned below before any read; the initialiser was dead. Every path that
+  // does not assign it returns first.
+  let email: string;
   try {
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { apikey: anon || service || "", Authorization: `Bearer ${token}` },
@@ -2750,6 +2850,129 @@ const supabase = createClient(
       return json({ error: "OPENAI_API_KEY is not set on this function" }, 500);
     }
     const openai = new OpenAI({ apiKey });
+
+    /*
+     * Column mapping for CSV import.
+     *
+     * The model is shown column NAMES and a few digits-masked sample values, and
+     * answers with a mapping only: which header is the phone, which is the price,
+     * and what each status word in this file means. It never sees a complete row,
+     * never writes data, and nothing it returns is trusted — the client checks
+     * every header against the real file and the existing parser does all the
+     * reading, cleaning and validating. A hallucination therefore produces an
+     * empty column, never a wrong price or a wrong buyer.
+     *
+     * temperature 0 and json_object, because this is classification: the same
+     * header shape should always map the same way.
+     */
+    if (action === "map_courier_columns") {
+      if (!callerEmail) {
+        return json({ error: "sign in to read a file with AI" }, 401);
+      }
+      const headers = Array.isArray(body.headers)
+        ? (body.headers as unknown[]).map((h) => String(h)).slice(0, 40)
+        : [];
+      if (headers.length === 0) return json({ error: "headers are required" }, 400);
+      const samples = Array.isArray(body.samples)
+        ? (body.samples as unknown[]).slice(0, 40).map((s) => {
+            const row = (s ?? {}) as Record<string, unknown>;
+            return {
+              header: String(row.header ?? "").slice(0, 80),
+              values: Array.isArray(row.values)
+                ? (row.values as unknown[]).map((v) => String(v).slice(0, 60)).slice(0, 4)
+                : [],
+            };
+          })
+        : [];
+      const mapRes = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "Map courier spreadsheet columns to the courier reconciliation schema. Return ONLY JSON shaped as " +
+              '{"columns":{"reference":"<header>","trackingNumber":"<header>","phone":"<header>","store":"<header>","status":"<header>","reason":"<header>","codAmount":"<header>","resolvedAt":"<header>"}}. ' +
+              "Use exact headers only; omit fields that cannot be identified. reference is the merchant/Shopify order ID, " +
+              "trackingNumber is CN/consignment/waybill, phone is the consignee/customer phone (prefer that over shipper/contact phone), " +
+              "store is merchant/shipper/vendor, status is the latest delivery status, reason is delivery/return reason, " +
+              "codAmount is the collectable/COD amount, and resolvedAt is the final status or delivery date. Never invent headers."
+          },
+          { role: "user", content: JSON.stringify({ headers, samples }) },
+        ],
+      });
+      let parsedMap: unknown = {};
+      try { parsedMap = JSON.parse(mapRes.choices[0]?.message?.content ?? "{}"); }
+      catch { return json({ error: "the mapping model returned something unreadable" }, 502); }
+      return json(parsedMap);
+    }
+
+    if (action === "map_import_columns") {
+      // Signed-in callers only: this spends OpenAI credit, and an anonymous
+      // holder of the publishable key must not be able to do that.
+      if (!callerEmail) {
+        return json({ error: "sign in to read a file with AI" }, 401);
+      }
+      const headers = Array.isArray(body.headers)
+        ? (body.headers as unknown[]).map((h) => String(h)).slice(0, 40)
+        : [];
+      if (headers.length === 0) {
+        return json({ error: "headers are required" }, 400);
+      }
+      const samples = Array.isArray(body.samples)
+        ? (body.samples as unknown[]).slice(0, 40).map((s) => {
+            const row = (s ?? {}) as Record<string, unknown>;
+            return {
+              header: String(row.header ?? "").slice(0, 80),
+              values: Array.isArray(row.values)
+                ? (row.values as unknown[]).map((v) => String(v).slice(0, 60)).slice(0, 4)
+                : [],
+            };
+          })
+        : [];
+
+      const mapRes = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You map the columns of a merchant's order spreadsheet onto a fixed schema. " +
+              "You are given column headers and a few masked sample values per column. " +
+              "Return ONLY JSON shaped exactly like:\n" +
+              '{"columns":{"phone":"<header>","product":"<header>","category":"<header>",' +
+              '"price":"<header>","quantity":"<header>","city":"<header>","address":"<header>",' +
+              '"store":"<header>","ordered_at":"<header>","outcome":"<header>",' +
+              '"resolved_at":"<header>","email":"<header>","reference":"<header>"},' +
+              '"status":{"<lowercased cell value>":"accepted"|"refused"|"pending"},' +
+              '"notes":"<one short sentence about anything uncertain>"}\n' +
+              "Rules:\n" +
+              "- Use a header EXACTLY as given, character for character. Omit fields you cannot identify. Never invent a header.\n" +
+              "- `phone` is required: the customer's phone, mobile or shipping number. If two columns carry one, prefer the shipping/delivery column.\n" +
+              "- `price` is the product's line total or unit price — not shipping, tax, or a grand total unless nothing else exists.\n" +
+              "- `outcome` is the delivery-status column, when the file has one.\n" +
+              "- In `status`, list the DISTINCT words that actually appear in the samples, lowercased, mapped to: " +
+              "accepted = delivered/received/paid/completed; refused = returned/RTO/refused/cancelled/undelivered/failed; " +
+              "pending = in transit/shipped/out for delivery/processing/on hold. Omit any word you are unsure about rather than guessing.\n" +
+              "- If there is no phone column at all, return an empty `columns` object and say why in `notes`.",
+          },
+          { role: "user", content: JSON.stringify({ headers, samples }) },
+        ],
+      });
+
+      const rawMap = mapRes.choices[0]?.message?.content ?? "{}";
+      let parsedMap: unknown = {};
+      try {
+        parsedMap = JSON.parse(rawMap);
+      } catch {
+        return json({ error: "the mapping model returned something unreadable" }, 502);
+      }
+      // Shape only; the client re-validates every header against the real file.
+      return json(parsedMap);
+    }
 
     if (action === "embed") {
       const stats = await fetchStats(supabase, phone, storeIds);

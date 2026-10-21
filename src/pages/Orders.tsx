@@ -341,7 +341,8 @@ export function Orders() {
       store: o.stores?.name ?? '',
       product: o.product_name || o.product_category || '',
       city: o.city ?? '',
-      total: (o.price ?? 0) * (o.quantity ?? 1),
+      // `price` stores the order-line total, so do not multiply by quantity again.
+      total: o.price ?? 0,
       risk_score: o.buyers?.risk_score ?? '',
       ordered_at: o.ordered_at ?? '',
       outcome: o.outcomes?.status ?? 'pending',
@@ -711,6 +712,7 @@ export function Orders() {
                   )}
                   <TableHead className={selectMode || hiddenView ? undefined : 'ps-6'}>Buyer</TableHead>
                   <TableHead className="text-end">Amount</TableHead>
+                  <TableHead className="text-end">Items</TableHead>
                   <TableHead>Risk</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="hidden lg:table-cell">Date</TableHead>
@@ -757,10 +759,8 @@ export function Orders() {
                           {phone(o.buyer_phone)}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-end tabular-nums">
-                        {money(o.price)}
-                        {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
-                      </TableCell>
+                      <TableCell className="text-end tabular-nums">{money(o.price)}</TableCell>
+                      <TableCell className="text-end tabular-nums">{o.quantity ?? 1}</TableCell>
                       <TableCell>
                         <VerdictBadge riskScore={o.buyers?.risk_score} totalOrders={o.buyers?.total_orders} />
                       </TableCell>

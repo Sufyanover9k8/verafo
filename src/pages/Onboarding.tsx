@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { supabase } from '../lib/supabase'
 import { claimShopifyStore } from '../lib/stores'
+import { ShopifyClaimCard } from '../components/app/shopify-claim-card'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -114,6 +115,17 @@ export function Onboarding() {
           <p className="mt-2 text-[13px] text-muted-foreground">
             This is the store Verafo will attach your orders and risk data to.
           </p>
+
+          {/*
+            * A merchant who already installed the Shopify app lands HERE, not on
+            * the dashboard — so a claim banner there was invisible to exactly the
+            * people who needed it. This is the first screen they see, so this is
+            * where their store is offered. It hides itself when there is nothing
+            * to connect, which is the normal case for a fresh signup.
+            */}
+          <div className="mt-6">
+            <ShopifyClaimCard variant="panel" />
+          </div>
 
           <form className="mt-8 flex flex-col gap-4" onSubmit={submit}>
             <div className="flex flex-col gap-2">

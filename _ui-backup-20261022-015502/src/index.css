@@ -1,0 +1,24 @@
+/* ============================================================
+   index.css — Verafo entry stylesheet
+
+   One design system: Tailwind v4 + shadcn tokens.
+     · tokens.css   — the brand palette, copied from the Verafo website
+                      stylesheet. Still the single source of truth for
+                      every colour, radius, space and motion value, and
+                      still read directly by inline styles and SVG in the
+                      charts and maps.
+     · tailwind.css — Tailwind, the shadcn theme bridge, the global reset
+                      and the entrance-motion utilities.
+
+   The hand-written legacy stylesheet (components.css / base.css /
+   utilities.css) has been retired now that every page is on the shared
+   system.
+   ============================================================ */
+
+@layer theme, base, components, utilities;
+
+@import './styles/tailwind.css';
+
+/* Raw brand tokens, available to Tailwind's theme layer and to the inline
+   `var(--teal)` / `var(--line-2)` references in charts and maps. */
+@import './styles/tokens.css' layer(theme);

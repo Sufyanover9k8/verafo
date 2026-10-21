@@ -91,7 +91,7 @@ describe('parseOrderCsv — a Shopify export, unmodified', () => {
     expect(r.orders[1].product).toBe('Other')
   })
 
-  it('reads a cancelled order as refused and a fulfilled one as accepted', () => {
+  it('imports Shopify rows as unknown — Fulfilled is not a delivery (SOP §4)', () => {
     const r = parseOrderCsv(
       [
         SHOPIFY_HEADER,
@@ -101,10 +101,13 @@ describe('parseOrderCsv — a Shopify export, unmodified', () => {
       ].join('\n'),
     )
     const byRef = new Map(r.orders.map((o) => [o.reference, o]))
-    expect(byRef.get('C')?.outcome).toBe('refused')
-    expect(byRef.get('C')?.resolved_at).toBe(toIso('2026-07-20 10:00:00 +0500'))
-    expect(byRef.get('F')?.outcome).toBe('accepted')
-    // Financial status says nothing about delivery, so it is not used.
+    // Fulfilled means the parcel left the warehouse. Cancelled usually means the
+    // seller cancelled. Neither is what happened at the buyer's door, so neither
+    // becomes an outcome — the courier file supplies that.
+    expect(byRef.get('C')?.outcome).toBe('pending')
+    expect(byRef.get('C')?.resolved_at).toBeNull()
+    expect(byRef.get('F')?.outcome).toBe('pending')
+    expect(byRef.get('F')?.resolved_at).toBeNull()
     expect(byRef.get('P')?.outcome).toBe('pending')
   })
 
@@ -211,6 +214,87 @@ describe('parseOrderCsv — Verafo\'s own template still works', () => {
     expect(r.orders[0].store).toBe('Sanicore')
     expect(r.orders[0].outcome).toBe('refused')
     expect(r.orders[1].quantity).toBe(2)
+  })
+})
+
+describe("parseOrderCsv — a file mapped by AI (stranger's spreadsheet)", () => {
+  /*
+   * The columns a real courier/agency sheet uses. Nothing here matches the alias
+   * table: "Ship To Mobile", "Item Description", "Amount Collected", and a
+   * status column whose words are the merchant's, not ours.
+   */
+  const STRANGE = [
+    'Order Ref,Ship To Mobile,Item Description,Amount Collected,Qty,Delivery Status,Town,Ship Date',
+    'A-1001,0300 1234567,Lawn suit 3pc,4999,1,Delivered,Lahore,2026-07-02 11:00',
+    'A-1002,+92 321 4445555,Cotton kurta,2199,2,RTO - customer refused,Karachi,2026-07-03 09:30',
+    'A-1003,0321 7778888,Silk dupatta,1499,1,In transit,Multan,2026-07-04 16:15',
+  ].join('\n')
+
+  const MAP = {
+    columns: {
+      phone: 'Ship To Mobile',
+      product: 'Item Description',
+      price: 'Amount Collected',
+      quantity: 'Qty',
+      city: 'Town',
+      ordered_at: 'Ship Date',
+      outcome: 'Delivery Status',
+      reference: 'Order Ref',
+    },
+    status: {
+      delivered: 'accepted' as const,
+      'rto - customer refused': 'refused' as const,
+      'in transit': 'pending' as const,
+    },
+  }
+
+  it('is unreadable without the map — this is the case the AI reader exists for', () => {
+    const r = parseOrderCsv(STRANGE)
+    expect(r.orders).toHaveLength(0)
+    expect(r.format).toBeNull()
+  })
+
+  it('reads every row once a mapping is supplied', () => {
+    const r = parseOrderCsv(STRANGE, MAP)
+    expect(r.orders).toHaveLength(3)
+    // 0300… is kept in the spelling the file used, exactly as everywhere else in
+    // the importer: Verafo matches phones by their last ten digits, and rewriting
+    // the spelling here is what used to create duplicate buyers.
+    expect(r.orders[0].phone).toBe('03001234567')
+    expect(r.orders[0].product).toBe('Lawn suit 3pc')
+    expect(r.orders[0].price).toBe(4999)
+    expect(r.orders[0].city).toBe('Lahore')
+    expect(r.orders[0].ordered_at?.slice(0, 10)).toBe('2026-07-02')
+    expect(r.orders[0].reference).toBe('A-1001')
+  })
+
+  it('translates the file\'s own status words into outcomes', () => {
+    const r = parseOrderCsv(STRANGE, MAP)
+    expect(r.orders[0].outcome).toBe('accepted')
+    expect(r.orders[1].outcome).toBe('refused')
+    expect(r.orders[2].outcome).toBe('pending')
+    // Quantity multiplies the line amount, as everywhere else in the importer.
+    expect(r.orders[1].price).toBe(2199 * 2)
+  })
+
+  it('ignores a mapping entry that names a column the file does not have', () => {
+    const r = parseOrderCsv(STRANGE, {
+      columns: { ...MAP.columns, address: 'Home Address' },
+      status: MAP.status,
+    })
+    expect(r.orders).toHaveLength(3)
+    expect(r.orders[0].address).toBe('')
+  })
+
+  it('falls back to the built-in vocabulary for a word the mapping never saw', () => {
+    const r = parseOrderCsv(STRANGE, { columns: MAP.columns, status: {} })
+    // "delivered" is in the parser's own word list too, so an empty mapping still
+    // reads it correctly...
+    expect(r.orders[0].outcome).toBe('accepted')
+    // ...and "rto - customer refused" is refused by the word list as well. A word
+    // neither knows would leave the outcome unset rather than invent one.
+    expect(r.orders[1].outcome).toBe('refused')
+    expect(r.orders[2].outcome).toBe('pending')
   })
 })
 
