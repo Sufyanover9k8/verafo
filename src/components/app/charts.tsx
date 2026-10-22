@@ -138,6 +138,18 @@ export interface MetricPoint {
   [key: string]: string | number
 }
 
+/**
+ * An optional dashed line for the same window one period ago, so a merchant can
+ * see "more orders than last week" without doing the subtraction themselves.
+ * Only offered when the previous window is a fair comparison — the caller
+ * decides that and passes nothing otherwise.
+ */
+export interface MetricCompare {
+  key: string
+  name: string
+  color: string
+}
+
 interface MetricChartProps {
   data: MetricPoint[]
   /** Which series are switched on. Keys match `series[].key`. */
@@ -146,6 +158,8 @@ interface MetricChartProps {
   height?: number
   label?: string
   emptyText?: string
+  /** Drawn as a dashed line on the left axis. */
+  compare?: MetricCompare
 }
 
 /**
@@ -163,6 +177,7 @@ export function MetricTrend({
   height = 260,
   label,
   emptyText = 'No data in this period yet.',
+  compare,
 }: MetricChartProps) {
   const on = series.filter((s) => active.includes(s.key))
   const gid = `metric-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
@@ -237,7 +252,20 @@ export function MetricTrend({
           {hasBars && (
             <Bar yAxisId="left" dataKey={left[0].key} fill={`url(#${gid})`} stroke="var(--chart-1)" strokeWidth={1} radius={[4, 4, 0, 0]} maxBarSize={34} />
           )}
-          {[...left.slice(1), ...right].map((s) => (
+          {compare && (
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey={compare.key}
+              name={compare.name}
+              stroke={compare.color}
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+              dot={false}
+              activeDot={false}
+              legendType="none"
+            />
+          )}          {[...left.slice(1), ...right].map((s) => (
             <Line
               key={s.key}
               yAxisId={s.axis}

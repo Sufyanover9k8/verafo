@@ -219,7 +219,7 @@ export function Decide() {
         skeletonHeight={280}
       >
         {queue.length === 0 ? (
-          <Card className="gap-0 p-6">
+          <Card className="gap-0 p-5">
             <EmptyHint
               large
               title={pendingCount === 0 ? 'Nothing is waiting for a decision' : 'Every waiting order has a decision'}
@@ -253,7 +253,7 @@ export function Decide() {
 
               return (
                 <li key={order.id}>
-                  <Card className="gap-0 p-6">
+                  <Card className="gap-0 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0">
                         <Link

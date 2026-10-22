@@ -102,26 +102,36 @@ export interface DonutSlice {
  * carrying every count and share. The ring is decorative; the legend beside it
  * is the accessible reading, so the numbers are never only in the graphic.
  */
-export function RiskDonut({ slices, total }: { slices: DonutSlice[]; total: number }) {
+export function RiskDonut({
+  slices,
+  total,
+  size = 148,
+}: {
+  slices: DonutSlice[]
+  total: number
+  /** Outer diameter in px. The ring stroke and radius scale with it. */
+  size?: number
+}) {
+  const R = Math.round(size * 0.365)
+  const STROKE = Math.round(size * 0.122)
+  const centre = size / 2
   const sum = slices.reduce((n, s) => n + s.value, 0)
-  const R = 54
-  const STROKE = 18
   const C = 2 * Math.PI * R
   let offset = 0
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-6">
-      <div className="relative shrink-0" style={{ width: 148, height: 148 }}>
-        <svg width={148} height={148} viewBox="0 0 148 148" className="-rotate-90" aria-hidden="true">
-          <circle cx={74} cy={74} r={R} fill="none" strokeWidth={STROKE} className="stroke-muted" />
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden="true">
+          <circle cx={centre} cy={centre} r={R} fill="none" strokeWidth={STROKE} className="stroke-muted" />
           {sum > 0 &&
             slices.map((s) => {
               const len = (s.value / sum) * C
               const el = (
                 <circle
                   key={s.label}
-                  cx={74}
-                  cy={74}
+                  cx={centre}
+                  cy={centre}
                   r={R}
                   fill="none"
                   strokeWidth={STROKE}

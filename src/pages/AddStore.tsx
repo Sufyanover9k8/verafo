@@ -129,11 +129,11 @@ export function AddStore() {
       />
 
       {checking ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <EmptyState icon="shield-checkmark" title="Checking access…" />
         </Card>
       ) : !admin ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <EmptyState icon="storefront"
             title="Restricted to admins"
             detail="Only administrators can add stores."
@@ -147,9 +147,9 @@ export function AddStore() {
           </div>
         </Card>
       ) : (
-        <Reveal stagger className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <Card className="gap-0 p-6">
-            <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+        <Reveal stagger className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <Card className="gap-0 p-5">
+            <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="add-store-name" className="text-[13px] font-medium text-muted-foreground">
                   Brand name
@@ -256,7 +256,7 @@ export function AddStore() {
             <span className="mb-3 block text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
               live preview
             </span>
-            <div className="rounded-[16px] border border-border bg-card p-6">
+            <div className="rounded-[var(--r-card)] border border-border bg-card p-5">
               <div className="flex items-center gap-3">
                 <span className="grid size-11 shrink-0 place-items-center rounded-[10px] bg-muted text-[15px] font-semibold text-foreground">
                   {initial}

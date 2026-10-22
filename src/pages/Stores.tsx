@@ -127,12 +127,12 @@ export function Stores() {
       />
 
       {checking ? (
-        <Card className="gap-3 p-6" aria-busy="true">
+        <Card className="gap-3 p-5" aria-busy="true">
           <Skeleton height={16} width="40%" />
           <Skeleton height={16} width="65%" />
         </Card>
       ) : !admin ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <EmptyState
             icon="shield-checkmark"
             title="Restricted to admins"
@@ -231,24 +231,27 @@ export function Stores() {
                       </div>
                     </div>
 
-                    <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-muted-foreground">
-                      <div>
-                        <dd className="font-mono text-[14px] font-semibold tabular-nums text-foreground">
+                    {/* Right-aligned numeric columns on fixed tracks: the three
+                        figures then share an edge and a baseline from row to
+                        row, instead of each pair sizing itself. */}
+                    <dl className="ms-auto grid shrink-0 grid-cols-[4rem_8rem_4rem] gap-x-4 text-end text-[12.5px] text-muted-foreground">
+                      <div className="flex flex-col-reverse">
+                        <dt>orders</dt>
+                        <dd className="whitespace-nowrap font-mono text-[14px] font-semibold tabular-nums text-foreground">
                           <CountUpNumber value={s.orders} />
                         </dd>
-                        <dt>orders</dt>
                       </div>
-                      <div>
-                        <dd className="font-mono text-[14px] font-semibold tabular-nums text-foreground">
+                      <div className="flex flex-col-reverse">
+                        <dt>sales</dt>
+                        <dd className="whitespace-nowrap font-mono text-[14px] font-semibold tabular-nums text-foreground">
                           <CountUpNumber prefix="PKR " value={s.revenue} />
                         </dd>
-                        <dt>sales</dt>
                       </div>
-                      <div>
-                        <dd className="font-mono text-[14px] font-semibold tabular-nums text-foreground">
+                      <div className="flex flex-col-reverse">
+                        <dt>buyers</dt>
+                        <dd className="whitespace-nowrap font-mono text-[14px] font-semibold tabular-nums text-foreground">
                           <CountUpNumber value={s.buyers} />
                         </dd>
-                        <dt>buyers</dt>
                       </div>
                     </dl>
 
@@ -301,12 +304,11 @@ export function Stores() {
             </span>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="h-11" onClick={() => setPendingDelete(null)}>
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              className="h-11"
               disabled={deletingId !== null}
               onClick={() => pendingDelete && void handleDelete(pendingDelete)}
             >

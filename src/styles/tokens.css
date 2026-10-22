@@ -265,10 +265,14 @@
   --z-dropdown: 40;  --z-modal-backdrop: 50;  --z-modal: 60;  --z-toast: 70;
 
   /* ── Layout ────────────────────────────────────────────── */
-  --v-sidebar-w: 260px;
+  /* These mirror what actually renders: the sidebar is `16rem` in
+     components/ui/sidebar.tsx and the top bar is `h-14` in site-header.tsx. */
+  --v-sidebar-w: 256px;
   --v-sidebar-w-collapsed: 68px;
-  --v-topbar-h: 60px;
-  --v-content-max: 1200px;
+  --v-topbar-h: 56px;
+  /* The widest the page column gets. Beyond this the cards stop reading as
+     cards and the eye travels the whole screen for one label/value pair. */
+  --v-content-max: 1400px;
   --v-outline: var(--teal);
   --v-focus-ring: 2px solid var(--teal);
   --v-focus-offset: 3px;

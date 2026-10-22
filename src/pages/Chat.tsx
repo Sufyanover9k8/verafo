@@ -1277,7 +1277,7 @@ export function Chat() {
           // On phones the chrome above is just the title now, so this reserves
           // less than the desktop offset and hands the transcript the ~48px it
           // was giving away.
-          'grid h-[calc(100dvh-var(--v-topbar-h)-5rem)] min-h-[26rem] gap-4 sm:h-[calc(100dvh-var(--v-topbar-h)-8rem)] sm:min-h-[30rem]',
+          'grid h-[calc(100dvh-var(--v-topbar-h)-5rem)] min-h-[26rem] gap-5 sm:h-[calc(100dvh-var(--v-topbar-h)-8rem)] sm:min-h-[30rem]',
           railOpen ? 'lg:grid-cols-[18rem_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)]',
         )}
       >
@@ -1287,7 +1287,7 @@ export function Chat() {
             // `min-w-0` matters: without it the search input's min-content width
             // set the column, and on a phone the rail grew wider than the screen
             // instead of shrinking with it.
-            'flex min-h-0 min-w-0 flex-col gap-3 rounded-[16px] border border-border bg-card p-4',
+            'flex min-h-0 min-w-0 flex-col gap-3 rounded-[var(--r-card)] border border-border bg-card p-4',
             /*
              * Phones: an overlay drawer, not a second row.
              *
@@ -1489,7 +1489,7 @@ export function Chat() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-11 w-full justify-start gap-2 md:h-9"
+              className="w-full justify-start gap-2"
               onClick={() => setManageMode((v) => !v)}
             >
               {manageMode ? <X className="size-3.5" /> : <CheckCheck className="size-3.5" />}
@@ -1499,7 +1499,7 @@ export function Chat() {
         </aside>
 
         {/* ── The conversation ── */}
-        <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-border bg-card">
+        <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-border bg-card">
           {!activeChat ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-6">
               <EmptyHint
@@ -1636,8 +1636,8 @@ export function Chat() {
               <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5">
                 {loading && (
                   <div className="flex flex-col gap-3" aria-hidden="true">
-                    <div className="h-16 w-3/5 animate-pulse rounded-[16px] bg-muted" />
-                    <div className="h-24 w-4/5 animate-pulse rounded-[16px] bg-muted" />
+                    <div className="h-16 w-3/5 animate-pulse rounded-[var(--r-card)] bg-muted" />
+                    <div className="h-24 w-4/5 animate-pulse rounded-[var(--r-card)] bg-muted" />
                   </div>
                 )}
 
@@ -1675,7 +1675,7 @@ export function Chat() {
                       <AlertTriangle className="size-3.5" aria-hidden="true" /> Not answered
                     </span>
                     <div
-                      className="rounded-[16px] rounded-es-[4px] border border-s-[3px] border-[var(--v-watch-bar)] bg-[var(--v-watch-bg)] px-4 py-3.5"
+                      className="rounded-[var(--r-card)] rounded-es-[4px] border border-s-[3px] border-[var(--v-watch-bar)] bg-[var(--v-watch-bg)] px-4 py-3.5"
                       role="alert"
                     >
                       <p className="text-[14px] font-semibold text-foreground">{failure.failure.title}</p>
@@ -1729,7 +1729,7 @@ export function Chat() {
                       <Sparkles className="size-3.5" aria-hidden="true" /> Verafo
                     </span>
                     <div
-                      className="flex flex-col gap-3 rounded-[16px] rounded-es-[4px] border border-s-[3px] border-border bg-card px-4 py-3.5"
+                      className="flex flex-col gap-3 rounded-[var(--r-card)] rounded-es-[4px] border border-s-[3px] border-border bg-card px-4 py-3.5"
                       role="status"
                       aria-live="polite"
                     >
@@ -1821,7 +1821,7 @@ export function Chat() {
                     </Button>
 
                     {quickOpen && (
-                      <div className="absolute bottom-[3.25rem] start-0 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-[16px] border border-border bg-popover p-3 shadow-3">
+                      <div className="absolute bottom-[3.25rem] start-0 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-[var(--r-card)] border border-border bg-popover p-3 shadow-3">
                         <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                           Instant reports
                         </p>
@@ -1906,7 +1906,7 @@ export function Chat() {
                         id="mention-listbox"
                         role="listbox"
                         aria-label={mention.kind === 'store' ? 'Matching stores' : 'Matching buyers'}
-                        className="absolute bottom-16 start-14 z-40 max-h-64 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-[16px] border border-border bg-popover p-1 shadow-3"
+                        className="absolute bottom-16 start-14 z-40 max-h-64 w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-[var(--r-card)] border border-border bg-popover p-1 shadow-3"
                       >
                         {mentionRows.length === 0 ? (
                           <p className="px-3 py-2.5 text-[13px] text-muted-foreground">

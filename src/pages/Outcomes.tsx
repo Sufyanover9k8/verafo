@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Check, ListChecks, Loader2, RefreshCw, Search, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { VerdictBadge, bandEvidence } from '../components/app/verdict-badge'
+import { RiskFilter, orderMatchesRisk, type RiskFilterValue } from '../components/app/risk-filter'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
+import { orderTotal, orderUnits } from '../lib/ui/money'
 import { formatScore } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
 import { notificationsChanged } from '../lib/notifications'
@@ -41,11 +43,14 @@ const EXIT_MS = 260
 
 export function Outcomes() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { store } = useStoreScope()
   const [orders, setOrders] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [tab, setTab] = useState<Tab>('pending')
+  /** Which risk band the lists are narrowed to. `all` is the default view. */
+  const [risk, setRisk] = useState<RiskFilterValue>('all')
   const [working, setWorking] = useState<string | null>(null)
   const [leaving, setLeaving] = useState<Record<string, boolean>>({})
   /** Phone typed into the correction search. */
@@ -106,13 +111,22 @@ export function Outcomes() {
 
   useEffect(() => () => timers.current.forEach(window.clearTimeout), [])
 
-  const pending = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending')
-  const resolved = orders.filter((o) => o.outcomes && o.outcomes.status !== 'pending').slice(0, 50)
+  /** Everything still waiting, whatever the risk filter says — the strip above
+   *  describes the book, not the current view. */
+  const pendingAll = orders.filter((o) => !o.outcomes || o.outcomes.status === 'pending')
   /*
-   * A phone search deliberately IGNORES the tab. A merchant correcting an
-   * outcome knows the number, not which list the order is in — searching only
-   * the visible tab would hide exactly the row they came to fix.
+   * The risk band narrows the book before the tabs count it, so "Pending 12"
+   * means twelve of the band you asked for. The phone search below deliberately
+   * ignores both the tab and the band: a merchant correcting an outcome knows
+   * the number, and hiding their row behind an unrelated filter is the one
+   * thing that would make this screen useless.
    */
+  const inBand =
+    risk === 'all'
+      ? orders
+      : orders.filter((o) => orderMatchesRisk(o.buyers?.risk_score, o.buyers?.total_orders, risk))
+  const pending = inBand.filter((o) => !o.outcomes || o.outcomes.status === 'pending')
+  const resolved = inBand.filter((o) => o.outcomes && o.outcomes.status !== 'pending').slice(0, 50)
   const searchKey = phoneKey(phoneQuery)
   const searched = searchKey ? orders.filter((o) => phoneKey(o.buyer_phone).includes(searchKey)) : null
   const visible = searched ?? (tab === 'pending' ? pending : resolved)
@@ -290,7 +304,7 @@ export function Outcomes() {
               Awaiting a verdict
             </p>
             <p className="mt-1.5 text-[21px] leading-none font-semibold tabular-nums text-foreground sm:text-[26px]">
-              {pending.length}
+              {pendingAll.length}
             </p>
             <p className="mt-1.5 text-[11.5px] text-muted-foreground sm:text-[12.5px]">No outcome recorded yet</p>
           </div>
@@ -342,6 +356,16 @@ export function Outcomes() {
             </button>
           )}
         </div>
+        {/* Narrowing the list to one risk band sits beside the search, at the
+            same height, because those are the two things that change what the
+            list below shows. It filters the tabs' counts too. */}
+        <RiskFilter
+          id="outcomes-risk"
+          value={risk}
+          onChange={setRisk}
+          labelled={false}
+          className="min-w-[10.5rem] max-sm:w-full"
+        />
         {searched && (
           <p className="text-[12.5px] text-muted-foreground" aria-live="polite">
             {searched.length} order{searched.length === 1 ? '' : 's'} for that number
@@ -350,57 +374,63 @@ export function Outcomes() {
         )}
       </div>
 
-      <div className="inline-flex flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            aria-pressed={tab === t.key}
-            className={`inline-flex h-11 items-center gap-2 rounded-[10px] px-3 text-[13px] font-semibold transition-colors md:h-8 ${
-              tab === t.key ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
-            }`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-            <span className="rounded-full bg-muted px-2 text-[12px] tabular-nums">{t.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Bulk entry point. The checkboxes themselves only exist in select mode,
-          so the default screen stays a plain list. */}
-      {tab === 'pending' && pending.length > 0 && (
-        <div className="flex flex-wrap items-center justify-end gap-3 text-[12.5px]">
-          {selectMode && (
+      {/* Tabs and the bulk-mode entry point share one row: on its own the
+          "Bulk select" button was an orphan line floating far right above the
+          list, and the tabs wrapped awkwardly on a phone. */}
+      <div className="sticky top-14 z-30 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="inline-flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto rounded-[10px] border border-border bg-card p-1 [scrollbar-width:none] max-sm:flex-1 sm:flex-wrap">
+          {tabs.map((t) => (
             <button
+              key={t.key}
               type="button"
-              className="font-medium text-primary-text hover:underline"
-              onClick={() =>
-                setSelected((s) =>
-                  s.size === pending.length ? new Set() : new Set(pending.map((o) => o.id)),
-                )
-              }
+              aria-pressed={tab === t.key}
+              className={`inline-flex h-11 items-center gap-2 rounded-[10px] px-3 text-[13px] font-semibold transition-colors md:h-8 ${
+                tab === t.key ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setTab(t.key)}
             >
-              {selected.size === pending.length ? 'Clear selection' : `Select all ${pending.length}`}
+              {t.label}
+              <span className="rounded-full bg-muted px-2 text-[12px] tabular-nums">{t.count}</span>
             </button>
-          )}
-          <Button
-            type="button"
-            variant={selectMode ? 'default' : 'outline'}
-            size="sm"
-            className="h-9 gap-1.5 px-3"
-            onClick={() => {
-              setSelectMode((on) => {
-                if (on) setSelected(new Set())
-                return !on
-              })
-            }}
-          >
-            <ListChecks className="size-3.5" />
-            {selectMode ? 'Done' : 'Bulk select'}
-          </Button>
+          ))}
         </div>
-      )}
+
+        {/* Right-hand controls: (on the pending tab) the bulk entry point. */}
+        <div className="ms-auto flex flex-wrap items-center gap-3 text-[12.5px]">
+          {tab === 'pending' && pending.length > 0 && (
+            <>
+              {selectMode && (
+                <button
+                  type="button"
+                  className="font-medium text-primary-text hover:underline"
+                  onClick={() =>
+                    setSelected((s) =>
+                      s.size === pending.length ? new Set() : new Set(pending.map((o) => o.id)),
+                    )
+                  }
+                >
+                  {selected.size === pending.length ? 'Clear selection' : `Select all ${pending.length}`}
+                </button>
+              )}
+              <Button
+                type="button"
+                variant={selectMode ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5 px-3"
+                onClick={() => {
+                  setSelectMode((on) => {
+                    if (on) setSelected(new Set())
+                    return !on
+                  })
+                }}
+              >
+                <ListChecks className="size-3.5" />
+                {selectMode ? 'Done' : 'Bulk select'}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Undo for the most recent change. Stays until another action replaces
           it, so a wrong click is recoverable a few seconds later rather than
@@ -416,7 +446,7 @@ export function Outcomes() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 gap-1.5 px-3"
+            className="gap-1.5 px-3"
             disabled={Boolean(working)}
             onClick={() => void undoLast()}
           >
@@ -479,7 +509,7 @@ export function Outcomes() {
 
       <Card className="gap-0 overflow-hidden p-0">
         {loading ? (
-          <div className="flex flex-col gap-3 p-6" aria-busy="true">
+          <div className="flex flex-col gap-3 p-5" aria-busy="true">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} width="100%" height={16} />
             ))}
@@ -521,10 +551,16 @@ export function Outcomes() {
             {visible.map((o) => {
               const status = (o.outcomes?.status ?? 'pending') as OutcomeStatus
               const busy = working === o.id
+              const units = orderUnits(o.quantity)
+              /* The row opens the buyer, the way a row does in any table. The
+                 action buttons stop the click so accepting never navigates. */
+              const openBuyer = () => navigate(`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`)
               const facts = [
-                o.product_name || o.product_category || 'Untitled product',
+                // The count rides with the product; the money stays the amount
+                // the courier collects, with no "× n" reading as arithmetic.
+                `${o.product_name || o.product_category || 'Untitled product'}${units ? ` (${units} units)` : ''}`,
                 o.stores?.name ?? 'Unknown store',
-                `${money(o.price)}${o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}`,
+                money(orderTotal(o.price, o.quantity)),
                 dateTime(o.ordered_at),
               ]
               return (
@@ -533,10 +569,16 @@ export function Outcomes() {
                   // Keyboard marking: focus a row and press A (accept) or
                   // R (refuse), as this screen has always supported.
                   tabIndex={status === 'pending' ? 0 : undefined}
+                  onClick={selectMode ? undefined : openBuyer}
                   onKeyDown={
                     status === 'pending'
                       ? (e) => {
                           const k = e.key.toLowerCase()
+                          if (k === 'enter' && !selectMode) {
+                            e.preventDefault()
+                            openBuyer()
+                            return
+                          }
                           if (k !== 'a' && k !== 'r') return
                           e.preventDefault()
                           void mark(o, k === 'a' ? 'accepted' : 'refused')
@@ -550,8 +592,9 @@ export function Outcomes() {
                     // of how long the product name is. On a phone the group gets
                     // basis-full, which puts it on its own line at full size
                     // instead of crushing the text into a 40px column.
-                    'flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 transition-opacity sm:px-6',
+                    'flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 transition-opacity focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--teal)] sm:px-6',
                     leaving[o.id] && 'opacity-40',
+                    !selectMode && 'cursor-pointer hover:bg-muted/40',
                   )}
                 >
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
@@ -578,6 +621,8 @@ export function Outcomes() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        title={phone(o.buyer_phone)}
                         className="font-mono text-[13.5px] font-medium text-primary-text hover:underline"
                       >
                         {phone(o.buyer_phone)}
@@ -599,7 +644,7 @@ export function Outcomes() {
                     </p>
                   </div>
 
-                  <div className="flex basis-full justify-end self-center sm:basis-auto">
+                  <div className="flex basis-full justify-end self-center sm:basis-auto" onClick={(e) => e.stopPropagation()}>
                     {/*
                      * Three states, three looks, so the row's current outcome is
                      * unmistakable:

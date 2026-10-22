@@ -19,6 +19,7 @@ import { Avatar } from '../components/Avatar'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { dateTime, money, phone } from '../lib/format'
+import { orderTotal, orderUnits } from '../lib/ui/money'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts } from '../lib/storeStats'
@@ -195,7 +196,7 @@ export function StoreDashboard() {
       />
 
       {!checking && !admin ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <EmptyState
             icon="shield-checkmark"
             title="Restricted to admins"
@@ -210,7 +211,7 @@ export function StoreDashboard() {
           />
         </Card>
       ) : missing ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <EmptyState icon="storefront" title="Store not found" detail="This store may have been removed." />
         </Card>
       ) : (
@@ -233,7 +234,7 @@ export function StoreDashboard() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-5 lg:grid-cols-2">
             <Card className="gap-0">
               <CardHeader>
                 <CardTitle>Sales by city</CardTitle>
@@ -322,6 +323,11 @@ export function StoreDashboard() {
                         <TableCell className="max-w-56">
                           <span className="flex flex-wrap items-center gap-2">
                             <span className="truncate">{o.product_name || o.product_category || 'Untitled product'}</span>
+                            {orderUnits(o.quantity) && (
+                              <span className="shrink-0 text-[11.5px] text-muted-foreground">
+                                {orderUnits(o.quantity)} units
+                              </span>
+                            )}
                             {o.product_category && (
                               <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11.5px] text-muted-foreground">
                                 {o.product_category}
@@ -330,8 +336,7 @@ export function StoreDashboard() {
                           </span>
                         </TableCell>
                         <TableCell className="text-end tabular-nums">
-                          {money(o.price)}
-                          {o.quantity && o.quantity > 1 ? ` × ${o.quantity}` : ''}
+                          {money(orderTotal(o.price, o.quantity))}
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={(o.outcomes?.status ?? 'pending') as OutcomeStatus} />

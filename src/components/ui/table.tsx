@@ -1,11 +1,22 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+/**
+ * A table that scrolls inside its own box.
+ *
+ * `containerClassName` styles that box, not the `<table>`: it is how a long list
+ * gets a sticky header and its own vertical scroll — Orders uses it — without
+ * the page itself growing a second scrollbar.
+ */
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<'table'> & { containerClassName?: string }) {
   return (
     <div
       data-slot='table-container'
-      className='relative w-full overflow-x-auto'
+      className={cn('relative w-full overflow-x-auto', containerClassName)}
     >
       <table
         data-slot='table'

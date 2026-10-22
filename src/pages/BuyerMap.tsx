@@ -760,7 +760,7 @@ export function BuyerMap() {
           </Card>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-2">
           <Card className="gap-0">
             <CardHeader>
               <CardTitle>Cities that refuse most</CardTitle>

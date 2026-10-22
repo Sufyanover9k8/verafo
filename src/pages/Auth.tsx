@@ -154,7 +154,7 @@ export function Auth() {
         </div>
 
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3 rounded-[16px] border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-3 rounded-[var(--r-card)] border border-border bg-card px-4 py-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-primary text-primary-foreground">
               <ShieldCheck size={18} strokeWidth={2} aria-hidden="true" />
             </span>
@@ -167,7 +167,7 @@ export function Auth() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3 rounded-[16px] border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-3 rounded-[var(--r-card)] border border-border bg-card px-4 py-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-warning text-foreground">
               <ShoppingBag size={18} strokeWidth={2} aria-hidden="true" />
             </span>
@@ -180,7 +180,7 @@ export function Auth() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3 rounded-[16px] border border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-3 rounded-[var(--r-card)] border border-border bg-card px-4 py-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-success text-primary-foreground">
               <MessageCircleMore size={18} strokeWidth={2} aria-hidden="true" />
             </span>

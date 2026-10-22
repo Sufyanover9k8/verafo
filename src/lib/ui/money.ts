@@ -27,3 +27,31 @@ export function formatCount(n: number | null | undefined): string {
 export function sentence(parts: (string | null | undefined | false)[]): string {
   return parts.filter((p): p is string => Boolean(p && String(p).trim())).join(' · ')
 }
+
+/**
+ * How many units a row covers — and ZERO for a single unit.
+ *
+ * Callers use it both as a figure and as a condition (`units && …`), so "one
+ * unit" has to read as nothing to say. That is why it is not `quantity ?? 1`:
+ * a row labelled "1 units" is noise.
+ */
+export function orderUnits(quantity: number | null | undefined): number {
+  const n = Math.round(Number(quantity ?? 1))
+  return Number.isFinite(n) && n > 1 ? n : 0
+}
+
+/**
+ * What the order is worth.
+ *
+ * `orders.price` already stores the LINE total (unit price × quantity) — that
+ * is what the importer writes and what the Orders table displays. Multiplying
+ * by quantity here would double-charge every multi-item order, so this
+ * multiplies nothing: it exists so a caller cannot get that wrong, and keeps a
+ * null price null instead of turning it into 0.
+ */
+export function orderTotal(
+  price: number | null | undefined,
+  _quantity?: number | null,
+): number | null {
+  return price == null || Number.isNaN(Number(price)) ? null : Number(price)
+}

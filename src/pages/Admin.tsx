@@ -117,17 +117,17 @@ export function Admin() {
       />
 
       {checking ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <p className="text-[13px] text-muted-foreground">Checking your access…</p>
         </Card>
       ) : !admin ? (
-        <Card className="gap-0 p-6">
+        <Card className="gap-0 p-5">
           <EmptyState
             icon="shield-checkmark"
             title="Restricted to admins"
             detail="Only administrators can send notifications. Head back to the dashboard to continue."
             action={
-              <Button asChild className="h-11 gap-2 rounded-full px-5">
+              <Button asChild className="gap-2 rounded-full px-5">
                 <Link to="/">
                   <ArrowRight className="size-4" /> Back to dashboard
                 </Link>
@@ -172,7 +172,6 @@ export function Admin() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="owner@brand.com"
-                  className="h-11"
                   autoComplete="off"
                 />
               </div>
@@ -186,7 +185,6 @@ export function Admin() {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Scheduled maintenance tonight"
                 maxLength={120}
-                className="h-11"
               />
             </div>
 
@@ -227,7 +225,7 @@ export function Admin() {
                 <Users className="size-3.5" aria-hidden="true" />
                 {audience === 'all' ? 'Goes to every store owner and admin' : 'Goes to one inbox'}
               </p>
-              <Button className="h-11 gap-2 rounded-full px-5" disabled={sending} onClick={() => void onSend()}>
+              <Button className="gap-2 rounded-full px-5" disabled={sending} onClick={() => void onSend()}>
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                 {sending ? 'Sending…' : 'Send notification'}
               </Button>

@@ -117,7 +117,7 @@ export function Simulate() {
         skeletonHeight={320}
       >
         {orders.length === 0 ? (
-          <Card className="gap-0 p-6">
+          <Card className="gap-0 p-5">
             <EmptyHint
               large
               title="No orders to test against"
@@ -127,10 +127,10 @@ export function Simulate() {
         ) : (
           <>
             {/* Controls */}
-            <Card className="gap-0 p-6">
+            <Card className="gap-0 p-5">
               <h2 className="text-[15px] font-semibold text-foreground">The rule you are testing</h2>
 
-              <div className="mt-5 flex flex-col gap-6">
+              <div className="mt-5 flex flex-col gap-5">
                 <div>
                   <label htmlFor="sim-score" className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-[14px] font-medium text-foreground">
@@ -217,7 +217,7 @@ export function Simulate() {
             </Card>
 
             {/* Results */}
-            <Card className="gap-0 p-6">
+            <Card className="gap-0 p-5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-[15px] font-semibold text-foreground">What would have happened</h2>
                 <p className="text-[11.5px] text-muted-foreground">
@@ -230,7 +230,7 @@ export function Simulate() {
                   { key: 'affected', title: 'Would need confirmation', b: result.affected, tone: 'border-risk-watch/40 bg-risk-watch-soft' },
                   { key: 'untouched', title: 'Would ship as normal', b: result.untouched, tone: 'border-border bg-muted' },
                 ].map((row) => (
-                  <div key={row.key} className={`rounded-[16px] border p-5 ${row.tone}`}>
+                  <div key={row.key} className={`rounded-[var(--r-card)] border p-5 ${row.tone}`}>
                     <p className="text-[11.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
                       {row.title}
                     </p>

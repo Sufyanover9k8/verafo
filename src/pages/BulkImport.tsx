@@ -166,7 +166,7 @@ function Panel({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-[16px] border border-border bg-card p-6">
+    <section className="rounded-[var(--r-card)] border border-border bg-card p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
           <Icon className="size-4 shrink-0 text-primary-text" aria-hidden="true" />
@@ -458,7 +458,7 @@ export function BulkImport() {
         description="Upload your Shopify orders export as it is, or paste a CSV. Risk scores recompute automatically."
       />
 
-      <Reveal stagger className="flex flex-col gap-6">
+      <Reveal stagger className="flex flex-col gap-5">
         <Panel
           icon={FileText}
           title="What to upload"
@@ -676,7 +676,10 @@ export function BulkImport() {
             </p>
           )}
 
-          {parsed.errors.length > 0 && (
+          {/* Nothing typed yet is not an error. The parser reports "File is
+              empty" for an empty box, which on a pristine page read as a red
+              failure before the merchant had done anything. */}
+          {parsed.errors.length > 0 && text.trim().length > 0 && (
             <div className="mt-3 flex flex-col gap-1.5" role="alert">
               {parsed.errors.map((e, i) => (
                 <p

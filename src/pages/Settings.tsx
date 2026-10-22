@@ -71,8 +71,8 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[16px] border border-border bg-card p-6">
-      <div className="mb-4 flex items-center gap-2.5">
+    <section className="rounded-[var(--r-card)] border border-border bg-card p-5">
+      <div className="mb-3 flex items-center gap-2.5">
         <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-muted text-primary-text">
           <Icon className="size-4" aria-hidden="true" />
         </span>
@@ -291,7 +291,7 @@ export function Settings() {
     return (
       <PageShell>
         <PageHeader title="Settings" description="Appearance, data and connection — everything in one place." />
-        <div className="rounded-[16px] border border-border bg-card p-6">
+        <div className="rounded-[var(--r-card)] border border-border bg-card p-5">
           <CardState loading skeletonHeight={280}>{null}</CardState>
         </div>
       </PageShell>
@@ -304,7 +304,7 @@ export function Settings() {
     <PageShell>
       <PageHeader title="Settings" description="Appearance, data and connection — everything in one place." />
 
-      <Reveal stagger className="flex flex-col gap-6">
+      <Reveal stagger className="flex flex-col gap-5">
         <Section icon={User} eyebrow="Personal information">
           <Row
             title="Your name"
@@ -539,7 +539,6 @@ export function Settings() {
             </Button>
             <Button
               variant="destructive"
-              className="h-11"
               onClick={() => {
                 setConfirmSignOut(false)
                 void supabase?.auth.signOut()

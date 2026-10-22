@@ -47,8 +47,8 @@ function emptyGlyph(name: string | undefined, className: string): ReactNode {
 export function NeedsSetup() {
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-6">
-      <div className="flex max-w-lg flex-col items-center gap-3 rounded-[16px] border border-border bg-card p-8 text-center">
-        <span className="grid size-12 place-items-center rounded-[16px] bg-muted text-muted-foreground">
+      <div className="flex max-w-lg flex-col items-center gap-3 rounded-[var(--r-card)] border border-border bg-card p-8 text-center">
+        <span className="grid size-12 place-items-center rounded-[var(--r-card)] bg-muted text-muted-foreground">
           <CloudOff className="size-6" aria-hidden="true" />
         </span>
         <h2 className="text-[18px] font-semibold text-foreground">Supabase not configured</h2>

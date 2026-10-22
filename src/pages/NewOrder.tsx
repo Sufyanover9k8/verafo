@@ -242,8 +242,8 @@ export function NewOrder() {
         description="Log an order and see the buyer's risk profile instantly — across every connected store."
       />
 
-      <Reveal stagger className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <Card className="gap-5 p-6">
+      <Reveal stagger className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <Card className="gap-5 p-5">
           <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
             {/* The phone field and its live verdict share one row. */}
             <div className="flex flex-wrap items-end gap-3">
@@ -365,7 +365,7 @@ export function NewOrder() {
             </div>
 
             <div className="border-t border-border pt-5">
-              <Button type="submit" className="h-11 w-full gap-2 px-5 sm:w-auto" disabled={submitting}>
+              <Button type="submit" className="w-full gap-2 px-5 sm:w-auto" disabled={submitting}>
                 {submitting ? (
                   <>
                     <Loader2 className="size-4 animate-spin" /> Logging order…
@@ -380,7 +380,7 @@ export function NewOrder() {
           </form>
         </Card>
 
-        <Card className="gap-4 self-start p-6">
+        <Card className="gap-4 self-start p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[15px] font-semibold text-foreground">Buyer insight</h2>
             <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
@@ -447,7 +447,7 @@ export function NewOrder() {
 
       {lastOrder && (
         <Reveal>
-          <div className="flex flex-wrap items-center gap-4 rounded-[16px] border border-risk-safe/40 bg-risk-safe-soft p-5">
+          <div className="flex flex-wrap items-center gap-4 rounded-[var(--r-card)] border border-risk-safe/40 bg-risk-safe-soft p-5">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-risk-safe-strong">
               <BadgeCheck className="size-5" aria-hidden="true" />
             </span>

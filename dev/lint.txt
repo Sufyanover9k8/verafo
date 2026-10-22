@@ -1,0 +1,191 @@
+﻿node.exe : npm warn Unknown env config "side-effects-cache". This will stop working in the next major version of npm. 
+See `npm help npmrc` for supported config options.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...config options.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\components\app\chat-message.tsx
+  81:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  92:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\components\app\insight-cards.tsx
+  39:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\components\app\verdict-badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  44:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\components\ui\badge.tsx
+  45:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\components\ui\button.tsx
+  58:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\components\ui\sidebar.tsx
+  726:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\lib\session.tsx
+  95:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\lib\store.tsx
+  142:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\lib\theme.tsx
+  16:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  69:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\backup\lib\toast.tsx
+  94:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\live\src\lib\session.tsx
+  95:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\live\src\lib\store.tsx
+  142:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\live\src\lib\theme.tsx
+  16:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  69:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\live\src\lib\toast.tsx
+  94:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\App.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\components\States.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\lib\toast.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\AddStore.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Admin.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Auth.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\BuyerMap.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Chat.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Decide.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Lookup.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\NewOrder.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Orders.tsx
+  43:10  error  'orderTotal' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Outcomes.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Scan.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Settings.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Simulate.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\StoreDashboard.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\merged\pages\Stores.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_theirs2\norm\out.tsx
+  1:0  error  Parsing error: File appears to be binary
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\components\app\chat-message.tsx
+  81:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  92:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\components\app\insight-cards.tsx
+  39:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\components\app\verdict-badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  44:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\components\ui\badge.tsx
+  45:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\components\ui\button.tsx
+  58:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\components\ui\sidebar.tsx
+  726:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\lib\session.tsx
+  95:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\lib\store.tsx
+  142:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\lib\theme.tsx
+  16:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  69:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\_ui-backup-20261022-015502\src\lib\toast.tsx
+  94:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\app\chat-message.tsx
+  81:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  92:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\app\insight-cards.tsx
+  39:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\app\risk-filter.tsx
+  42:14  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  58:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\app\verdict-badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  44:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\ui\badge.tsx
+  45:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\ui\button.tsx
+  58:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\src\components\ui\sidebar.tsx
+  726:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\ui-only\src\components\app\chat-message.tsx
+  81:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  92:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\ui-only\src\components\app\insight-cards.tsx
+  39:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\ui-only\src\components\app\verdict-badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  44:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\ui-only\src\components\ui\badge.tsx
+  45:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\ui-only\src\components\ui\button.tsx
+  58:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\lavee\Desktop\Verafo\verafo-frontend\ui-only\src\components\ui\sidebar.tsx
+  726:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+✖ 68 problems (19 errors, 49 warnings)
+

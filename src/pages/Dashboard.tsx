@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/app/page-header'
 import { PageShell } from '@/components/app/page-shell'
 import { Segmented } from '@/components/app/segmented'
 import { StatusBadge } from '@/components/app/status-badge'
-import { MetricTrend, TrendArea, type MetricSeries } from '@/components/app/charts'
+import { MetricTrend, TrendArea, type MetricCompare, type MetricSeries } from '@/components/app/charts'
 import { KpiCard, RiskDonut, type DonutSlice } from '@/components/app/kpi-cards'
 import { VerdictBadge } from '@/components/app/verdict-badge'
 import { CardState } from '@/components/app/card-state'
@@ -219,10 +219,12 @@ export function Dashboard() {
       values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : null
 
     const dayCount = new Map<string, number>()
+    const refusedByDay = new Map<string, number>()
     for (const o of orders) {
       if (!o.ordered_at) continue
       const k = keyOf(new Date(o.ordered_at))
       dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
+      if (o.outcomes?.status === 'refused') refusedByDay.set(k, (refusedByDay.get(k) ?? 0) + 1)
     }
 
     /**
@@ -231,7 +233,7 @@ export function Dashboard() {
      * the buyers who ordered that day — presented as a TREND, never as a
      * per-order score, which this app does not have.
      */
-    const days: { label: string; orders: number; revenue: number; risk: number | null }[] = []
+    const days: { label: string; orders: number; revenue: number; risk: number | null; refused: number }[] = []
     const spendByDay = new Map<string, number>()
     const riskByDay = new Map<string, number[]>()
     for (const o of orders) {
@@ -255,7 +257,18 @@ export function Dashboard() {
         orders: dayCount.get(k) ?? 0,
         revenue: spendByDay.get(k) ?? 0,
         risk: averageOf(riskByDay.get(k) ?? []),
+        refused: refusedByDay.get(k) ?? 0,
       })
+    }
+
+    /*
+     * The same window, one period earlier — the ghost line behind the volume
+     * chart. It reads the day buckets already built above, so it costs no extra
+     * query and cannot disagree with the current line about which days are which.
+     */
+    const previousDays: number[] = []
+    for (let i = range - 1; i >= 0; i--) {
+      previousDays.push(dayCount.get(keyOf(new Date(now.getTime() - (i + range) * 86400000))) ?? 0)
     }
 
     /** Totals for any whole-day window ending `offsetDays` ago. */
@@ -300,6 +313,7 @@ export function Dashboard() {
       avg,
       pending,
       days,
+      previousDays,
       current,
       previous,
       deltas: {
@@ -485,6 +499,7 @@ export function Dashboard() {
       deltaLabel,
       upIsGood: true,
       hint: 'Orders placed in this period',
+      spark: stats.days.map((d) => d.orders),
     },
     {
       label: `Revenue · last ${periodLabel}`,
@@ -494,6 +509,7 @@ export function Dashboard() {
       deltaLabel,
       upIsGood: true,
       hint: 'No order in this period carries a price',
+      spark: stats.days.map((d) => d.revenue),
     },
     {
       label: `Refused · last ${periodLabel}`,
@@ -503,6 +519,7 @@ export function Dashboard() {
       deltaLabel,
       upIsGood: false,
       hint: 'Orders marked refused, returned to origin',
+      spark: stats.days.map((d) => d.refused),
     },
     {
       label: 'Average risk',
@@ -510,6 +527,10 @@ export function Dashboard() {
       icon: Gauge,
       delta: null,
       hint: `${TONE_UI[averageBand].word} · ${buyers.length} buyer${buyers.length === 1 ? '' : 's'} scored`,
+      // The average-risk series has gaps (a day with no resolved order has no
+      // average); the sparkline skips them rather than plotting a zero.
+      spark: stats.days.map((d) => d.risk),
+      sparkTone: 'muted' as const,
     },
   ]
 
@@ -539,12 +560,24 @@ export function Dashboard() {
     },
   ]
 
-  const metricData = stats.days.map((d) => ({
+  const metricData = stats.days.map((d, i) => ({
     label: d.label,
     orders: d.orders,
     revenue: d.revenue,
     risk: d.risk ?? 0,
+    // The ghost series only exists to give the bars a past to compare against.
+    prev: stats.previousDays[i] ?? 0,
   }))
+
+  /**
+   * Show the previous period only when the loaded book actually reaches back
+   * that far: the query takes the newest 500 orders, so on a busy network the
+   * older window is truncated and the line would understate the past.
+   */
+  const comparePrevious: MetricCompare | undefined =
+    orders.length < 500
+      ? { key: 'prev', name: `Previous ${periodLabel}`, color: 'var(--line-2)' }
+      : undefined
 
   const donutSlices: DonutSlice[] = buckets.map((b) => ({
     label: b.label,
@@ -626,16 +659,7 @@ export function Dashboard() {
       {!loading && !ordersError && orders.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {kpiCards.map((k) => (
-            <KpiCard
-              key={k.label}
-              label={k.label}
-              value={k.value}
-              icon={k.icon}
-              delta={k.delta}
-              deltaLabel={deltaLabel}
-              upIsGood={k.upIsGood}
-              hint={k.hint}
-            />
+            <KpiCard key={k.label} {...k} deltaLabel={k.delta == null ? undefined : deltaLabel} />
           ))}
         </div>
       )}
@@ -693,7 +717,7 @@ export function Dashboard() {
           Based on your {attentionCount} order{attentionCount === 1 ? '' : 's'} waiting for a decision.
         </p>
         <div className="mt-4">
-          <Button asChild className="h-11 w-full sm:w-auto">
+          <Button asChild className="w-full sm:w-auto">
             <Link to="/orders/pending">
               Review orders <ArrowRight className="size-4" />
             </Link>
@@ -722,6 +746,7 @@ export function Dashboard() {
               onRetry={() => void load()}
               empty={attention.length === 0}
               emptyText="No order from a risky buyer is waiting on you."
+              skeleton="list"
               skeletonHeight={200}
             >
               <ul className="-mx-2 m-0 list-none divide-y divide-border p-0">
@@ -740,10 +765,16 @@ export function Dashboard() {
                         className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-[10px] px-2 transition-colors hover:bg-muted/60"
                       >
                         <div className="min-w-0">
-                          <div className="truncate font-mono text-[13px] font-medium whitespace-nowrap">
+                          <div
+                            className="truncate font-mono text-[13px] font-medium whitespace-nowrap"
+                            title={phone(order.buyer_phone)}
+                          >
                             {phone(order.buyer_phone)}
                           </div>
-                          <div className="truncate text-[13px] text-muted-foreground">
+                          <div
+                            className="truncate text-[13px] text-muted-foreground"
+                            title={order.product_name || order.product_category || 'Order'}
+                          >
                             {order.product_name || order.product_category || 'Order'}
                           </div>
                         </div>
@@ -765,6 +796,30 @@ export function Dashboard() {
               <p className="mt-3 text-[11.5px] text-muted-foreground">
                 These open your phone or WhatsApp. Verafo does not send messages for you.
               </p>
+            </CardState>
+          </CardContent>
+        </Card>
+
+        {/* Paired with the call list: "who needs you" and "how risky the book
+            is" answer the same question, and together they fill the row. On its
+            own the call list left half of a two-column grid empty. */}
+        <Card className="gap-0">
+          <CardHeader>
+            <CardTitle>Risk distribution</CardTitle>
+            <CardDescription>
+              {isAdmin ? 'Every buyer on the network.' : 'Buyers who ordered from your store.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col justify-center">
+            <CardState
+              loading={loading}
+              error={buyersError}
+              onRetry={() => void load()}
+              empty={distTotal === 0}
+              emptyText="No buyers have been scored yet."
+              skeletonHeight={200}
+            >
+              <RiskDonut slices={donutSlices} total={distTotal} size={370} />
             </CardState>
           </CardContent>
         </Card>
@@ -817,18 +872,33 @@ export function Dashboard() {
             })}
           </div>
 
+          {/* The ghost line is not switchable, so it gets a static legend next
+              to the toggles rather than a fifth chip that looks clickable. */}
+          {comparePrevious && (
+            <p className="inline-flex items-center gap-2 text-[12.5px] text-muted-foreground">
+              <span
+                className="h-0 w-4 border-t border-dashed"
+                style={{ borderColor: comparePrevious.color }}
+                aria-hidden="true"
+              />
+              {comparePrevious.name} orders
+            </p>
+          )}
+
           <CardState
             loading={loading}
             error={ordersError}
             onRetry={() => void load()}
             empty={stats.days.every((d) => d.orders === 0)}
             emptyText={trendEmptyText('orders')}
+            skeleton="chart"
             skeletonHeight={260}
           >
             <MetricTrend
               data={metricData}
               series={metricSeries}
               active={metrics}
+              compare={comparePrevious}
               label={`Orders, revenue and average risk per day over the last ${range} days`}
               emptyText={trendEmptyText('orders')}
             />
@@ -836,30 +906,9 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* How risky the book is, what COD is carrying, and the daily sales line
-          the admin-only daily_sales function feeds. */}
-      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-        <Card className="gap-0">
-          <CardHeader>
-            <CardTitle>Risk distribution</CardTitle>
-            <CardDescription>
-              {isAdmin ? 'Every buyer on the network.' : 'Buyers who ordered from your store.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CardState
-              loading={loading}
-              error={buyersError}
-              onRetry={() => void load()}
-              empty={distTotal === 0}
-              emptyText="No buyers have been scored yet."
-              skeletonHeight={200}
-            >
-              <RiskDonut slices={donutSlices} total={distTotal} />
-            </CardState>
-          </CardContent>
-        </Card>
-
+      {/* What COD is carrying and the daily sales line the admin-only
+          daily_sales function feeds. Two cards, so two columns. */}
+      <div className="grid gap-5 lg:grid-cols-2">
         {!loading && !ordersError && (
           <MoneyRiskCards
             codAtRisk={codAtRisk}
@@ -882,6 +931,7 @@ export function Dashboard() {
               onRetry={() => void load()}
               empty={salesData.length === 0 || salesData.every((d) => d.a === 0)}
               emptyText={trendEmptyText('sales')}
+              skeleton="chart"
               skeletonHeight={200}
             >
               <TrendArea
@@ -923,7 +973,7 @@ export function Dashboard() {
                 {cityStats.slice(0, 5).map((c) => (
                   <li key={c.city} className="space-y-1.5">
                     <div className="flex items-baseline justify-between gap-3 text-sm">
-                      <span className="truncate font-medium">
+                      <span className="truncate font-medium" title={`${c.city} — ${c.orders} order${c.orders === 1 ? '' : 's'}`}>
                         {c.city}{' '}
                         <span className="ms-1 text-xs font-normal text-muted-foreground">
                           {c.orders} order{c.orders === 1 ? '' : 's'}
@@ -953,6 +1003,7 @@ export function Dashboard() {
               onRetry={() => void load()}
               empty={topProducts.length === 0}
               emptyText="No products logged yet."
+              skeleton="list"
               skeletonHeight={280}
             >
               <ol className="m-0 list-none divide-y divide-border p-0">
@@ -960,7 +1011,7 @@ export function Dashboard() {
                   <li key={p.name} className="flex min-h-11 items-center gap-3 py-3">
                     <span className="w-5 text-xs font-medium text-muted-foreground tabular-nums">{i + 1}</span>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{p.name}</div>
+                      <div className="truncate text-sm font-medium" title={p.name}>{p.name}</div>
                       <div className="text-[13px] text-muted-foreground">
                         {p.orders} order{p.orders === 1 ? '' : 's'} · {p.share}% of sales
                       </div>
@@ -1019,7 +1070,9 @@ export function Dashboard() {
                         {phone(o.buyer_phone)}
                       </Link>
                     </TableCell>
-                    <TableCell className="max-w-56 truncate">{o.product_name || o.product_category || 'Untitled product'}</TableCell>
+                    <TableCell className="max-w-56 truncate" title={o.product_name || o.product_category || 'Untitled product'}>
+                      {o.product_name || o.product_category || 'Untitled product'}
+                    </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">{o.stores?.name ?? 'Unknown store'}</TableCell>
                     <TableCell>
                       <StatusBadge status={o.outcomes?.status ?? 'pending'} />

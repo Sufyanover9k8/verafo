@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Check,
   Download,
@@ -19,6 +19,12 @@ import { StatStrip, type StatItem } from '../components/app/stat-strip'
 import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { VerdictBadge } from '../components/app/verdict-badge'
+import {
+  RISK_FILTER_SUMMARY,
+  RiskFilter,
+  orderMatchesRisk,
+  type RiskFilterValue,
+} from '../components/app/risk-filter'
 import { StatusBadge } from '../components/app/status-badge'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { cn } from '@/lib/utils'
@@ -34,6 +40,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { dateTime, money, phone } from '../lib/format'
+import { orderUnits } from '../lib/ui/money'
 import { formatScore, riskLevel } from '../lib/risk'
 import { SORT_OPTIONS, sortOrders, type SortKey } from '../lib/ui/order-sort'
 import { countHiddenOrders, setOrdersHidden, softDeleteReady } from '../lib/ui/order-visibility'
@@ -78,6 +85,7 @@ function csv(rows: Record<string, unknown>[]): string {
 
 export function Orders() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { role, store, stores: adminStores, scopeStoreIds } = useStoreScope()
   const isAdmin = role === 'admin'
 
@@ -92,6 +100,8 @@ export function Orders() {
   const [dateTo, setDateTo] = useState('')
   const [city, setCity] = useState('')
   const [product, setProduct] = useState('')
+  /** Which risk band the list is narrowed to. `all` is the default view. */
+  const [risk, setRisk] = useState<RiskFilterValue>('all')
   const [filterStoreId, setFilterStoreId] = useState('')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
   /**
@@ -165,6 +175,7 @@ export function Orders() {
     setCity('')
     setProduct('')
     setFilterStoreId('')
+    setRisk('all')
   }
 
   const filtered = useMemo(() => {
@@ -188,6 +199,8 @@ export function Orders() {
     return rows.filter((o) => {
       const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
       if (status !== 'all' && s !== status) return false
+      // Same band the row's badge shows, so the filter and the pill never disagree.
+      if (!orderMatchesRisk(o.buyers?.risk_score, o.buyers?.total_orders, risk)) return false
       if (q && !phoneKey(o.buyer_phone).includes(q)) return false
       if (c && !(o.city ?? '').trim().toLowerCase().includes(c)) return false
       // Stored under its own heading so the address is searchable too.
@@ -201,7 +214,7 @@ export function Orders() {
       }
       return true
     })
-  }, [rows, status, term, city, product])
+  }, [rows, status, term, city, product, risk])
 
   /**
    * The order the table renders in.
@@ -240,7 +253,8 @@ export function Orders() {
     dateTo !== '' ||
     city.trim() !== '' ||
     product.trim() !== '' ||
-    filterStoreId !== ''
+    filterStoreId !== '' ||
+    risk !== 'all'
 
   /** One plain sentence naming the filters that are on. */
   const filterSummary = useMemo(() => {
@@ -249,12 +263,13 @@ export function Orders() {
     if (term.trim()) parts.push(`phone ${term.trim()}`)
     if (city.trim()) parts.push(`city “${city.trim()}”`)
     if (product.trim()) parts.push(`product “${product.trim()}”`)
+    if (risk !== 'all') parts.push(RISK_FILTER_SUMMARY[risk])
     if (status !== 'all') parts.push(`status ${status}`)
     if (isAdmin && filterStoreId) {
       parts.push(`store ${adminStores.find((s) => s.id === filterStoreId)?.name ?? 'selected'}`)
     }
     return parts.join(' · ')
-  }, [dateFrom, dateTo, term, city, product, status, isAdmin, filterStoreId, adminStores])
+  }, [dateFrom, dateTo, term, city, product, status, isAdmin, filterStoreId, adminStores, risk])
 
   async function mark(order: Row, next: 'accepted' | 'refused') {
     if (!supabase || working) return
@@ -446,7 +461,7 @@ export function Orders() {
           it stays reachable whether the panel is open or shut. */}
       <div
         className={cn(
-          'rounded-[var(--r-card)] border border-border bg-card p-4 sm:p-6',
+          'rounded-[var(--r-card)] border border-border bg-card p-4 sm:p-5',
           !mobileFiltersOpen && 'max-sm:hidden',
         )}
       >
@@ -501,6 +516,10 @@ export function Orders() {
               placeholder="e.g. Lahore"
             />
           </div>
+
+          {/* Not tucked behind "More filters": narrowing the book to high-risk
+              orders is a primary way to read this screen. */}
+          <RiskFilter id="orders-risk" value={risk} onChange={setRisk} />
 
           {showMoreFilters && (
             <>
@@ -589,8 +608,11 @@ export function Orders() {
         </div>
       </div>
 
-      {/* Status filter, what is showing, and refresh. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Status filter, what is showing, and refresh.
+          Pinned: with 140 rows loaded, the tab you are on and the count you are
+          reading used to scroll away, so changing either meant going back to the
+          top of the page. `top-14` is the top bar's height. */}
+      <div className="sticky top-14 z-30 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {/* Mobile-only: open or close the filter panel above. The label says
               how many filters are on, so a collapsed panel never hides the fact
@@ -605,7 +627,11 @@ export function Orders() {
             <SlidersHorizontal className="size-4" />
             {mobileFiltersOpen ? 'Hide filters' : narrowed ? 'Filters on' : 'Filters'}
           </Button>
-          <div className="inline-flex flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1">
+          {/* One row on a phone: the four counters scroll sideways rather than
+              dropping "Refused" onto a second line by itself. `min-w-0` is what
+              lets the bar shrink below its content and scroll — without it the
+              flex item's min-content width wins and the page clips it. */}
+          <div className="inline-flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto rounded-[10px] border border-border bg-card p-1 [scrollbar-width:none] sm:flex-wrap">
           {(['all', 'pending', 'accepted', 'refused'] as StatusFilter[]).map((s) => (
             <button
               key={s}
@@ -670,9 +696,9 @@ export function Orders() {
       )}
 
       {/* The table. Wide tables scroll inside this box, never the page. */}
-      <div className="overflow-hidden rounded-[16px] border border-border bg-card">
+      <div className="overflow-hidden rounded-[var(--r-card)] border border-border bg-card">
         {loading ? (
-          <div className="flex flex-col gap-3 p-6" aria-busy="true">
+          <div className="flex flex-col gap-3 p-5" aria-busy="true">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} width="100%" height={16} />
             ))}
@@ -695,10 +721,12 @@ export function Orders() {
             }
           />
         ) : (
-          /* Wide table scrolls inside its own box on phones, never the page. */
+          /* Wide table scrolls inside its own box on phones, never the page.
+             From `lg` the box also caps its height, so the sticky header stays
+             with you while a 140-row book scrolls past. */
           <div className="w-full overflow-x-auto">
-            <Table>
-              <TableHeader>
+            <Table containerClassName="lg:max-h-[72vh] lg:overflow-y-auto">
+              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:border-b [&_th]:border-border [&_th]:bg-card">
                 <TableRow className="hover:bg-transparent">
                   {(selectMode || hiddenView) && (
                     <TableHead className="w-10 ps-6">
@@ -717,18 +745,37 @@ export function Orders() {
                   <TableHead>Status</TableHead>
                   <TableHead className="hidden lg:table-cell">Date</TableHead>
                   <TableHead>Product</TableHead>
-                  <TableHead className="hidden xl:table-cell">City</TableHead>
-                  {isAdmin && <TableHead className="hidden lg:table-cell">Store</TableHead>}
-                  <TableHead className="pe-6 text-end">Action</TableHead>
+                  {/* City and Store are the first to go: at 1440 the remaining
+                      columns fit, so the action buttons are never the thing that
+                      gets clipped. The action column stays pinned, so Accept and
+                      Refuse are reachable even when the table does scroll. */}
+                  <TableHead className="hidden 2xl:table-cell">City</TableHead>
+                  {isAdmin && <TableHead className="hidden 2xl:table-cell">Store</TableHead>}
+                  {/* Pinned from `lg` only: on a phone the action group is
+                      wider than the screen, so pinning it would cover the data. */}
+                  <TableHead className="pe-6 text-end lg:sticky lg:end-0 lg:z-20 lg:border-s lg:border-border lg:bg-card">
+                    Action
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {shownRows.map((o) => {
                   const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
                   const busy = working === o.id
+                  const units = orderUnits(o.quantity)
+                  /* A row is a thing you can open. While delete mode is on the
+                     click belongs to the tick boxes, so it stays inert there. */
+                  const canOpen = !selectMode && !hiddenView
+                  const openBuyer = () => navigate(`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`)
                   return (
                     <TableRow
                       key={o.id}
+                      className={cn(
+                        'group',
+                        canOpen && 'cursor-pointer',
+                        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--teal)]',
+                      )}
+                      onClick={canOpen ? openBuyer : undefined}
                       // Keyboard marking: focus a row and press A (accept) or
                       // R (refuse), as this screen has always supported.
                       tabIndex={s === 'pending' ? 0 : undefined}
@@ -736,6 +783,11 @@ export function Orders() {
                         s === 'pending'
                           ? (e) => {
                               const k = e.key.toLowerCase()
+                              if (k === 'enter' && canOpen) {
+                                e.preventDefault()
+                                openBuyer()
+                                return
+                              }
                               if (k !== 'a' && k !== 'r') return
                               e.preventDefault()
                               void mark(o, k === 'a' ? 'accepted' : 'refused')
@@ -754,12 +806,26 @@ export function Orders() {
                         )}
                         <Link
                           to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="font-mono text-[13px] font-medium text-primary-text hover:underline"
+                          title={phone(o.buyer_phone)}
                         >
                           {phone(o.buyer_phone)}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-end tabular-nums">{money(o.price)}</TableCell>
+                      <TableCell
+                        className="text-end tabular-nums"
+                        // The working is one hover away: the unit price stays
+                        // legible without being mistaken for the total. The
+                        // Items column beside this one carries the count.
+                        title={
+                          (o.quantity ?? 1) > 1 && o.price != null
+                            ? `${money((o.price ?? 0) / (o.quantity ?? 1))} each x ${o.quantity}`
+                            : undefined
+                        }
+                      >
+                        {money(o.price)}
+                      </TableCell>
                       <TableCell className="text-end tabular-nums">{o.quantity ?? 1}</TableCell>
                       <TableCell>
                         <VerdictBadge riskScore={o.buyers?.risk_score} totalOrders={o.buyers?.total_orders} />
@@ -770,16 +836,29 @@ export function Orders() {
                       <TableCell className="hidden text-muted-foreground lg:table-cell">
                         {dateTime(o.ordered_at)}
                       </TableCell>
-                      <TableCell className="max-w-56 truncate">
-                        {o.product_name || o.product_category || 'Untitled product'}
+                      <TableCell className="max-w-56">
+                        {/* The unit count belongs to the product, not to the
+                            money: "2 units" here, and the Amount column above
+                            shows only what the courier collects. */}
+                        <span className="flex items-baseline gap-1.5">
+                          <span className="truncate" title={o.product_name || o.product_category || 'Untitled product'}>
+                            {o.product_name || o.product_category || 'Untitled product'}
+                          </span>
+                          {units && (
+                            <span className="shrink-0 text-[12px] text-muted-foreground">{units} units</span>
+                          )}
+                        </span>
                       </TableCell>
-                      <TableCell className="hidden text-muted-foreground xl:table-cell">{o.city || '—'}</TableCell>
+                      <TableCell className="hidden text-muted-foreground 2xl:table-cell">{o.city || '—'}</TableCell>
                       {isAdmin && (
-                        <TableCell className="hidden text-muted-foreground lg:table-cell">
+                        <TableCell className="hidden text-muted-foreground 2xl:table-cell">
                           {o.stores?.name ?? '—'}
                         </TableCell>
                       )}
-                      <TableCell className="pe-6">
+                      <TableCell
+                        className="pe-6 lg:sticky lg:end-0 lg:z-[5] lg:border-s lg:border-border lg:bg-card lg:group-hover:bg-muted/50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <span className="flex flex-nowrap items-center justify-end gap-2">
                           {hiddenView ? (
                             <Button
@@ -874,12 +953,12 @@ export function Orders() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" className="h-11" onClick={() => setConfirmHide(null)}>
+            <Button variant="outline" onClick={() => setConfirmHide(null)}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              className="h-11 gap-2"
+              className="gap-2"
               disabled={hiding}
               onClick={() => void applyHidden((confirmHide ?? []).map((r) => r.id), true)}
             >

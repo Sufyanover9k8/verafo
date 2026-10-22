@@ -279,6 +279,12 @@
   background: var(--bg-2);
 }
 
+/* The Esri reference layer carries place names. Dimmed so it reads as context
+   behind our revenue dots instead of competing with them. */
+.city-map-labels {
+  opacity: 0.55;
+}
+
 /* One revenue dot. Sized inline from the data; the top city gets a ring. */
 .city-map-pin {
   display: block;

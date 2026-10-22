@@ -211,7 +211,7 @@ export function Scan() {
 
       <CardState loading={false} error={error} onRetry={() => void run(0)}>
         {!summary ? (
-          <Card className="gap-0 p-6">
+          <Card className="gap-0 p-5">
             <EmptyHint
               large
               title="Nothing scanned yet"
@@ -219,7 +219,7 @@ export function Scan() {
             />
           </Card>
         ) : summary.scanned === 0 ? (
-          <Card className="gap-0 p-6">
+          <Card className="gap-0 p-5">
             <EmptyHint
               large
               title="No orders to scan"
@@ -228,7 +228,7 @@ export function Scan() {
           </Card>
         ) : (
           <>
-            <Card className="gap-0 p-6">
+            <Card className="gap-0 p-5">
               <h2 className="text-[15px] font-semibold text-foreground">What the scan found</h2>
               <p className="mt-2 text-[14px] text-foreground">{scanHeadline(summary)}</p>
 

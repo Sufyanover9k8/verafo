@@ -23,6 +23,12 @@ interface CardStateProps {
   emptyAction?: { label: string; to: string } | null
   /** Skeleton height used while loading. */
   skeletonHeight?: number
+  /**
+   * Which placeholder to draw while loading. A chart-shaped shimmer in a list's
+   * place (or the reverse) reads as a layout jump, so the caller says which one
+   * it is; the default stays the plain block.
+   */
+  skeleton?: 'block' | 'list' | 'chart'
   children: ReactNode
 }
 
@@ -47,9 +53,41 @@ export function CardState({
   emptyText = 'Nothing here yet.',
   emptyAction = null,
   skeletonHeight = 160,
+  skeleton = 'block',
   children,
 }: CardStateProps) {
-  if (loading) return <Skeleton className="w-full" style={{ height: skeletonHeight }} />
+  /*
+   * The placeholder should be shaped like what is coming: three short bars for a
+   * list, one wide block for a chart. A chart-shaped shimmer in a list's place
+   * (or the reverse) reads as a layout jump when the data lands.
+   */
+  if (loading) {
+    if (skeleton === 'list') {
+      return (
+        <div className="flex w-full flex-col gap-2.5" aria-busy="true">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton className="size-8 shrink-0 rounded-full" />
+              <div className="flex-1">
+                <Skeleton className="h-3 w-[55%]" />
+                <Skeleton className="mt-2 h-2.5 w-[35%]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+    if (skeleton === 'chart') {
+      return (
+        <div className="flex w-full items-end gap-1.5" style={{ height: skeletonHeight }} aria-busy="true">
+          {[38, 62, 48, 80, 56, 92, 70, 44, 68, 54, 86, 60].map((h, i) => (
+            <Skeleton key={i} className="w-full rounded-t-[4px]" style={{ height: `${h}%` }} />
+          ))}
+        </div>
+      )
+    }
+    return <Skeleton className="w-full" style={{ height: skeletonHeight }} />
+  }
 
   if (error) {
     return (
