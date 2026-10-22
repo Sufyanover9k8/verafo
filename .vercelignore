@@ -1,7 +1,14 @@
 # Keep local scratch directories out of every Vercel upload.
+# A single big folder here does not just slow the upload — `vercel --prod`
+# hangs long enough to look like an auth failure, which is exactly what it did.
 dev/
 _qa/
 _install-clean/
 _plan-clean/
 _privacy-clean/
 apps/shopify/
+ui-only/
+_theirs/
+_theirs2/
+_ui-backup-*/
+dist/
