@@ -43,15 +43,31 @@ export function orderUnits(quantity: number | null | undefined): number {
 /**
  * What the order is worth.
  *
- * `orders.price` already stores the LINE total (unit price × quantity) — that
- * is what the importer writes and what the Orders table displays. Multiplying
- * by quantity here would double-charge every multi-item order, so this
- * multiplies nothing: it exists so a caller cannot get that wrong, and keeps a
- * null price null instead of turning it into 0.
+ * `orders.price` already stores the ORDER total in both write paths: the
+ * Shopify app writes `total_price`, and the CSV importer writes
+ * `unit price × quantity`. Multiplying by quantity again would double-charge
+ * every multi-item order — which is exactly what the dashboard used to do, and
+ * why its revenue figures were inflated.
  */
 export function orderTotal(
   price: number | null | undefined,
   _quantity?: number | null,
 ): number | null {
   return price == null || Number.isNaN(Number(price)) ? null : Number(price)
+}
+
+/** `orderTotal` for summing: a missing price contributes 0, never NaN. */
+export function orderValue(price: number | null | undefined): number {
+  return price == null || Number.isNaN(Number(price)) ? 0 : Number(price)
+}
+
+/**
+ * Does this order count as money earned?
+ *
+ * Only a delivered order does. A refused COD parcel comes back, and one still
+ * in transit has not been paid for. So `Revenue` moves when an outcome is
+ * recorded, which is what a merchant expects to see after marking one.
+ */
+export function isDelivered(status: string | null | undefined): boolean {
+  return status === 'accepted'
 }

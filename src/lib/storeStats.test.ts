@@ -25,6 +25,13 @@ function order(partial: Partial<OrderRow> & { id: string; store_id: string }): O
 describe('computeStoreOverview', () => {
   it('aggregates orders per store and keeps zero-order stores', () => {
     const now = Date.now()
+    /*
+     * `price` is the ORDER total, not a unit price. Both writers agree on that:
+     * the Shopify app stores `total_price`, and the CSV importer stores
+     * `unit price × quantity`. So quantity never multiplies money — a fixture
+     * that expected 1000 × 2 + 500 + 200 = 2700 is what hid a real double-count
+     * in every revenue figure the dashboard and Stores page displayed.
+     */
     const orders: OrderRow[] = [
       order({ id: 'o1', store_id: 's1', buyer_phone: '+92 300 1', price: 1000, quantity: 2, ordered_at: new Date(now - 1000).toISOString(), outcomes: { status: 'accepted', resolved_at: null, refusal_reason: null } }),
       order({ id: 'o2', store_id: 's1', buyer_phone: '+92 300 1', price: 500, quantity: 1, ordered_at: new Date(now - 2000).toISOString(), outcomes: { status: 'refused', resolved_at: null, refusal_reason: null } }),
@@ -37,9 +44,9 @@ describe('computeStoreOverview', () => {
     expect(s1.accepted).toBe(1)
     expect(s1.refused).toBe(1)
     expect(s1.pending).toBe(1)
-    expect(s1.revenue).toBe(2700)
+    expect(s1.revenue).toBe(1700)
     expect(s1.buyers).toBe(2)
-    expect(s1.avg_order_value).toBe(900)
+    expect(s1.avg_order_value).toBe(567)
     expect(result[1].orders).toBe(0)
     expect(result[1].revenue).toBe(0)
   })
@@ -53,6 +60,7 @@ describe('computeDailySales', () => {
     yesterday.setDate(today.getDate() - 1)
     const orders: OrderRow[] = [
       order({ id: 'o1', store_id: 's1', price: 1000, quantity: 1, ordered_at: today.toISOString() }),
+      // 500 is the order total; quantity 2 must not double it.
       order({ id: 'o2', store_id: 's1', price: 500, quantity: 2, ordered_at: yesterday.toISOString() }),
     ]
     const rows = computeDailySales(orders, 7)
@@ -60,7 +68,7 @@ describe('computeDailySales', () => {
     expect(rows[6].orders).toBe(1)
     expect(rows[6].revenue).toBe(1000)
     expect(rows[5].orders).toBe(1)
-    expect(rows[5].revenue).toBe(1000)
+    expect(rows[5].revenue).toBe(500)
     expect(rows[0].revenue).toBe(0)
   })
 })
@@ -74,9 +82,9 @@ describe('computeCityStats', () => {
       order({ id: 'o4', store_id: 's1', price: 100, quantity: 1 }),
     ]
     const rows = computeCityStats(orders)
-    expect(rows[0]).toEqual({ city: 'Karachi', orders: 2, revenue: 2300, share: 79 })
-    expect(rows[1]).toEqual({ city: 'Lahore', orders: 1, revenue: 500, share: 17 })
-    expect(rows[2]).toEqual({ city: 'Unknown', orders: 1, revenue: 100, share: 3 })
+    expect(rows[0]).toEqual({ city: 'Karachi', orders: 2, revenue: 1300, share: 68 })
+    expect(rows[1]).toEqual({ city: 'Lahore', orders: 1, revenue: 500, share: 26 })
+    expect(rows[2]).toEqual({ city: 'Unknown', orders: 1, revenue: 100, share: 5 })
     expect(rows).toHaveLength(3)
   })
 

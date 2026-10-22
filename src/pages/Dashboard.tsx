@@ -23,6 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { money, phone, timeAgo } from '@/lib/format'
+import { isDelivered, orderValue } from '@/lib/ui/money'
+import { NOTIFICATIONS_CHANGED } from '@/lib/notifications'
 import { greetingForName } from '@/lib/greeting'
 import { hasEnoughData, toneFromScore, type VerdictTone } from '@/lib/risk'
 import { confirmOrderMessage } from '@/lib/ui'
@@ -186,6 +188,20 @@ export function Dashboard() {
     void load()
   }, [load])
 
+  /*
+   * Reload the moment the order book changes elsewhere.
+   *
+   * Outcomes fires this after every accept/refuse, and the window-focus path
+   * below covers other tabs. Without it the cards were up to 90 seconds stale —
+   * long enough to look like marking an outcome had no effect at all, which is
+   * exactly what a merchant concludes.
+   */
+  useEffect(() => {
+    const onChange = () => void load()
+    window.addEventListener(NOTIFICATIONS_CHANGED, onChange)
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED, onChange)
+  }, [load])
+
   // Keep the numbers fresh while the merchant is looking at them. Pauses when
   // the tab is hidden, and never runs two loads at once.
   useAutoRefresh(load, 90_000, !loading)
@@ -204,10 +220,16 @@ export function Dashboard() {
     let todayOrders = 0
     let todayRevenue = 0
     for (const o of orders) {
-      if (!o.ordered_at) continue
-      if (keyOf(new Date(o.ordered_at)) !== today) continue
+      /*
+       * An order with no date is a NEW order, not an ancient one. The importer
+       * writes whatever date the file carried; skipping undated rows is what
+       * made freshly imported orders invisible in every window.
+       */
+      const at = o.ordered_at ? new Date(o.ordered_at) : now
+      if (keyOf(at) !== today) continue
       todayOrders++
-      todayRevenue += (o.price ?? 0) * (o.quantity ?? 1)
+      // Money earned, so only what was actually delivered.
+      if (isDelivered(o.outcomes?.status)) todayRevenue += orderValue(o.price)
     }
 
     const avg =
@@ -221,8 +243,7 @@ export function Dashboard() {
     const dayCount = new Map<string, number>()
     const refusedByDay = new Map<string, number>()
     for (const o of orders) {
-      if (!o.ordered_at) continue
-      const k = keyOf(new Date(o.ordered_at))
+      const k = keyOf(o.ordered_at ? new Date(o.ordered_at) : now)
       dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
       if (o.outcomes?.status === 'refused') refusedByDay.set(k, (refusedByDay.get(k) ?? 0) + 1)
     }
@@ -237,9 +258,12 @@ export function Dashboard() {
     const spendByDay = new Map<string, number>()
     const riskByDay = new Map<string, number[]>()
     for (const o of orders) {
-      if (!o.ordered_at) continue
-      const k = keyOf(new Date(o.ordered_at))
-      if (o.price != null) spendByDay.set(k, (spendByDay.get(k) ?? 0) + (o.price ?? 0) * (o.quantity ?? 1))
+      const k = keyOf(o.ordered_at ? new Date(o.ordered_at) : now)
+      // Delivered money only: the same rule as the Revenue card, so the chart
+      // and the number above it can never tell different stories.
+      if (o.price != null && isDelivered(o.outcomes?.status)) {
+        spendByDay.set(k, (spendByDay.get(k) ?? 0) + orderValue(o.price))
+      }
       const b = riskByPhone.get(o.buyer_phone)
       // Only buyers who have actually resolved an order are scored; an
       // unscored buyer sits at the neutral 0.5 and would flatten the trend.
@@ -282,14 +306,17 @@ export function Dashboard() {
       let refused = 0
       let priced = false
       for (const o of orders) {
-        if (!o.ordered_at) continue
-        const t = new Date(o.ordered_at).getTime()
+        // Undated = just arrived, counted in the current window rather than
+        // dropped. Only a DATE IN THE PAST should keep an order out.
+        const t = (o.ordered_at ? new Date(o.ordered_at) : now).getTime()
         if (t < from.getTime() || t >= toExclusive.getTime()) continue
         count++
         if (o.outcomes?.status === 'refused') refused++
-        if (o.price != null) {
+        // Revenue is money kept: delivered only. Marking an outcome therefore
+        // moves this card, which it never used to.
+        if (o.price != null && isDelivered(o.outcomes?.status)) {
           priced = true
-          revenue += (o.price ?? 0) * (o.quantity ?? 1)
+          revenue += orderValue(o.price)
         }
       }
       return { count, revenue: priced ? revenue : null, refused }
@@ -409,7 +436,7 @@ export function Dashboard() {
     for (const { order } of riskyPending) {
       if (order.price == null) continue
       any = true
-      sum += (order.price ?? 0) * (order.quantity ?? 1)
+      sum += orderValue(order.price)
     }
     return any ? sum : null
   }, [riskyPending])
@@ -424,7 +451,7 @@ export function Dashboard() {
       if (o.ordered_at && new Date(o.ordered_at).getTime() < cutoff) continue
       if (o.price == null) continue
       any = true
-      sum += (o.price ?? 0) * (o.quantity ?? 1)
+      sum += orderValue(o.price)
     }
     return any ? sum : null
   }, [orders, range])
@@ -508,7 +535,12 @@ export function Dashboard() {
       delta: stats.deltas.revenue,
       deltaLabel,
       upIsGood: true,
-      hint: 'No order in this period carries a price',
+      // Says what the figure means, because it is not gross order value: a
+      // refused COD parcel goes back, so only delivered orders count.
+      hint:
+        stats.current.revenue == null
+          ? 'No delivered order in this period yet'
+          : 'Delivered orders only — refused parcels are not revenue',
       spark: stats.days.map((d) => d.revenue),
     },
     {
@@ -1077,7 +1109,7 @@ export function Dashboard() {
                     <TableCell>
                       <StatusBadge status={o.outcomes?.status ?? 'pending'} />
                     </TableCell>
-                    <TableCell className="text-end tabular-nums">{money((o.price ?? 0) * (o.quantity ?? 1))}</TableCell>
+                    <TableCell className="text-end tabular-nums">{money(orderValue(o.price))}</TableCell>
                     <TableCell className="pe-6 text-end text-muted-foreground">{timeAgo(o.ordered_at)}</TableCell>
                   </TableRow>
                 ))}

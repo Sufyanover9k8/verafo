@@ -1,4 +1,5 @@
 import type { DailySalesRow, OrderRow, StoreOverview } from './types'
+import { orderValue } from './ui/money'
 
 export interface StoreLite {
   id: string
@@ -24,7 +25,7 @@ export function computeStoreOverview(orders: OrderRow[], stores: StoreLite[]): S
     const accepted = os.filter((o) => o.outcomes?.status === 'accepted').length
     const refused = os.filter((o) => o.outcomes?.status === 'refused').length
     const pending = os.filter((o) => !o.outcomes || o.outcomes.status === 'pending').length
-    const revenue = os.reduce((sum, o) => sum + (o.price ?? 0) * (o.quantity ?? 1), 0)
+    const revenue = os.reduce((sum, o) => sum + orderValue(o.price), 0)
     const buyers = new Set(os.map((o) => o.buyer_phone)).size
     const avgOrderValue = os.length ? Math.round(revenue / os.length) : 0
     const lastOrderAt = os.reduce<string | null>(
@@ -75,7 +76,7 @@ export function computeDailySales(orders: OrderRow[], days = 14): DailySalesRow[
     const row = map.get(iso)
     if (!row) continue
     row.orders++
-    row.revenue += (o.price ?? 0) * (o.quantity ?? 1)
+    row.revenue += orderValue(o.price)
   }
   return rows
 }
@@ -108,7 +109,7 @@ export function computeCityStats(orders: OrderRow[], limit = 8): CityStat[] {
     const city = normalizeCity(o.city)
     const entry = byCity.get(city) ?? { orders: 0, revenue: 0 }
     entry.orders++
-    entry.revenue += (o.price ?? 0) * (o.quantity ?? 1)
+    entry.revenue += orderValue(o.price)
     byCity.set(city, entry)
   }
   const total = [...byCity.values()].reduce((sum, e) => sum + e.revenue, 0) || 1
@@ -130,7 +131,7 @@ export function computeTopProducts(orders: OrderRow[], limit = 6): ProductStat[]
     const name = o.product_name || o.product_category || 'Untitled product'
     const entry = byName.get(name) ?? { category: o.product_category ?? null, orders: 0, revenue: 0 }
     entry.orders++
-    entry.revenue += (o.price ?? 0) * (o.quantity ?? 1)
+    entry.revenue += orderValue(o.price)
     if (o.product_category) entry.category = o.product_category
     byName.set(name, entry)
   }
