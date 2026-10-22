@@ -245,7 +245,12 @@ export function Dashboard() {
     for (const o of orders) {
       const k = keyOf(o.ordered_at ? new Date(o.ordered_at) : now)
       dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
-      if (o.outcomes?.status === 'refused') refusedByDay.set(k, (refusedByDay.get(k) ?? 0) + 1)
+      // Refusals belong to the day they were recorded, not the day the parcel
+      // was ordered — my own rule for the card above.
+      if (o.outcomes?.status === 'refused') {
+        const rk = keyOf(o.outcomes.resolved_at ? new Date(o.outcomes.resolved_at) : now)
+        refusedByDay.set(rk, (refusedByDay.get(rk) ?? 0) + 1)
+      }
     }
 
     /**
@@ -258,12 +263,13 @@ export function Dashboard() {
     const spendByDay = new Map<string, number>()
     const riskByDay = new Map<string, number[]>()
     for (const o of orders) {
-      const k = keyOf(o.ordered_at ? new Date(o.ordered_at) : now)
-      // Delivered money only: the same rule as the Revenue card, so the chart
-      // and the number above it can never tell different stories.
+      // Delivered money only, bucketed by the day it was delivered, so the
+      // chart agrees with the Revenue card above it.
       if (o.price != null && isDelivered(o.outcomes?.status)) {
+        const k = keyOf(o.outcomes?.resolved_at ? new Date(o.outcomes.resolved_at) : now)
         spendByDay.set(k, (spendByDay.get(k) ?? 0) + orderValue(o.price))
       }
+      const k = keyOf(o.ordered_at ? new Date(o.ordered_at) : now)
       const b = riskByPhone.get(o.buyer_phone)
       // Only buyers who have actually resolved an order are scored; an
       // unscored buyer sits at the neutral 0.5 and would flatten the trend.
@@ -296,24 +302,45 @@ export function Dashboard() {
     }
 
     /** Totals for any whole-day window ending `offsetDays` ago. */
-    const windowTotals = (offsetDays: number) => {
-      const from = new Date(now.getTime() - (offsetDays + range - 1) * 86400000)
-      from.setHours(0, 0, 0, 0)
-      const toExclusive = new Date(now.getTime() - offsetDays * 86400000)
-      toExclusive.setHours(0, 0, 0, 0)
+    /**
+     * Totals for one whole-day window, `offsetDays` periods back.
+     *
+     * `by` decides which date the window is measured on, and that is the whole
+     * point:
+     *   'placed'   → the day the order was placed. "Orders" counts orders.
+     *   'resolved' → the day the outcome was recorded. "Revenue" and "Refused"
+     *                describe what happened to the money, so an order placed
+     *                ten days ago and refused this morning belongs to today's
+     *                refusal — bucketing it by the order date is why marking an
+     *                outcome on an older order changed nothing at all.
+     *
+     * The window RUNS TO TOMORROW MIDNIGHT, so today is included. It used to
+     * end at today 00:00, which silently excluded every order placed today.
+     */
+    const windowTotals = (offsetDays: number, by: 'placed' | 'resolved') => {
+      const endExclusive = new Date(now.getTime() - offsetDays * 86400000)
+      endExclusive.setHours(0, 0, 0, 0)
+      endExclusive.setDate(endExclusive.getDate() + 1)
+      const from = new Date(endExclusive.getTime() - range * 86400000)
+
+      const when = (o: (typeof orders)[number]) => {
+        const placed = o.ordered_at ? new Date(o.ordered_at) : now
+        if (by === 'placed') return placed.getTime()
+        // No resolved_at yet (still pending) → fall back to the placed date so
+        // an undelivered order still contributes to its own day's order count.
+        return o.outcomes?.resolved_at ? new Date(o.outcomes.resolved_at).getTime() : placed.getTime()
+      }
+
       let count = 0
       let revenue = 0
       let refused = 0
       let priced = false
       for (const o of orders) {
-        // Undated = just arrived, counted in the current window rather than
-        // dropped. Only a DATE IN THE PAST should keep an order out.
-        const t = (o.ordered_at ? new Date(o.ordered_at) : now).getTime()
-        if (t < from.getTime() || t >= toExclusive.getTime()) continue
+        const t = when(o)
+        if (t < from.getTime() || t >= endExclusive.getTime()) continue
         count++
         if (o.outcomes?.status === 'refused') refused++
-        // Revenue is money kept: delivered only. Marking an outcome therefore
-        // moves this card, which it never used to.
+        // Revenue is money kept: delivered only.
         if (o.price != null && isDelivered(o.outcomes?.status)) {
           priced = true
           revenue += orderValue(o.price)
@@ -329,8 +356,18 @@ export function Dashboard() {
       return ((nowValue - prevValue) / prevValue) * 100
     }
 
-    const current = windowTotals(0)
-    const previous = windowTotals(range)
+    /*
+     * Three windows, because the cards measure three different things:
+     * orders by when they were placed; revenue and refusals by when the outcome
+     * was recorded. Using one window for all three is what left "Refused"
+     * frozen while "Revenue" moved.
+     */
+    const placedNow = windowTotals(0, 'placed')
+    const placedPrev = windowTotals(range, 'placed')
+    const settledNow = windowTotals(0, 'resolved')
+    const settledPrev = windowTotals(range, 'resolved')
+    const current = { count: placedNow.count, revenue: settledNow.revenue, refused: settledNow.refused }
+    const previous = { count: placedPrev.count, revenue: settledPrev.revenue, refused: settledPrev.refused }
     // MIN_DELTA_SAMPLE: below this the previous window is too thin to compare.
     const MIN_DELTA_SAMPLE = 5
 
