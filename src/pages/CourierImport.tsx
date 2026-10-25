@@ -82,6 +82,15 @@ function planRow(args: {
   if (action === 'already') {
     return { source, outcome, order, stored, action, tone: 'same', reason: `Already ${stored} — nothing to change` }
   }
+  /*
+   * Spell the current state out in the product's own words. "no outcome yet"
+   * read as a verdict on the order rather than a description of the database,
+   * so a merchant could not tell whether the update was safe to accept: an order
+   * with no outcome row is exactly what the Outcomes screen calls pending.
+   */
+  const current = stored === null
+    ? 'currently pending (no outcome recorded yet)'
+    : `currently ${stored}`
   return {
     source,
     outcome,
@@ -89,7 +98,7 @@ function planRow(args: {
     stored,
     action,
     tone: 'change',
-    reason: `Will set ${outcome} — ${stored ? `currently ${stored}` : 'no outcome yet'}`,
+    reason: `Will set ${outcome} — ${current}`,
   }
 }
 
@@ -101,6 +110,8 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  /** A 70-row report writes 70 rows one by one; the button must show that. */
+  const [applyProgress, setApplyProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<{ updated: number; review: number; unchanged: number; failed: string[] } | null>(null)
 
   /**
@@ -281,6 +292,7 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
       toast.push({ kind: 'info', title: 'Nothing to update', detail: 'Every matched order already holds the outcome in this report; unmatched and non-final rows are left for review.' }); return
     }
     setConfirming(true)
+    setApplyProgress({ done: 0, total: eligible.length })
     let updated = 0
     let unchanged = 0
     const failed: string[] = []
@@ -309,11 +321,11 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
         // preview snapshot below.
       }
 
-      for (const item of eligible) {
+      for (const [index, item] of eligible.entries()) {
         const order = item.order!
         const target = item.outcome as 'accepted' | 'refused'
         const live = fresh.has(order.id) ? fresh.get(order.id) ?? null : item.stored
-        if (live === target) { unchanged++; continue }
+        if (live === target) { unchanged++; setApplyProgress({ done: index + 1, total: eligible.length }); continue }
         try {
           const { error: outcomeError } = await supabase.from('outcomes').upsert({
             order_id: order.id,
@@ -328,6 +340,7 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
           applied.set(order.id, target)
           updated++
         } catch (error) { failed.push(`Line ${item.source.line}: ${error instanceof Error ? error.message : String(error)}`) }
+        setApplyProgress({ done: index + 1, total: eligible.length })
       }
 
       /*
@@ -356,7 +369,7 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
           detail: `${updated} outcome${updated === 1 ? '' : 's'} updated${unchanged ? `, ${unchanged} already current` : ''}, ${review} row${review === 1 ? '' : 's'} left for review.`,
         })
       }
-    } finally { setConfirming(false) }
+    } finally { setConfirming(false); setApplyProgress(null) }
   }
 
   return <section className="rounded-[16px] border border-border bg-card p-6">
@@ -377,7 +390,7 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
       <div className="max-h-[420px] overflow-auto rounded-lg border border-border"><table className="w-full text-left text-[12px]"><thead className="sticky top-0 bg-muted"><tr>{['Line','Courier status','Phone / reference','Matched order','Action'].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr></thead><tbody>{preview.slice(0, 250).map((item) => <tr key={`${item.source.line}-${item.source.trackingNumber}`} className="border-t border-border"><td className="px-3 py-2">{item.source.line}</td><td className="px-3 py-2">{item.source.status || '—'}</td><td className="px-3 py-2">{item.source.phone || item.source.reference || item.source.trackingNumber || '—'}</td><td className="px-3 py-2">{item.order ? `${item.order.stores?.name ?? 'Store'} · ${item.order.product_name ?? item.order.id.slice(0, 8)}` : '—'}</td><td className="px-3 py-2"><span className={item.tone === 'change' ? 'text-risk-safe-strong' : item.tone === 'same' ? 'text-muted-foreground' : 'text-risk-high-strong'}>{item.reason}</span></td></tr>)}</tbody></table></div>
       {preview.length > 250 && <p className="text-[12px] text-muted-foreground">Showing first 250 of {preview.length} rows. All rows are included in the update calculation.</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void applyUpdates()} disabled={confirming || summary.toUpdate === 0} className="h-10">{confirming ? <><Loader2 className="me-2 size-4 animate-spin"/>Applying…</> : summary.toUpdate === 0 ? 'Nothing to update' : `Confirm ${summary.toUpdate} outcome update${summary.toUpdate === 1 ? '' : 's'}`}</Button>
+        <Button onClick={() => void applyUpdates()} disabled={confirming || summary.toUpdate === 0} className="h-10">{confirming ? <><Loader2 className="me-2 size-4 animate-spin"/>Applying{applyProgress && applyProgress.total > 1 ? ` ${applyProgress.done}/${applyProgress.total}` : ''}…</> : summary.toUpdate === 0 ? 'Nothing to update' : `Confirm ${summary.toUpdate} outcome update${summary.toUpdate === 1 ? '' : 's'}`}</Button>
         {summary.toUpdate === 0 && <p className="text-[12px] text-muted-foreground">{summary.already > 0 ? `The ${summary.already} matched order${summary.already === 1 ? '' : 's'} already hold${summary.already === 1 ? 's' : ''} exactly these outcomes — there is nothing to write.` : 'No row in this file can be applied automatically.'}</p>}
       </div>
     </div>}

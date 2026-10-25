@@ -145,7 +145,7 @@ describe('CourierImport confirm step', () => {
     STORED = []
     const user = await uploadAndPreview()
 
-    expect(screen.getByText('Will set accepted — no outcome yet')).toBeInTheDocument()
+    expect(screen.getByText('Will set accepted — currently pending (no outcome recorded yet)')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Confirm 1 outcome update' }))
     await waitFor(() => expect(UPSERTS).toHaveLength(1))
     expect(UPSERTS[0]).toMatchObject({ order_id: 'o1', status: 'accepted' })
