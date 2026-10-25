@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { courierOutcome, normalizeCourierPhone, normalizeCourierReference, parseCourierRows } from './courier-reconciliation'
+import {
+  courierOutcome,
+  courierUpdateAction,
+  normalizeCourierPhone,
+  normalizeCourierReference,
+  normalizeStoredOutcome,
+  parseCourierRows,
+} from './courier-reconciliation'
 
 describe('courier reconciliation helpers', () => {
   it('recognizes the sample courier spreadsheet headers', () => {
@@ -27,5 +34,27 @@ describe('courier reconciliation helpers', () => {
     expect(courierOutcome('Returned to shipper')).toBe('refused')
     expect(courierOutcome('UnDelivered', 'CUSTOMER NOT AVAILABLE')).toBe('pending')
     expect(courierOutcome('MOVED to ORIGIN BRANCH')).toBe('pending')
+  })
+
+  it('reads a stored outcome defensively', () => {
+    expect(normalizeStoredOutcome('accepted')).toBe('accepted')
+    expect(normalizeStoredOutcome(' Refused ')).toBe('refused')
+    expect(normalizeStoredOutcome(null)).toBeNull()
+    expect(normalizeStoredOutcome('')).toBeNull()
+    expect(normalizeStoredOutcome('delivered')).toBeNull()
+  })
+
+  it('only counts a row as an update when the database would actually change', () => {
+    // The exact bug from the report: the preview promised three updates, then
+    // applied nothing because the stored outcome already matched the report.
+    expect(courierUpdateAction('accepted', 'accepted')).toBe('already')
+    expect(courierUpdateAction('refused', 'refused')).toBe('already')
+    expect(courierUpdateAction('accepted', 'pending')).toBe('update')
+    expect(courierUpdateAction('refused', 'accepted')).toBe('update')
+    // No outcome row yet is an update, not an "already".
+    expect(courierUpdateAction('accepted', null)).toBe('update')
+    // Non-final courier statuses are never written, whatever is stored.
+    expect(courierUpdateAction('pending', 'accepted')).toBe('hold')
+    expect(courierUpdateAction(null, null)).toBe('hold')
   })
 })

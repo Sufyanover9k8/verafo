@@ -1,6 +1,42 @@
 /** Pure helpers for normalizing courier reports and mapping their delivery states. */
 export type CourierOutcome = 'accepted' | 'refused' | 'pending' | null
 
+/** The three values `outcomes.status` accepts, plus `null` for "no row yet". */
+export type StoredOutcome = 'accepted' | 'refused' | 'pending' | null
+
+/** What a courier row will do to the order it matched. */
+export type CourierUpdateAction =
+  /** The stored outcome differs → the merchant can write it. */
+  | 'update'
+  /** The database already holds exactly this outcome → nothing to write. */
+  | 'already'
+  /** No final courier status (In Transit, UnDelivered, …) → never written. */
+  | 'hold'
+
+/**
+ * `outcomes.status` is constrained to lowercase, but a value can still arrive
+ * with stray whitespace or in another casing (older rows, hand edits). Anything
+ * unrecognised must read as "no outcome", not as a mismatch that triggers a
+ * pointless write.
+ */
+export function normalizeStoredOutcome(value: unknown): StoredOutcome {
+  const s = String(value ?? '').trim().toLowerCase()
+  return s === 'accepted' || s === 'refused' || s === 'pending' ? s : null
+}
+
+/**
+ * Decide whether a courier row is worth writing.
+ *
+ * This is the single place that answers "will pressing Confirm change
+ * anything", so the count on the button and the write loop can never disagree:
+ * a row whose stored outcome already equals the courier's outcome is *not* an
+ * update, and reporting it as one is what makes the button look broken.
+ */
+export function courierUpdateAction(outcome: CourierOutcome, stored: StoredOutcome): CourierUpdateAction {
+  if (!outcome || outcome === 'pending') return 'hold'
+  return stored === outcome ? 'already' : 'update'
+}
+
 export interface CourierRow {
   line: number
   reference: string
