@@ -108,6 +108,11 @@ beforeEach(() => {
 })
 
 describe('CourierImport confirm step', () => {
+  /** The Outcome cell shows only the word; the explanation is its tooltip. */
+  function outcomeCell(tooltip: string) {
+    return screen.getByTitle(tooltip).textContent
+  }
+
   it('does not promise an update for a row the database already matches', async () => {
     ORDERS = [order({ outcomes: { status: 'accepted', resolved_at: null } })]
     STORED = [{ order_id: 'o1', status: 'accepted' }]
@@ -115,7 +120,7 @@ describe('CourierImport confirm step', () => {
 
     const button = await screen.findByRole('button', { name: 'Nothing to update' })
     expect(button).toBeDisabled()
-    expect(screen.getByText('Already accepted — nothing to change')).toBeInTheDocument()
+    expect(outcomeCell('Already accepted — nothing to change')).toBe('Accepted')
     expect(screen.queryByRole('button', { name: /Confirm 1 outcome update/ })).toBeNull()
 
     await userEvent.setup().click(button)
@@ -127,16 +132,17 @@ describe('CourierImport confirm step', () => {
     STORED = [{ order_id: 'o1', status: 'pending' }]
     const user = await uploadAndPreview()
 
-    expect(screen.getByText('Will set accepted — currently pending')).toBeInTheDocument()
+    expect(outcomeCell('Will set accepted — currently pending')).toBe('Accepted')
     await user.click(screen.getByRole('button', { name: 'Confirm 1 outcome update' }))
 
     await waitFor(() => expect(UPSERTS).toHaveLength(1))
     expect(UPSERTS[0]).toMatchObject({ order_id: 'o1', status: 'accepted' })
     expect(NOTIFICATIONS).toHaveBeenCalled()
 
-    // The section must look different after a successful run.
-    expect(await screen.findByText('Already accepted — nothing to change')).toBeInTheDocument()
+    // The section must look different after a successful run: the row is now
+    // current, so the button can no longer promise an update.
     expect(await screen.findByRole('button', { name: 'Nothing to update' })).toBeDisabled()
+    expect(outcomeCell('Already accepted — nothing to change')).toBe('Accepted')
     expect(screen.getByText(/Updated 1/)).toBeInTheDocument()
   })
 
@@ -145,7 +151,7 @@ describe('CourierImport confirm step', () => {
     STORED = []
     const user = await uploadAndPreview()
 
-    expect(screen.getByText('Will set accepted — currently pending (no outcome recorded yet)')).toBeInTheDocument()
+    expect(outcomeCell('Will set accepted — currently pending (no outcome recorded yet)')).toBe('Accepted')
     await user.click(screen.getByRole('button', { name: 'Confirm 1 outcome update' }))
     await waitFor(() => expect(UPSERTS).toHaveLength(1))
     expect(UPSERTS[0]).toMatchObject({ order_id: 'o1', status: 'accepted' })
@@ -160,8 +166,8 @@ describe('CourierImport confirm step', () => {
     await user.upload(input, new File(['Phone,Status\n03001234501,In Transit\n'], 'c.csv', { type: 'text/csv' }))
     await user.click(await screen.findByRole('button', { name: 'Preview matches' }))
 
-    expect(await screen.findByText('“In Transit” is not a final delivery status — left unchanged')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Nothing to update' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Nothing to update' })).toBeDisabled()
+    expect(outcomeCell('“In Transit” is not a final delivery status — left unchanged')).toBe('—')
   })
 
   /*
@@ -179,7 +185,7 @@ describe('CourierImport confirm step', () => {
     await uploadAndPreview()
 
     // Hidden duplicates are gone, so the visible order matches uniquely.
-    expect(await screen.findByText('Will set accepted — currently pending')).toBeInTheDocument()
+    expect(outcomeCell('Will set accepted — currently pending')).toBe('Accepted')
     expect(screen.queryByText(/share this phone/)).toBeNull()
   })
 
@@ -194,7 +200,7 @@ describe('CourierImport confirm step', () => {
     ]
     await uploadAndPreview()
 
-    expect(await screen.findByText('2 orders share this phone — check Orders before importing')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Nothing to update' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Nothing to update' })).toBeDisabled()
+    expect(outcomeCell('2 orders share this phone — check Orders before importing')).toBe('—')
   })
 })

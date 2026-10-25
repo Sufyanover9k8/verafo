@@ -102,6 +102,16 @@ function planRow(args: {
   }
 }
 
+/**
+ * The Outcome column says only the word the courier proved — "Accepted" or
+ * "Refused". A row that cannot be written shows a dash. The sentence explaining
+ * why stays available as the cell's tooltip, so the table stays a table.
+ */
+function actionLabel(item: PreviewRow) {
+  if (item.tone === 'review') return '—'
+  return item.outcome === 'refused' ? 'Refused' : 'Accepted'
+}
+
 export function CourierImport({ stores }: { stores: StoreOption[] }) {
   const toast = useToast()
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -387,7 +397,7 @@ export function CourierImport({ stores }: { stores: StoreOption[] }) {
         <strong>{summary.already}</strong> already current ·{' '}
         <strong>{summary.review}</strong> row{summary.review === 1 ? '' : 's'} {summary.review === 1 ? 'needs' : 'need'} review or {summary.review === 1 ? 'is' : 'are'} non-final.
       </p>
-      <div className="max-h-[420px] overflow-auto rounded-lg border border-border"><table className="w-full text-left text-[12px]"><thead className="sticky top-0 bg-muted"><tr>{['Line','Courier status','Phone / reference','Matched order','Action'].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr></thead><tbody>{preview.slice(0, 250).map((item) => <tr key={`${item.source.line}-${item.source.trackingNumber}`} className="border-t border-border"><td className="px-3 py-2">{item.source.line}</td><td className="px-3 py-2">{item.source.status || '—'}</td><td className="px-3 py-2">{item.source.phone || item.source.reference || item.source.trackingNumber || '—'}</td><td className="px-3 py-2">{item.order ? `${item.order.stores?.name ?? 'Store'} · ${item.order.product_name ?? item.order.id.slice(0, 8)}` : '—'}</td><td className="px-3 py-2"><span className={item.tone === 'change' ? 'text-risk-safe-strong' : item.tone === 'same' ? 'text-muted-foreground' : 'text-risk-high-strong'}>{item.reason}</span></td></tr>)}</tbody></table></div>
+      <div className="max-h-[420px] overflow-auto rounded-lg border border-border"><table className="w-full text-left text-[12px]"><thead className="sticky top-0 bg-muted"><tr>{['Line','Courier status','Phone / reference','Matched order','Outcome'].map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr></thead><tbody>{preview.slice(0, 250).map((item) => <tr key={`${item.source.line}-${item.source.trackingNumber}`} className="border-t border-border"><td className="px-3 py-2">{item.source.line}</td><td className="px-3 py-2">{item.source.status || '—'}</td><td className="px-3 py-2">{item.source.phone || item.source.reference || item.source.trackingNumber || '—'}</td><td className="px-3 py-2">{item.order ? `${item.order.stores?.name ?? 'Store'} · ${item.order.product_name ?? item.order.id.slice(0, 8)}` : '—'}</td><td className="px-3 py-2"><span title={item.reason} className={item.tone === 'change' ? 'font-medium text-risk-safe-strong' : 'text-muted-foreground'}>{actionLabel(item)}</span></td></tr>)}</tbody></table></div>
       {preview.length > 250 && <p className="text-[12px] text-muted-foreground">Showing first 250 of {preview.length} rows. All rows are included in the update calculation.</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={() => void applyUpdates()} disabled={confirming || summary.toUpdate === 0} className="h-10">{confirming ? <><Loader2 className="me-2 size-4 animate-spin"/>Applying{applyProgress && applyProgress.total > 1 ? ` ${applyProgress.done}/${applyProgress.total}` : ''}…</> : summary.toUpdate === 0 ? 'Nothing to update' : `Confirm ${summary.toUpdate} outcome update${summary.toUpdate === 1 ? '' : 's'}`}</Button>
