@@ -62,7 +62,15 @@ export function Auth() {
       const res =
         mode === 'in'
           ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({ email, password })
+          : await supabase.auth.signUp({
+              email,
+              password,
+              // The confirmation link must come back to the app, not to the
+              // marketing page that now owns `/` — otherwise the session in the
+              // link's hash is read by a static HTML page and never reaches the
+              // app.
+              options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+            })
       if (res.error) {
         setError(res.error.message)
         return
@@ -83,9 +91,12 @@ export function Auth() {
    * Google sign-in, for both modes.
    *
    * OAuth has no sign-in/sign-up distinction: Google returns an identity and
-   * Supabase creates the account on the first visit. `redirectTo` has to be the
-   * app origin, and the browser leaves this page entirely on success — so the
-   * spinner stays until it does rather than flickering back to idle.
+   * Supabase creates the account on the first visit. `redirectTo` must be a path
+   * the app owns — `/dashboard`, never the bare origin, because `/` is served as
+   * static marketing HTML since the site/app split, and that page cannot read the
+   * `#access_token` Google comes back with. The browser leaves this page
+   * entirely on success, so the spinner stays until it does rather than
+   * flickering back to idle.
    */
   async function signInWithGoogle() {
     if (!supabase) {
@@ -97,7 +108,7 @@ export function Auth() {
     const { error: oauthErr } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/dashboard`,
         queryParams: { prompt: 'select_account' },
       },
     })
@@ -119,7 +130,11 @@ export function Auth() {
     }
     setBusy(true)
     setError(null)
-    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim())
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      // Same reason as the confirmation and OAuth links: the recovery hash has
+      // to land inside the app so ResetPassword can read it.
+      redirectTo: `${window.location.origin}/dashboard`,
+    })
     setBusy(false)
     if (resetErr) {
       setError(resetErr.message)

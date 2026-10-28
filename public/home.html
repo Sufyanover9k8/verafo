@@ -2,6 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+/*
+ * Auth links must never stop here.
+ *
+ * `/` is this static marketing page; the app lives at `/dashboard`. Supabase
+ * links (Google OAuth, sign-up confirmation, password reset) put the session in
+ * the URL hash or a PKCE `code`, and a static page cannot read them — the
+ * merchant would land on the website with a session nobody picks up. So if this
+ * page is opened with auth material in the URL, hand it straight to the app,
+ * which does understand it. Runs before anything renders.
+ */
+(function () {
+  var hash = window.location.hash || '';
+  var search = window.location.search || '';
+  var url = hash + '&' + search;
+  var markers = [
+    'access_token=', 'refresh_token=', 'error_description=', 'error_code=',
+    'code=', 'type=recovery', 'type=signup', 'type=magiclink',
+  ];
+  var isAuth = false;
+  for (var i = 0; i < markers.length; i++) {
+    if (url.indexOf(markers[i]) !== -1) { isAuth = true; break; }
+  }
+  if (isAuth) window.location.replace('/dashboard' + search + hash);
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="canonical" href="https://www.verafo.com/">
 <title>Verafo | Stop shipping blind. Score every COD buyer before you ship.</title>
@@ -583,7 +609,7 @@ document.documentElement.className='js';
 
     <div class="dash reveal">
       <div class="dash__frame">
-        <img src="assets/img/dashboard.webp" alt="The Verafo dashboard showing orders today, revenue today, average risk score, pending outcomes, and a risk distribution chart." loading="lazy" width="1917" height="896">
+        <img src="assets/img/dashboard.webp" alt="The Verafo dashboard showing orders, revenue, refused orders and average risk over the last 7 days, a high-risk verdict, buyers needing attention, and a risk distribution chart." loading="lazy" width="1514" height="736">
       </div>
     </div>
 
@@ -688,7 +714,7 @@ document.documentElement.className='js';
 
         <div class="tier__deal">
           <p class="tier__deal-v">PKR 0<em class="tier__anchor">PKR 39,000/mo</em></p>
-          <p class="tier__deal-terms">Free for <b>45 days</b>, then <b>PKR 12,499/mo locked in forever</b>.</p>
+          <p class="tier__deal-terms">Free for <b>30 days</b>, then <b>PKR 12,499/mo locked in forever</b>.</p>
         </div>
 
         <ul class="tier__list tier__list--valued">

@@ -50,6 +50,31 @@ describe('deployment routing', () => {
   })
 })
 
+describe('auth links land in the app, not on the marketing page', () => {
+  /*
+   * `/` is static marketing HTML: a Supabase session that arrives there in the
+   * URL hash is never read, so the merchant was left sitting on the website
+   * after signing in. Every auth link must therefore point at a route the app
+   * owns, and the marketing page must forward anything that still arrives.
+   */
+  it('sends OAuth, confirmation and reset links to /dashboard', () => {
+    const auth = read('src/pages/Auth.tsx')
+    const redirects = [...auth.matchAll(/(?:emailRedirectTo|redirectTo):\s*`\$\{window\.location\.origin\}(\/[a-z]*)`/g)].map((m) => m[1])
+    expect(redirects.length).toBeGreaterThanOrEqual(3) // password confirm, Google, reset
+    for (const target of redirects) expect(target).toBe('/dashboard')
+    expect(auth).not.toContain('origin}/`')
+  })
+
+  it('makes the marketing home hand auth URLs to the app', () => {
+    const home = read('public/home.html')
+    expect(home).toContain("window.location.replace('/dashboard'")
+    // The markers that matter: implicit-flow session, PKCE code, recovery links.
+    for (const marker of ['access_token=', 'type=recovery', 'code=']) {
+      expect(home).toContain(marker)
+    }
+  })
+})
+
 describe('in-app routing', () => {
   const links = NAV_SECTIONS.flatMap((section) => section.items).map((item) => item.to)
 
