@@ -140,7 +140,7 @@ export function AddStore() {
           />
           <div className="flex justify-center pb-6">
             <Button asChild className="h-11 gap-2 rounded-full px-5 text-[13px] font-semibold">
-              <Link to="/">
+              <Link to="/dashboard">
                 <ArrowLeft className="size-3.5" aria-hidden="true" /> Back to dashboard
               </Link>
             </Button>

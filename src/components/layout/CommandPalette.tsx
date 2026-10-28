@@ -199,7 +199,7 @@ function Palette({ onClose }: { onClose: () => void }) {
       navigate(`/stores/${item.store.id}`)
     } else if (item.kind === 'network') {
       setStore(null)
-      navigate('/')
+      navigate('/dashboard')
     } else if (item.kind === 'phone') {
       navigate(`/lookup?phone=${encodeURIComponent(item.phone)}`)
     }

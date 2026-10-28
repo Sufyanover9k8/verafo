@@ -73,7 +73,7 @@ export function Auth() {
         setMode('in')
         return
       }
-      navigate('/')
+      navigate('/dashboard')
     } finally {
       setBusy(false)
     }

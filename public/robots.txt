@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# The app behind /login is private; the marketing pages above are not.
+Disallow: /login
+Disallow: /dashboard
+Disallow: /orders
+Disallow: /outcomes
+Disallow: /lookup
+Disallow: /map
+Disallow: /chat
+Disallow: /import
+Disallow: /settings
+Disallow: /stores
+Disallow: /admin
+
+Sitemap: https://www.verafo.com/sitemap.xml

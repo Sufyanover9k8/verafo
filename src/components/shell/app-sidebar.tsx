@@ -62,7 +62,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader className="gap-3 pb-1">
-        <NavLink to="/" className="flex h-11 items-center gap-2 px-2 group-data-[collapsible=icon]:px-0">
+        <NavLink to="/dashboard" className="flex h-11 items-center gap-2 px-2 group-data-[collapsible=icon]:px-0">
           {/* The sidebar is the Verafo teal, so both logos are forced to
               white here to stay legible on it. One filter per image fixes
               each: the mark is teal art (not dark), the wordmark is

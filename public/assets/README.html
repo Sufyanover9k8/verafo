@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Asset note</title>
+<style>body{background:#0A0F10;color:#F2F6F6;font:16px/1.7 system-ui,sans-serif;max-width:62ch;margin:12vh auto;padding:0 24px}code{background:#111A1D;padding:2px 6px;border-radius:4px;color:#2DD4BF;font-size:14px}h1{font-size:24px;letter-spacing:-.02em}</style>
+</head>
+<body>
+<h1>These files live in the project root</h1>
+<p>The site currently links to its assets with root-relative paths, and they resolve correctly as things stand. Nothing here needs changing for the site to work.</p>
+<p>If you would like a tidier root later, create an <code>assets</code> folder, move these three files into it, and rename them to drop the spaces:</p>
+<ul>
+  <li><code>Verafo logo 1.0.jpeg</code> &rarr; <code>assets/verafo-mark.jpeg</code></li>
+  <li><code>Verafo logo 2.0.jpeg</code> &rarr; <code>assets/verafo-wordmark.jpeg</code></li>
+  <li><code>image.png</code> &rarr; <code>assets/dashboard.png</code></li>
+</ul>
+<p>Then, in all seven HTML files, replace <code>Verafo%20logo%201.0.jpeg</code> with <code>assets/verafo-mark.jpeg</code> and <code>image.png</code> with <code>assets/dashboard.png</code>. Note that <code>Verafo logo 2.0.jpeg</code> is not referenced by the site at all: the logo in the header is drawn as inline SVG so it stays crisp, which also means the mark works on light and dark backgrounds.</p>
+</body>
+</html>

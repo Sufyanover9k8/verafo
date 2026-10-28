@@ -39,7 +39,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Operate',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/orders', label: 'Orders', icon: Package },
       // Logging an order by hand is a Verafo-team tool. Merchants' orders
       // arrive through Bulk Import or the Shopify app, so this row is not

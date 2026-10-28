@@ -203,7 +203,7 @@ export function StoreDashboard() {
             detail="Only administrators can view store dashboards."
             action={
               <Button asChild className="h-11 gap-2 rounded-full px-5">
-                <Link to="/">
+                <Link to="/dashboard">
                   <ArrowRight className="size-4" /> Back to dashboard
                 </Link>
               </Button>

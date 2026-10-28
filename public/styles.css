@@ -1,0 +1,2417 @@
+/* =========================================================
+   VERAFO â€” stylesheet
+   Light theme. Palette, type and tone follow the Verafo
+   brand document: teal #14B8A6 accent on white, ink #0A0F10.
+   ========================================================= */
+
+:root{
+  --bg:#FFFFFF;
+  --bg-2:#F6F8F8;
+  --bg-3:#EDF3F3;
+  --panel:#FFFFFF;
+  --panel-2:#F5F8F8;
+  --line:rgba(10,15,16,.09);
+  --line-2:rgba(10,15,16,.16);
+
+  --teal:#14B8A6;
+  --teal-bright:#2DD4BF;
+  --teal-deep:#0F766E;
+  --teal-glow:rgba(20,184,166,.26);
+  --coral:#E11D48;
+  --amber:#D97706;
+  --purple:#7C3AED;
+
+  --ink:#0A0F10;
+  --ink-2:#4A575A;
+  --ink-3:#7C8A8D;
+
+  /* semantic surfaces: overwritten wholesale in dark mode */
+  --surface:#FFFFFF;
+  --field:#FFFFFF;
+  --tint:#E9FBF8;
+  --tint-soft:#F2F8F7;
+  --tint-strong:#E4FAF6;
+  --tint-lav:#F5F3FF;
+  --head-glass:rgba(255,255,255,.86);
+  --nav-glass:rgba(255,255,255,.98);
+  --subnav-glass:rgba(255,255,255,.9);
+  --plate:#FFFFFF;
+  --select-arrow:%236F7C7F;
+  --ph:#9AA7A9;
+  --err-fg:#9F1239;
+  --err-bg:rgba(225,29,72,.08);
+
+  --r-sm:10px;
+  --r:16px;
+  --r-lg:22px;
+  --r-xl:30px;
+
+  --sh-1:0 1px 2px rgba(10,15,16,.06);
+  --sh-2:0 2px 4px rgba(10,15,16,.04),0 10px 24px -10px rgba(10,15,16,.12);
+  --sh-3:0 4px 8px rgba(10,15,16,.04),0 24px 48px -20px rgba(10,15,16,.18);
+  --sh-teal:0 4px 12px -3px rgba(20,184,166,.35),0 12px 32px -12px rgba(20,184,166,.4);
+
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --serif:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  --wrap:1200px;
+  --head-h:72px;
+
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+
+  --btn-teal-1:#16C2AE;
+  --btn-teal-2:#0FA394;
+  /* Dark ink rather than white. The gradient is a bright teal, and white on it
+     measured 2.2:1 — well under the 4.5:1 a 15px label needs, which made every
+     primary button in light mode look washed out. Dark ink on the same gradient
+     is 7.7:1, and it is what the dark theme was already doing, so both themes
+     now treat the primary button the same way. */
+  --btn-teal-fg:#04201C;
+  --shadow-rgb:10,15,16;
+  /* The hero's background grid. It has to flip with the theme: a near-black
+     hairline is invisible on the dark field, which is why the grid only ever
+     appeared in light mode. */
+  --grid-line:rgba(10,15,16,.045);
+}
+/* =========================================================
+   DARK THEME
+   Applied by [data-theme="dark"] on <html>, set by an inline
+   script in each page head so there is no flash, and remembered
+   in localStorage. Falls back to the visitor's system setting.
+   ========================================================= */
+[data-theme="dark"]{
+  color-scheme:dark;
+
+  --bg:#0A0F10;
+  --bg-2:#0E1517;
+  --bg-3:#141D1F;
+  --panel:#0E1517;
+  --panel-2:#141D1F;
+  --line:rgba(255,255,255,.09);
+  --line-2:rgba(255,255,255,.17);
+
+  --teal:#2DD4BF;
+  --teal-deep:#5EEAD4;
+  --teal-glow:rgba(45,212,191,.34);
+
+  --ink:#F2F6F6;
+  --ink-2:#A3B1B3;
+  --ink-3:#748386;
+
+  --surface:#111A1D;
+  --field:#0B1113;
+  --tint:rgba(45,212,191,.1);
+  --tint-soft:rgba(45,212,191,.06);
+  --tint-strong:rgba(45,212,191,.14);
+  --tint-lav:rgba(167,139,250,.12);
+  --head-glass:rgba(10,15,16,.86);
+  --nav-glass:rgba(10,15,16,.98);
+  --subnav-glass:rgba(10,15,16,.9);
+  --plate:#0E1517;
+  --select-arrow:%238C9A9D;
+  --ph:#6E7B7E;
+  --err-fg:#FCA5B5;
+  --err-bg:rgba(225,29,72,.16);
+
+  --sh-1:0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 2px 4px rgba(0,0,0,.3),0 10px 24px -10px rgba(0,0,0,.6);
+  --sh-3:0 4px 8px rgba(0,0,0,.3),0 24px 48px -20px rgba(0,0,0,.75);
+  --sh-teal:0 4px 12px -3px rgba(45,212,191,.3),0 12px 32px -12px rgba(45,212,191,.35);
+
+  --btn-teal-1:#38DCC7;
+  --btn-teal-2:#20B7A4;
+  --btn-teal-fg:#04201C;
+  --shadow-rgb:0,0,0;
+  /* Lighter than the light theme's 4.5% of black, because a 1px white hairline
+     at 6% reads dimmer against near-black than 4.5% black does against white. */
+  --grid-line:rgba(255,255,255,.07);
+}
+[data-theme="dark"] .form__store{border-color:rgba(217,119,6,.4);background:rgba(217,119,6,.12)}
+[data-theme="dark"] .form__store p{color:#FCD34D}
+[data-theme="dark"] .form__store code{background:rgba(217,119,6,.18);color:#FDE68A}
+
+*,*::before,*::after{box-sizing:border-box}
+
+/* overflow-x:clip on html as well as body. body alone hid the scrollbar but the
+   document still reported a wider width while the blurred .bg-glow (positioned
+   right:-16vw, 60vw across) drifted — measured at 390, 393, 394, 396, 398, 399
+   and 400px over four seconds on a 390px viewport. clip rather than hidden, so
+   it does not create a scroll container and cannot break position:sticky. */
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--head-h) + 60px);-webkit-text-size-adjust:100%;overflow-x:clip}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:15.5px;
+  line-height:1.62;
+  font-weight:400;
+  letter-spacing:-.004em;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+img{max-width:100%;display:block;height:auto}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3,h4{margin:0;line-height:1.1;letter-spacing:-.03em;font-weight:700}
+p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+em{font-style:italic}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sr-h{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+.wrap{width:100%;max-width:var(--wrap);margin-inline:auto;padding-inline:24px}
+.muted{color:var(--ink-3)}
+.hl{color:var(--teal-deep)}
+.pct{font-size:.62em;vertical-align:super;color:var(--teal)}
+
+.skip{position:absolute;left:-9999px;top:0;background:var(--teal);color:#FFFFFF;padding:10px 16px;z-index:999;border-radius:0 0 8px 0;font-weight:600}
+.skip:focus{left:0}
+
+::selection{background:var(--teal);color:#FFFFFF}
+
+/* ============ BACKGROUND FX ============ */
+.bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-glow{position:absolute;border-radius:50%;filter:blur(90px);opacity:.55}
+.bg-glow--a{width:60vw;height:60vw;top:-24vw;right:-16vw;background:radial-gradient(circle,rgba(45,212,191,.28),transparent 62%)}
+.bg-glow--b{width:52vw;height:52vw;bottom:-20vw;left:-18vw;background:radial-gradient(circle,rgba(15,118,110,.2),transparent 64%)}
+.bg-grid{
+  position:absolute;inset:0;
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+  background-size:68px 68px;
+  mask-image:radial-gradient(ellipse 92% 68% at 50% 0%,#000 12%,transparent 78%);
+  -webkit-mask-image:radial-gradient(ellipse 92% 68% at 50% 0%,#000 12%,transparent 78%);
+}
+.bg-grain{
+  position:absolute;inset:-100%;opacity:.022;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain 6s steps(4) infinite;
+}
+@keyframes grain{
+  0%{transform:translate(0,0)}25%{transform:translate(-1.6%,1.1%)}
+  50%{transform:translate(1.1%,-1.6%)}75%{transform:translate(-1.1%,-1.1%)}100%{transform:translate(0,0)}
+}
+
+main,.site-head,.announce,.site-foot{position:relative;z-index:1}
+
+/* ============ ANNOUNCE ============ */
+.announce{background:linear-gradient(90deg,rgba(45,212,191,.16),rgba(124,58,237,.1));border-bottom:1px solid var(--line);font-size:14px}
+.announce__in{display:flex;align-items:center;gap:12px;min-height:44px;flex-wrap:wrap;justify-content:center;text-align:center}
+/* On a phone this line wrapped to three rows and pushed the headline down the
+   screen. The brand count is the part worth keeping; the offer detail waits
+   until there is room for it on one line. */
+@media (max-width:640px){
+  .announce__more{display:none}
+  .announce__in{min-height:38px}
+}
+.announce p{color:var(--ink-2)}
+.announce strong{color:var(--ink)}
+.announce__link{color:var(--teal-deep);font-weight:600;border-bottom:1px solid rgba(20,184,166,.4);white-space:nowrap}
+.announce__link:hover{border-color:var(--teal)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 0 var(--teal-glow);animation:pulse 2.2s infinite;flex:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(45,212,191,.55)}70%{box-shadow:0 0 0 12px rgba(45,212,191,0)}100%{box-shadow:0 0 0 0 rgba(45,212,191,0)}}
+
+/* ============ HEADER ============ */
+.site-head{position:sticky;top:0;z-index:60;transition:background .3s,border-color .3s,backdrop-filter .3s;border-bottom:1px solid transparent}
+.site-head.is-stuck{background:var(--head-glass);backdrop-filter:blur(18px) saturate(150%);border-bottom-color:var(--line)}
+.site-head__in{display:flex;align-items:center;gap:28px;min-height:var(--head-h)}
+
+.brand{display:inline-flex;align-items:center;gap:11px;flex:none}
+.brand__mark{width:30px;height:30px;color:var(--teal);flex:none}
+.brand__mark .brand__nodes{filter:drop-shadow(0 0 4px rgba(20,184,166,.35))}
+.brand__word{font-family:var(--sans);font-weight:600;font-size:18px;letter-spacing:.24em;color:var(--ink)}
+.brand__dot{color:var(--teal)}
+
+.nav{display:flex;gap:28px;margin-left:auto;font-size:15px;font-weight:500}
+.nav a{color:var(--ink-2);transition:color .2s;position:relative}
+.nav a::after{content:"";position:absolute;left:0;right:100%;bottom:-6px;height:1.5px;background:var(--teal);transition:right .3s var(--ease)}.nav a:hover{color:var(--ink)}
+.nav a:hover::after{right:0}
+
+.site-head__cta{display:flex;gap:10px;align-items:center}
+.burger{display:none;width:42px;height:42px;border:1px solid var(--line);background:transparent;border-radius:10px;position:relative;cursor:pointer}
+.burger span{position:absolute;left:11px;right:11px;height:1.6px;background:var(--ink);transition:.3s var(--ease)}
+.burger span:first-child{top:16px}
+.burger span:last-child{top:24px}
+.burger[aria-expanded="true"] span:first-child{transform:translateY(4px) rotate(45deg)}
+.burger[aria-expanded="true"] span:last-child{transform:translateY(-4px) rotate(-45deg)}
+.mobile-nav{display:none;flex-direction:column;gap:2px;padding:14px 24px 22px;background:var(--nav-glass);border-bottom:1px solid var(--line);backdrop-filter:blur(18px)}
+.mobile-nav a{padding:12px 0;border-bottom:1px solid var(--line);color:var(--ink-2);font-weight:500}
+/* The drawer's link colour otherwise wins on specificity and repaints the
+   buttons, which left "Sign up" pale grey on the bright teal fill — close to
+   invisible in dark mode. Buttons keep their own foreground. */
+.mobile-nav a.btn{color:var(--btn-fg);padding-block:13px}
+.mobile-nav .btn{margin-top:14px;border-bottom:0;justify-content:center}
+.mobile-nav .btn + .btn{margin-top:9px}
+
+/* ============ BUTTONS ============ */
+.btn{
+  --btn-bg:var(--panel-2);--btn-fg:var(--ink);--btn-bd:var(--line-2);
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:13px 22px;border-radius:100px;border:1px solid var(--btn-bd);
+  background:var(--btn-bg);color:var(--btn-fg);
+  font-weight:600;font-size:15px;letter-spacing:-.01em;cursor:pointer;
+  transition:transform .2s var(--ease),box-shadow .3s var(--ease),background .25s,border-color .25s,color .25s;
+  white-space:nowrap;
+}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(0)}
+.btn--sm{padding:10px 17px;font-size:14px}
+.btn--lg{padding:16px 30px;font-size:16px}
+.btn--block{width:100%}
+.btn__arrow{transition:transform .3s var(--ease)}
+
+.btn--primary{
+  --btn-bg:linear-gradient(180deg,var(--btn-teal-1),var(--btn-teal-2));--btn-fg:var(--btn-teal-fg);--btn-bd:transparent;
+  box-shadow:var(--sh-teal);
+}
+.btn--primary:hover{box-shadow:0 6px 16px -3px rgba(20,184,166,.45),0 18px 40px -14px rgba(20,184,166,.5)}
+.btn--primary:hover .btn__arrow{transform:translateX(4px)}
+
+.btn--teal{--btn-bg:#E6FAF7;--btn-fg:var(--teal-deep);--btn-bd:rgba(20,184,166,.35)}
+.btn--teal:hover{--btn-bg:#D3F5F0;--btn-bd:var(--teal)}
+
+.btn--ghost{--btn-bg:var(--surface);--btn-fg:var(--ink);--btn-bd:var(--line-2)}
+.btn--ghost:hover{--btn-bg:var(--bg-2);--btn-bd:rgba(10,15,16,.3)}
+[data-theme="dark"] .btn--ghost:hover{--btn-bd:rgba(255,255,255,.3)}
+[data-theme="dark"] .btn--teal{--btn-bg:rgba(45,212,191,.14);--btn-fg:#5EEAD4;--btn-bd:rgba(45,212,191,.38)}
+[data-theme="dark"] .btn--teal:hover{--btn-bg:rgba(45,212,191,.22);--btn-bd:var(--teal)}
+
+:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:4px}
+
+/* ============ EYEBROW / HEADS ============ */
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal-deep);margin-bottom:20px}
+.eyebrow__pip{width:6px;height:6px;background:var(--teal);transform:rotate(45deg);flex:none;box-shadow:0 0 8px var(--teal-glow)}
+
+/* Section rhythm. The heads lost their lead paragraphs, so the gap under a
+   heading is sized for a heading alone rather than a heading plus a paragraph;
+   the old 32-50px left a hole under every one of them.
+
+   When the h2 is the last thing in the head its own 16px margin-bottom is
+   removed, otherwise the two margins collapse and the gap comes out at 8px on
+   desktop and -4px on mobile — the body content visually touches the heading. */
+.sec{padding:clamp(48px,5.6vw,84px) 0;position:relative}
+.sec__head{max-width:760px;margin-bottom:clamp(22px,2.4vw,34px)}
+.sec__head .sec__h2:last-child{margin-bottom:0}
+.sec__head:last-child{margin-bottom:0}
+
+@media (max-width:720px){
+  /* One column means each section is much taller, so the air between them has
+     to come from the gaps rather than from a large padding on both sides. */
+  .sec{padding:40px 0}
+  .sec__head{margin-bottom:20px}
+}
+.sec__h2{font-size:clamp(25px,3.1vw,37px);letter-spacing:-.027em;line-height:1.14;margin-bottom:16px}
+.sec__lead{font-size:clamp(15px,1.05vw,16.5px);color:var(--ink-2);max-width:64ch;line-height:1.62}
+
+/* ============ THEME TOGGLE ============ */
+.theme-toggle{display:inline-flex;gap:2px;padding:3px;border-radius:99px;
+  border:1px solid var(--line-2);background:var(--panel-2);flex:none}
+.theme-toggle--mobile{align-self:flex-start;margin-top:14px}
+.theme-toggle button{width:32px;height:32px;padding:0;border:0;border-radius:50%;background:transparent;
+  color:var(--ink-3);cursor:pointer;display:grid;place-items:center;
+  transition:background .25s,color .25s,box-shadow .25s}
+.theme-toggle button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.theme-toggle button:hover{color:var(--ink)}
+.theme-toggle button[aria-pressed="true"]{background:var(--surface);color:var(--teal-deep);box-shadow:var(--sh-1)}
+
+/* ============ SOUND TOGGLE ============
+   Same shape as the theme control, since it is the same kind of thing: a
+   preference the visitor owns. One button rather than two, because sound is
+   simply on or off. Injected by script so it cannot drift between pages. */
+.sound-toggle{display:inline-flex;padding:3px;border-radius:99px;
+  border:1px solid var(--line-2);background:var(--panel-2);flex:none}
+.sound-toggle--mobile{align-self:flex-start;margin-top:14px}
+.sound-toggle button{width:32px;height:32px;padding:0;border:0;border-radius:50%;background:transparent;
+  color:var(--ink-3);cursor:pointer;display:grid;place-items:center;
+  transition:background .25s,color .25s,box-shadow .25s}
+.sound-toggle button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.sound-toggle button:hover{color:var(--ink)}
+.sound-toggle button[aria-pressed="true"]{background:var(--surface);color:var(--teal-deep);box-shadow:var(--sh-1)}
+
+/* ============ FLOW DIAGRAM ============
+   Four steps with no numbering. A sequence of four reads as a sequence on its
+   own, and the arrows between the cards already carry the direction, so the
+   numerals were doing no work. The cards keep the same height either way. */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:clamp(30px,3.6vw,48px)}
+.flow__step{position:relative;padding:22px;border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-1);
+  transition:transform .3s var(--ease),box-shadow .3s,border-color .3s}
+.flow__step:hover{transform:translateY(-3px);box-shadow:var(--sh-2);border-color:rgba(20,184,166,.3)}
+.flow__step b{display:block;font-size:15.5px;margin-bottom:7px;letter-spacing:-.02em}
+.flow__step span{display:block;color:var(--ink-2);font-size:13.6px;line-height:1.55}
+.flow__step:not(:last-child)::after{content:"";position:absolute;right:-16px;top:34px;width:16px;height:2px;
+  background:linear-gradient(90deg,var(--teal),rgba(20,184,166,.2))}
+.flow__step:last-child{border-color:rgba(20,184,166,.35);background:linear-gradient(160deg,var(--tint),var(--surface))}
+
+/* ============ COMPARISON TABLE ============ */
+.tablewrap{overflow-x:auto;margin-top:clamp(28px,3.4vw,44px);border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-2);
+  -webkit-overflow-scrolling:touch}
+.ctable{min-width:640px}
+.ctable__row{display:grid;grid-template-columns:minmax(240px,2.2fr) repeat(3,minmax(110px,1fr));
+  border-bottom:1px solid var(--line);align-items:stretch}
+.ctable__row:last-child{border-bottom:0}
+.ctable__row--head{background:var(--bg-2)}
+.ctable__row--head .ctable__cell{font-weight:700;font-size:14.5px;color:var(--ink);letter-spacing:-.01em;
+  padding-block:18px}
+.ctable__cell{padding:15px 20px;font-size:14px;color:var(--ink-2);display:flex;align-items:center;gap:9px}
+.ctable__row{transition:background .2s}
+.ctable__row:hover:not(.ctable__row--head){background:var(--bg-2)}
+.ctable__row--best:hover{background:linear-gradient(90deg,rgba(20,184,166,.1),var(--bg-2) 60%)}
+.ctable__cell small{font-weight:500}
+.ctable__cell:first-child{font-weight:500;color:var(--ink)}
+.ctable__cell:not(:first-child){justify-content:center;text-align:center;border-left:1px solid var(--line)}
+.ctable__row--head .ctable__cell:not(:first-child){border-left:1px solid var(--line)}
+.ctable__row--best{background:linear-gradient(90deg,var(--tint),transparent 60%)}
+.ctable__row--best .ctable__cell:first-child::after{content:"Best value";margin-left:10px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--teal-deep);border:1px solid rgba(20,184,166,.35);border-radius:99px;padding:2px 8px}
+.yes,.no{width:20px;height:20px;border-radius:50%;flex:none;position:relative}
+.yes{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--teal)}
+.yes::after{content:"";position:absolute;left:6px;top:4px;width:6px;height:10px;
+  border-right:2px solid var(--teal-deep);border-bottom:2px solid var(--teal-deep);transform:rotate(42deg)}
+.no{background:var(--bg-3);box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.no::after{content:"";position:absolute;left:9px;top:5px;width:2px;height:10px;background:var(--ink-3);transform:rotate(45deg)}
+.no::before{content:"";position:absolute;left:9px;top:5px;width:2px;height:10px;background:var(--ink-3);transform:rotate(-45deg)}
+
+/* ============ HOLO VIEWER ============ */
+.holo{position:relative;perspective:1200px;width:min(100%,480px);
+  padding:clamp(14px,2.4vw,26px);display:grid;place-items:center}
+.holo__glow{position:absolute;inset:-6% -2%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(58% 50% at 50% 56%,rgba(20,184,166,.34),transparent 70%);
+  filter:blur(26px);animation:holoPulse 7s ease-in-out infinite}
+@keyframes holoPulse{0%,100%{opacity:.55;transform:scale(.97)}50%{opacity:.9;transform:scale(1.04)}}
+
+.holo__grid{position:absolute;left:50%;bottom:5%;width:78%;height:34%;
+  pointer-events:none;opacity:.5;
+  background-image:linear-gradient(rgba(20,184,166,.45) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(20,184,166,.45) 1px,transparent 1px);
+  background-size:22px 22px;
+  transform-origin:50% 100%;transform:translateX(-50%) perspective(340px) rotateX(72deg);
+  mask-image:radial-gradient(60% 70% at 50% 40%,#000,transparent 78%);
+  -webkit-mask-image:radial-gradient(60% 70% at 50% 40%,#000,transparent 78%);
+  animation:holoGrid 9s linear infinite}
+@keyframes holoGrid{to{background-position:0 22px,22px 0}}
+
+.holo__ring{position:absolute;left:50%;top:56%;border-radius:50%;pointer-events:none;
+  border:1px solid rgba(20,184,166,.5)}
+.holo__ring--a{width:82%;aspect-ratio:1;transform:translate(-50%,-50%) rotateX(76deg);
+  animation:holoSpin 22s linear infinite}
+.holo__ring--b{width:60%;aspect-ratio:1;border-style:dashed;border-color:rgba(20,184,166,.4);
+  transform:translate(-50%,-50%) rotateX(76deg);animation:holoSpin 15s linear infinite reverse}
+@keyframes holoSpin{to{transform:translate(-50%,-50%) rotateX(76deg) rotate(360deg)}}
+
+/* ---- Levitation ----
+   Two nested layers on purpose. The stage owns tilt because it is the only
+   element with `transform-style: preserve-3d`, so its children can be pushed
+   apart in Z and the card gains real depth. The card owns the idle float,
+   which keeps the two transforms from overwriting each other. */
+.holo__stage{position:relative;width:100%;display:grid;place-items:center;
+  transform-style:preserve-3d;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateZ(0);
+  transition:transform .7s cubic-bezier(.16,1,.3,1);will-change:transform}
+.holo__stage.is-live{transition:transform .18s cubic-bezier(.22,.61,.36,1)}
+
+.holo__card{position:relative;width:100%;max-width:330px;
+  animation:holoFloat 7s ease-in-out infinite;will-change:transform}
+@keyframes holoFloat{
+  0%,100%{transform:translateY(0) translateZ(0)}
+  50%{transform:translateY(-13px) translateZ(24px)}
+}
+/* The screen tilts in space, so the text sits above the plate rather than on
+   it. That parallax is what reads as levitation rather than as a flat card. */
+.holo__screen{position:relative;overflow:hidden;border-radius:var(--r-lg);
+  padding:24px;color:#DCFBF5;transform:translateZ(22px);
+  background:linear-gradient(160deg,rgba(6,32,32,.94),rgba(8,44,42,.88));
+  border:1px solid rgba(45,212,191,.5);
+  box-shadow:0 0 54px -12px rgba(20,184,166,.6),inset 0 0 46px rgba(20,184,166,.14)}
+.holo__scan{position:absolute;left:0;right:0;height:34%;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(45,212,191,.22),transparent);
+  animation:holoScan 5.5s linear infinite}
+@keyframes holoScan{0%{top:-40%}100%{top:110%}}
+
+/* A soft light that follows the pointer, so the card reads as lit by it. */
+.holo__cursor{position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(210px circle at var(--mx,50%) var(--my,50%),
+    rgba(94,234,212,.16),transparent 62%)}
+
+.holo__top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding-bottom:16px;border-bottom:1px solid rgba(45,212,191,.28);margin-bottom:20px}
+.holo__kicker{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(45,212,191,.85)}
+.holo__id{font-family:var(--mono);font-size:11px;color:rgba(220,251,245,.7)}
+
+/* The verdict and the bars carry the risk colour, and it is drawn entirely
+   from data-level. Every level has one accent, so the card never mixes two. */
+.holo__verdict{font-size:clamp(26px,3.2vw,34px);font-weight:800;letter-spacing:-.03em;
+  line-height:1.15;margin-bottom:10px;
+  color:var(--lvl,#5EEAD4);
+  text-shadow:0 0 22px var(--lvl-glow,rgba(45,212,191,.6))}
+.holo__meta{font-family:var(--mono);font-size:11.5px;color:rgba(220,251,245,.72);margin-bottom:20px}
+
+.holo__bars{display:grid;grid-template-columns:auto 1fr auto;gap:9px 12px;align-items:center;
+  margin-bottom:20px;font-family:var(--mono);font-size:10.5px;color:rgba(220,251,245,.8)}
+.holo__bar{display:contents}
+.holo__bar i{font-style:normal;min-width:74px}
+.holo__bar span{display:block;height:6px;border-radius:99px;
+  background:linear-gradient(90deg,var(--lvl-b1,#14B8A6),var(--lvl,#5EEAD4));
+  transition:width .75s var(--ease-out)}
+.holo__bar b{font-weight:500;min-width:34px;text-align:right;
+  color:var(--lvl,#5EEAD4);font-variant-numeric:tabular-nums}
+
+.holo__act{display:flex;justify-content:space-between;gap:12px;padding-top:16px;
+  border-top:1px solid rgba(45,212,191,.28);font-size:12.5px;color:rgba(220,251,245,.85)}
+.holo__act b{color:var(--lvl,#5EEAD4);font-weight:600;text-align:right}
+
+/* One colour set per risk level. */
+.holo[data-level="safe"]{
+  --lvl:#5EEAD4;--lvl-glow:rgba(45,212,191,.6);--lvl-b1:#14B8A6}
+.holo[data-level="medium"]{
+  --lvl:#FCD34D;--lvl-glow:rgba(252,211,77,.5);--lvl-b1:#D97706}
+.holo[data-level="high"]{
+  --lvl:#FDA4AF;--lvl-glow:rgba(251,113,133,.55);--lvl-b1:#E11D48}
+.holo[data-level="neutral"]{
+  --lvl:#93C5FD;--lvl-glow:rgba(147,197,253,.45);--lvl-b1:#3B82F6}
+
+
+/* ============ CHART ============ */
+.chart{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(28px,4vw,56px);
+  align-items:center;margin-top:clamp(30px,3.6vw,48px);
+  padding:clamp(26px,3.4vw,44px);border-radius:var(--r-xl);
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-2)}
+.donut{position:relative;width:clamp(190px,18vw,236px);flex:none;margin-inline:auto}
+
+/* In-page anchors have a sticky header and a sticky section nav above them, so
+   jumping to a section put its heading underneath both. The offset is applied
+   to the anchor targets rather than to the smooth-scroll code, so it holds for
+   a deep link opened directly as well. */
+.sec, section[id]{scroll-margin-top:112px}
+.donut__svg{width:100%;height:auto}
+.donut__seg{fill:none;stroke-width:26;stroke-linecap:butt;cursor:pointer;
+  transition:stroke-width .3s var(--ease),opacity .3s}
+.donut__seg--cod{stroke:url(#codGrad)}
+.donut__seg--pre{stroke:var(--line-2)}
+.donut__seg.is-dim{opacity:.4}
+.donut__seg.is-on{stroke-width:32}
+.donut__mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;text-align:center;pointer-events:none}
+.donut__val{font-size:clamp(26px,3vw,36px);font-weight:800;letter-spacing:-.04em;
+  line-height:1;color:var(--teal-deep);font-variant-numeric:tabular-nums}
+.donut__lab{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);max-width:16ch;line-height:1.4}
+
+.chart__legend{display:flex;flex-direction:column;gap:11px;margin-bottom:22px}
+.chart__legend button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:11px 14px;border-radius:var(--r);border:1px solid transparent;background:transparent;
+  cursor:pointer;font-size:14.5px;color:var(--ink-2);transition:background .25s,border-color .25s}
+.chart__legend button:hover{background:var(--bg-2)}
+.chart__legend button.is-on{border-color:var(--line-2);background:var(--bg-2);color:var(--ink)}
+.chart__swatch{width:11px;height:11px;border-radius:3px;flex:none}
+.chart__swatch--cod{background:linear-gradient(180deg,#2DD4BF,#14B8A6)}
+.chart__swatch--pre{background:var(--line-2)}
+.chart__legend b{margin-left:auto;font-family:var(--mono);font-size:13.5px;color:var(--ink);font-weight:500}
+.chart__line{font-size:15.5px;color:var(--ink-2);line-height:1.6;max-width:52ch;
+  padding-top:20px;border-top:1px solid var(--line)}
+.chart__line b{color:var(--ink)}
+.ev{display:flex;flex-direction:column;gap:10px;padding:18px 20px;border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-1);
+  transition:border-color .3s,transform .3s var(--ease)}
+.ev:hover{border-color:var(--line-2);transform:translateY(-3px)}
+@keyframes evFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+/* ============ DECISION DIAGRAM ============ */
+.dgm{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:clamp(28px,3.4vw,44px)}
+.dgm__node{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);
+  padding:13px 26px;font-weight:600;font-size:15px;box-shadow:var(--sh-1);text-align:center}
+.dgm__node--start{border-color:var(--teal);color:var(--teal-deep);background:var(--tint)}
+.dgm__down{width:2px;height:26px;background:var(--line-2);position:relative}
+.dgm__down::after{content:"";position:absolute;left:50%;bottom:-1px;transform:translateX(-50%);
+  border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--line-2)}
+.dgm__split{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,4vw,64px);width:100%;margin-top:26px}
+.dgm__branch{display:flex;flex-direction:column;align-items:center;position:relative;padding-top:26px}
+.dgm__branch::before{content:"";position:absolute;top:0;height:26px;width:2px;background:var(--line-2)}
+.dgm__branch--yes::before{background:rgba(20,184,166,.5)}
+.dgm__branch--no::before{background:rgba(225,29,72,.4)}
+.dgm__tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  margin-bottom:12px}
+.dgm__branch--yes .dgm__tag{color:var(--teal-deep)}
+.dgm__branch--no .dgm__tag{color:var(--coral)}
+.dgm__out{width:100%;text-align:center;padding:20px;border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-1)}
+.dgm__branch--yes .dgm__out{border-color:rgba(20,184,166,.35);background:linear-gradient(160deg,var(--tint),var(--surface))}
+.dgm__out b{display:block;font-size:16.5px;margin-bottom:8px}
+.dgm__out span{font-size:13.8px;color:var(--ink-2);line-height:1.55}
+
+/* ============ CTA BAND ============ */
+.cta-band{margin:clamp(40px,5vw,72px) 0 0;padding:clamp(24px,3vw,36px) clamp(24px,3vw,40px);
+  border-radius:var(--r-xl);border:1px solid rgba(20,184,166,.3);
+  background:linear-gradient(120deg,var(--tint),var(--surface) 70%);
+  box-shadow:var(--sh-2);display:flex;align-items:center;gap:clamp(20px,3vw,40px);
+  flex-wrap:wrap;justify-content:space-between}
+.cta-band h3{font-size:clamp(19px,2.2vw,26px);letter-spacing:-.03em;margin-bottom:6px}
+.cta-band p{color:var(--ink-2);font-size:15px;max-width:56ch;line-height:1.6}
+.cta-band .btn{flex:none}
+
+@media (max-width:980px){
+  .chart{grid-template-columns:1fr;text-align:left}
+  .donut{margin-bottom:8px}
+  .evidence{grid-template-columns:1fr}
+}
+@media (max-width:680px){
+  .holo{width:100%}
+  .dgm__split{grid-template-columns:1fr;gap:26px}
+  .cta-band .btn{width:100%}
+}
+
+/* ============ AUTH / LOGIN ============ */
+.site-head--bare .nav{display:none}
+/* The sign-in page has no mobile menu, so its theme switch must stay visible. */
+.site-head--bare .theme-toggle--inline{display:inline-flex}
+.auth{padding:clamp(32px,4.4vw,64px) 0 clamp(56px,6vw,90px)}
+
+/* Two halves in one frame. The brand half keeps its own dark tokens rather than
+   following the theme, exactly as the pricing and proof bands do, so the pair
+   reads as a single object and the form keeps whatever surface the theme gives
+   it. In dark mode both halves are dark and it reads like one panel. */
+.auth__panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,436px);
+  border-radius:var(--r-xl);border:1px solid var(--line);overflow:hidden;
+  background:var(--surface);box-shadow:var(--sh-3)}
+
+.auth__brand{position:relative;overflow:hidden;
+  padding:clamp(26px,3.4vw,46px);
+  background:linear-gradient(158deg,#0E3B36 0%,#0A2724 44%,#050F0E 100%);
+  --ink:#F1F8F7; --ink-2:#B9CFCB; --ink-3:#87A5A0;
+  --teal:#2DD4BF; --teal-deep:#5EEAD4; --teal-glow:rgba(45,212,191,.55);
+  --line:rgba(255,255,255,.13);
+  color:var(--ink)}
+.auth__brand-glow{position:absolute;left:-18%;top:-28%;width:86%;height:78%;
+  pointer-events:none;
+  background:radial-gradient(58% 58% at 34% 26%,rgba(45,212,191,.3),transparent 72%)}
+.auth__brand-in{position:relative;display:flex;flex-direction:column;
+  height:100%;gap:clamp(20px,2.6vw,32px)}
+.auth__brand h1{font-size:clamp(26px,3vw,37px);letter-spacing:-.034em;
+  line-height:1.1;margin-bottom:14px;max-width:20ch}
+.auth__brand-note{color:var(--ink-2);font-size:14.4px;line-height:1.6;max-width:42ch}
+
+/* The three cards from the reference, on Verafo's own terms: what the dashboard
+   actually shows you, numbered, with the first one lit. */
+.auth__steps{display:flex;flex-direction:column;gap:9px;list-style:none;
+  margin:auto 0 0;padding:0}
+.auth__step{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 13px;
+  padding:14px 16px;border-radius:var(--r);border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.045);
+  transition:background .3s var(--ease),border-color .3s,transform .3s var(--ease)}
+.auth__step-n{grid-row:1 / span 2;align-self:start;padding-top:2px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  color:rgba(255,255,255,.42);transition:color .3s}
+.auth__step b{font-size:14px;font-weight:600;letter-spacing:-.01em;
+  color:rgba(255,255,255,.88);transition:color .3s}
+.auth__step > span:last-child{font-size:12.8px;line-height:1.45;
+  color:rgba(255,255,255,.52);transition:color .3s}
+.auth__step:not(.is-on):hover{background:rgba(255,255,255,.09);
+  border-color:rgba(255,255,255,.2);transform:translateY(-2px)}
+/* The lit card inverts, which is what gives the group its depth. */
+.auth__step.is-on{background:#F3FAF8;border-color:#F3FAF8;
+  box-shadow:0 12px 32px -16px rgba(0,0,0,.75)}
+.auth__step.is-on .auth__step-n{color:#0F766E}
+.auth__step.is-on b{color:#07211E}
+.auth__step.is-on > span:last-child{color:#43625E}
+
+.auth__brand-trust{display:flex;gap:10px;align-items:flex-start;
+  font-size:12.6px;line-height:1.5;color:var(--ink-3);margin:0;max-width:44ch}
+.auth__dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex:none;
+  margin-top:5px;box-shadow:0 0 0 4px rgba(45,212,191,.18)}
+
+.auth__form{display:flex;flex-direction:column;
+  padding:clamp(26px,3.4vw,44px);
+  background:var(--surface);border-left:1px solid var(--line)}
+.auth__head{margin-bottom:22px}
+.auth__head h2{font-size:23px;letter-spacing:-.028em;margin-bottom:6px}
+.auth__head p{font-size:14px;color:var(--ink-2)}
+/* Two classes deep, because the shared .form rule sits far below this point in
+   the file and would otherwise win on equal specificity — which left the fields
+   inside a bordered card inside the already-bordered panel. */
+.form.form--auth{display:flex;flex-direction:column;gap:16px;
+  padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+
+/* The route that works today, kept out in the open instead of buried in the
+   note that only appears after a failed attempt. */
+.auth__alt{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.auth__alt p{font-size:12.8px;color:var(--ink-3);line-height:1.5;margin-bottom:11px}
+
+@media (max-width:900px){
+  /* One column, and the form comes first visually. The brand half carries the
+     page's h1, so it stays first in the markup and order is only reversed for
+     display — it holds nothing focusable, so the tab order is unaffected. */
+  .auth__panel{grid-template-columns:1fr;border-radius:var(--r-lg)}
+  .auth__form{order:1;border-left:0;border-bottom:1px solid var(--line)}
+  .auth__brand{order:2}
+  .auth__brand-in{gap:18px}
+  .auth__steps{margin-top:20px}
+  .auth__brand h1{max-width:none}
+}
+.auth__row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:2px 0 4px}
+.auth__link{font-size:13.4px;color:var(--teal-deep);border-bottom:1px solid rgba(20,184,166,.35)}
+.auth__note{margin-top:18px;padding:16px;border-radius:var(--r);border:1px dashed rgba(217,119,6,.45);
+  background:#FFFBEB}
+.auth__note p{font-size:12.8px;color:#92400E;line-height:1.6;margin-bottom:13px}
+.auth__note code{font-family:var(--mono);font-size:11.6px;background:rgba(217,119,6,.12);
+  padding:2px 6px;border-radius:4px;color:#78350F}
+[data-theme="dark"] .auth__note{background:rgba(217,119,6,.12);border-color:rgba(217,119,6,.45)}
+[data-theme="dark"] .auth__note p{color:#FCD34D}
+[data-theme="dark"] .auth__note code{background:rgba(217,119,6,.2);color:#FDE68A}
+.auth__handoff{margin-top:14px;font-size:12.8px;color:var(--ink-3);line-height:1.55}
+.auth__handoff b{color:var(--ink-2);font-weight:600}
+.auth__foot{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.auth__foot p{font-size:13.4px;color:var(--ink-3);margin-bottom:12px}
+
+.pass{position:relative;display:block}
+.pass input{padding-right:48px}
+.pass__toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:34px;height:34px;border:0;border-radius:8px;background:transparent;cursor:pointer;
+  color:var(--ink-3);display:grid;place-items:center;transition:color .25s,background .25s}
+.pass__toggle:hover{color:var(--ink);background:var(--bg-2)}
+.pass__toggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7}
+.pass__toggle[aria-pressed="true"]{color:var(--teal-deep)}
+
+/* The sign-in page has no link columns, so it uses only the bottom bar. The
+   longhands here are specific enough to survive the dark-footer block
+   further down the sheet. */
+.site-foot--slim{padding-top:clamp(26px,3.5vw,40px);padding-bottom:6px;background:#080D0E}
+.site-foot--slim .site-foot__base{border-top:0;padding-block:14px}
+.site-foot--slim a{color:#A3B1B3;border-bottom:1px solid rgba(255,255,255,.18)}
+.site-foot--slim a:hover{color:#5EEAD4}
+
+/* ============ 404 ============ */
+.nf{padding:clamp(46px,6vw,84px) 0 clamp(64px,7vw,104px)}
+.nf__in{max-width:760px}
+.nf__mark{width:clamp(84px,11vw,124px);color:var(--teal);
+  filter:drop-shadow(0 0 22px rgba(20,184,166,.28));margin-bottom:28px}
+.nf__mark svg{width:100%;height:auto}
+.nf h1{font-size:clamp(28px,3.8vw,44px);letter-spacing:-.032em;line-height:1.1;margin-bottom:16px}
+.nf__lead{color:var(--ink-2);font-size:16px;line-height:1.6;max-width:48ch;margin-bottom:30px}
+.nf__cta{display:flex;gap:13px;flex-wrap:wrap;margin-bottom:clamp(38px,4.5vw,58px)}
+.nf__links>p{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:16px}
+.nf__grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.nf__grid a{display:flex;flex-direction:column;gap:4px;padding:16px 18px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-1);
+  transition:border-color .3s,transform .3s var(--ease),box-shadow .3s}
+.nf__grid a:hover{border-color:rgba(20,184,166,.35);transform:translateY(-3px);box-shadow:var(--sh-2)}
+.nf__grid b{font-size:15px;letter-spacing:-.015em}
+.nf__grid span{font-size:13.2px;color:var(--ink-3);line-height:1.45}
+
+/* ============ MOBILE STICKY CTA ============ */
+.mobile-cta{position:fixed;left:0;right:0;bottom:0;z-index:110;
+  display:none;align-items:center;gap:12px;justify-content:space-between;
+  padding:11px 16px calc(11px + env(safe-area-inset-bottom,0px));
+  background:var(--head-glass);backdrop-filter:blur(16px) saturate(150%);
+  border-top:1px solid var(--line);
+  transform:translateY(102%);transition:transform .35s var(--ease)}
+.mobile-cta.is-on{transform:none}
+.mobile-cta p{font-size:13px;color:var(--ink-2);line-height:1.35}
+.mobile-cta p b{display:block;color:var(--ink);font-size:13.5px}
+.mobile-cta .btn{flex:none;padding:11px 18px;font-size:14px}
+
+@media (max-width:680px){
+  .nf__grid{grid-template-columns:1fr}
+}
+
+/* ============ HERO LOAD SEQUENCE ============
+   Plays once on arrival rather than on scroll, because the hero is already
+   in view when the page opens. Declarative CSS animation, so it runs even if
+   the script never loads, and the fixed delays give a readable cadence: the
+   headline words first, then the deck, buttons, numbers and finally the card. */
+.hero__h1 .w{display:inline-block;overflow:hidden;vertical-align:bottom;
+  padding-bottom:.08em;margin-bottom:-.08em}
+.hero__h1 .w > span{display:inline-block}
+.js .hero__h1.load .w > span{animation:wordUp .95s var(--ease-out) both}
+.hero__h1.load .w:nth-child(1) > span{animation-delay:.06s}
+.hero__h1.load .w:nth-child(2) > span{animation-delay:.15s}
+.hero__h1.load .w:nth-child(3) > span{animation-delay:.24s}
+.hero__h1.load .w:nth-child(4) > span{animation-delay:.34s}
+@keyframes wordUp{
+  from{transform:translateY(112%) rotate(2.5deg);opacity:0}
+  to{transform:none;opacity:1}
+}
+.js .hero .load{animation:riseIn .8s var(--ease-out) both}
+.js .hero__sub.load{animation-delay:.5s}
+.js .hero__cta.load{animation-delay:.62s}
+.js .hero .trustbar.load{animation-delay:.74s}
+.js .hero__art.load{animation:artIn 1.1s .34s var(--ease-out) both}
+@keyframes riseIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+@keyframes artIn{
+  from{opacity:0;transform:translateY(34px) scale(.94)}
+  to{opacity:1;transform:none}
+}
+
+/* ============ MAGNETIC BUTTONS ============ */
+.magnet{will-change:transform}
+
+/* ============ CARD HEADING UNDERLINE ============ */
+.card h3, .step h3{position:relative;display:inline-block}
+.card h3::after, .step h3::after{content:"";position:absolute;left:0;bottom:-4px;height:1.5px;width:100%;
+  background:linear-gradient(90deg,var(--teal),transparent);
+  transform:scaleX(0);transform-origin:left;
+  transition:transform .45s var(--ease-out)}
+.card:hover h3::after, .step:hover h3::after{transform:scaleX(1)}
+
+/* ============ TIER SPOTLIGHT ============
+   A soft light that follows the cursor across each price card. Driven by
+   --mx and --my, written from script on hover-capable devices only. */
+.tier::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  opacity:0;transition:opacity .35s;
+  background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),
+    rgba(45,212,191,.16),transparent 62%)}
+.tier:hover::after{opacity:1}
+.tier--hero::after{background:radial-gradient(300px circle at var(--mx,50%) var(--my,50%),
+  rgba(94,234,212,.2),transparent 64%)}
+
+/* ============ CALCULATOR PULSE ============ */
+.calc__out-v span.is-hit{animation:numHit .42s var(--ease-out)}
+@keyframes numHit{
+  0%{transform:scale(1)}
+  35%{transform:scale(1.07);filter:brightness(1.25)}
+  100%{transform:scale(1)}
+}
+
+/* ============ FORM SUCCESS BURST ============ */
+.form__done-ico{position:relative}
+.burst{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.burst i{position:absolute;left:0;top:0;width:7px;height:7px;border-radius:2px;
+  background:var(--teal);transform:translate(-50%,-50%) rotate(0deg);
+  animation:burstOut .95s var(--ease-out) both}
+@keyframes burstOut{
+  0%{opacity:0;transform:translate(-50%,-50%) rotate(0deg) translateX(0) scale(.4)}
+  15%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-50%) rotate(160deg) translateX(var(--d,58px)) scale(1)}
+}
+
+/* ============ LIVE BAND ============
+   A slow teal light that crosses the dark bands, so they read as live
+   surfaces rather than flat blocks of black. */
+.sec--pricing::before{background-size:220% 220%,auto,auto;
+  animation:bandDrift 16s ease-in-out infinite}
+@keyframes bandDrift{
+  0%,100%{background-position:0% 0%,0 0,0 0}
+  50%{background-position:100% 0%,0 0,0 0}
+}
+
+@media (prefers-reduced-motion:reduce){
+  /* The scan card: no floating, no tilt, no scan sweep. It simply sits. */
+  .holo__glow,.holo__grid,.holo__ring,.holo__scan{animation:none}
+  .holo__verdict{transition:none;animation:none !important}
+  .holo__bar span{transition:none}
+  .holo__card{animation:none}
+  .holo__stage{transform:none;transition:none}
+  .holo__cursor{display:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .js .hero__h1.load .w > span,
+  .js .hero .load,
+  .js .hero__art.load{animation:none}
+  .card h3::after, .step h3::after{transition:none;transform:scaleX(1)}
+  .tier::after{display:none}
+  .calc__out-v span.is-hit{animation:none}
+  .burst{display:none}
+  .sec--pricing::before{animation:none}
+  .magnet{transform:none !important}
+}
+
+/* ============ READING PROGRESS ============ */
+.readbar{position:fixed;top:0;left:0;height:3px;width:0;z-index:200;
+  background:linear-gradient(90deg,#0F766E,#14B8A6,#2DD4BF);
+  box-shadow:0 0 10px rgba(20,184,166,.55);
+  transition:width .1s linear;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.readbar{transition:none}}
+
+/* ============ SECTION SUBNAV ============ */
+.subnav{position:sticky;top:var(--head-h);z-index:55;background:var(--subnav-glass);
+  backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid var(--line)}
+.subnav__in{display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;
+  padding-block:9px}
+.subnav__in::-webkit-scrollbar{display:none}
+.subnav a{padding:7px 15px;border-radius:99px;font-size:14px;font-weight:500;color:var(--ink-2);
+  white-space:nowrap;transition:background .25s,color .25s}
+.subnav a:hover{background:var(--bg-2);color:var(--ink)}
+.subnav a.is-active{background:var(--tint);color:var(--teal-deep);box-shadow:inset 0 0 0 1px rgba(20,184,166,.28)}
+
+/* ============ BACK TO TOP ============ */
+.totop{position:fixed;right:22px;bottom:22px;z-index:120;width:50px;height:50px;padding:0;
+  border-radius:50%;border:1px solid var(--line-2);background:var(--plate);cursor:pointer;
+  display:grid;place-items:center;box-shadow:var(--sh-3);
+  opacity:0;visibility:hidden;transform:translateY(12px) scale(.9);
+  transition:opacity .35s var(--ease),transform .35s var(--ease),visibility .35s,border-color .25s}
+.totop.is-on{opacity:1;visibility:visible;transform:none}
+.totop:hover{border-color:var(--teal)}
+.totop__ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.totop__track{fill:none;stroke:rgba(10,15,16,.07);stroke-width:2.5}
+.totop__fill{fill:none;stroke:var(--teal);stroke-width:2.5;stroke-linecap:round;
+  stroke-dasharray:132;stroke-dashoffset:132;transition:stroke-dashoffset .12s linear}
+.totop__arrow{position:relative;width:20px;height:20px;color:var(--ink);
+  transition:transform .3s var(--ease)}
+.totop:hover .totop__arrow{transform:translateY(-2px);color:var(--teal-deep)}
+
+/* ============ FAQ ACCORDION ============ */
+.faq{max-width:880px}
+.faq__item{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);
+  margin-bottom:10px;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+.faq__item:hover{border-color:var(--line-2)}
+.faq__item[open]{border-color:rgba(20,184,166,.32);box-shadow:var(--sh-2)}
+.faq__item summary{list-style:none;cursor:pointer;position:relative;
+  padding:19px 56px 19px 22px;font-weight:600;font-size:16.5px;letter-spacing:-.015em;
+  transition:color .25s}
+.faq__item summary::-webkit-details-marker{display:none}
+.faq__item summary:hover{color:var(--teal-deep)}
+.faq__item summary::after{content:"";position:absolute;right:22px;top:50%;width:11px;height:11px;
+  margin-top:-7px;border-right:2px solid var(--teal);border-bottom:2px solid var(--teal);
+  transform:rotate(45deg);transition:transform .3s var(--ease)}
+.faq__item[open] summary::after{transform:rotate(-135deg);margin-top:-3px}
+.faq__body{padding:0 22px 22px;border-top:1px solid var(--line);margin-top:-1px;padding-top:18px;
+  animation:faqIn .35s var(--ease-out)}
+@keyframes faqIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.faq__body p{color:var(--ink-2);font-size:15px;line-height:1.65}
+.faq__body a{color:var(--teal-deep);border-bottom:1px solid rgba(20,184,166,.4)}
+
+/* ============ TABLE OF CONTENTS ============ */
+.page-doc{display:grid;grid-template-columns:250px minmax(0,1fr);gap:clamp(28px,4vw,64px);
+  align-items:start}
+.toc{border:1px solid var(--line);border-radius:var(--r);padding:20px;background:var(--surface);
+  box-shadow:var(--sh-1)}
+.toc__t{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:14px}
+.toc ol{list-style:none;counter-reset:toc}
+.toc li{counter-increment:toc}
+.toc a{display:block;padding:5px 0 5px 24px;position:relative;font-size:13.6px;color:var(--ink-2);
+  line-height:1.42;transition:color .2s}
+.toc a::before{content:counter(toc) ".";position:absolute;left:0;color:var(--ink-3);
+  font-family:var(--mono);font-size:11.5px}
+.toc a:hover{color:var(--teal-deep)}
+.toc a.is-active{color:var(--teal-deep);font-weight:600}
+@media (min-width:1024px){.toc{position:sticky;top:calc(var(--head-h) + 76px)}}
+.prose__body{max-width:76ch;min-width:0}
+section[id],main[id]{scroll-margin-top:calc(var(--head-h) + 64px)}
+.prose__body h2{scroll-margin-top:calc(var(--head-h) + 76px)}
+
+/* ============ REVEAL ============ */
+.reveal{transform:translateY(26px)}
+/* Content must never depend on JavaScript to become readable. The reveal
+   transition only applies when script.js has confirmed it is running. */
+.js .reveal{opacity:0;transition:opacity .9s var(--ease-out),transform .9s var(--ease-out)}
+.js .reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .js .reveal{opacity:1;transform:none;transition:none}
+  .bg-grain{animation:none}
+  html{scroll-behavior:auto}
+}
+
+/* ============ HERO ============ */
+.hero{padding-top:clamp(44px,6vw,84px);position:relative}
+.hero__in{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);gap:clamp(32px,5vw,72px);align-items:center}
+
+.hero__h1{font-size:clamp(40px,5.6vw,68px);line-height:1;letter-spacing:-.038em;font-weight:800;margin-bottom:22px}
+.hero__h1 .hl{position:relative;display:inline-block}
+.hero__h1 .hl::after{
+  content:"";position:absolute;left:0;right:-4px;bottom:.04em;height:.06em;
+  background:linear-gradient(90deg,var(--teal-bright),rgba(45,212,191,.12));
+  border-radius:4px;transform:scaleX(0);transform-origin:left;
+  animation:swipe 1s .7s var(--ease-out) forwards;
+}
+@keyframes swipe{to{transform:scaleX(1)}}
+
+.hero__sub{font-size:clamp(15px,1.05vw,16.5px);color:var(--ink-2);max-width:58ch;line-height:1.65;margin-bottom:30px;
+  /* Without this the sentence broke leaving "before." alone on a second line. */
+  text-wrap:pretty}
+.hero__sub strong{color:var(--teal-deep);font-weight:600}
+.hero__sub em{color:var(--ink);font-style:normal;border-bottom:1px solid rgba(20,184,166,.45)}
+
+/* ============ <verafo-flow> ============
+   The hero diagram. All colour lives inside the component, because the spec
+   fixes it; CSS only sizes the box.
+
+   No aspect-ratio here on purpose. The component picks one of two viewBoxes
+   depending on the width of this box, and a fixed aspect-ratio would lock the
+   box to one of them and let the SVG render outside it — which it did, 148px
+   into the logo strip. The SVG is height:auto, so it drives the element's
+   height from whichever viewBox it chose. */
+verafo-flow{display:block;width:100%;max-width:1000px;margin-inline:auto}
+verafo-flow .vflow__svg{display:block;width:100%;height:auto;overflow:visible}
+
+@media (max-width:640px){
+  /* Float distance is reduced in the component itself: it is a per-node value,
+     not something CSS can reach. */
+  verafo-flow{max-width:100%}
+}
+
+/* ---- the flow section ----
+   The diagram is drawn with no colour of its own: every stroke and fill comes
+   from the .vf-* rules below, once for light and once under [data-theme=dark].
+   So the section reads as part of each theme rather than a dark widget sitting
+   in a light page. The panel frames it and the key sits under it, so the three
+   outcomes and their share can be read without waiting for the animation. */
+/* The second dark field on the page, built to the same recipe as the pricing
+   band rather than inventing its own: same near-black, same three teal auras,
+   same hairline grid, same inset edge line. Two bands made the same way read as
+   one system instead of two one-offs.
+
+   Like pricing it is fixed dark in both themes. That also settles the diagram's
+   palette — the light palette existed only to survive a white field, and there
+   is no longer one to survive, so there is a single palette now. */
+/* Shares the results band's field: same white-to-mint gradient, same soft teal
+   wash at the top, same fixed light treatment in both themes. Those two bands are
+   the ones carrying the product's own evidence, so they should read as the same
+   kind of surface.
+
+   The panels inside stay dark. They are cards sitting on this band rather than
+   part of it, which is why their dark tokens now live on .vflow-stack and the
+   band itself carries light ones. */
+.sec--flow{position:relative;overflow:hidden;
+  /* Tighter than a normal section: the composition already carries its own
+     whitespace. */
+  padding-block:clamp(38px,4vw,56px);
+  background:linear-gradient(180deg,#FFFFFF,#E9FBF8 42%,#DCF6F1 100%);
+  --bg:#FFFFFF; --bg-2:#F4FAF9; --bg-3:#EDF3F3;
+  --ink:#0A0F10; --ink-2:#3D4B4D; --ink-3:#5F6E70;
+  --line:rgba(10,15,16,.12); --line-2:rgba(10,15,16,.2);
+  --panel:#FFFFFF; --panel-2:#F4FAF9; --surface:#FFFFFF;
+  --teal:#0F766E; --teal-deep:#0F766E; --teal-glow:rgba(15,118,110,.3);
+  color:var(--ink)}
+.sec--flow::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(60% 50% at 50% 0%,rgba(45,212,191,.20),transparent 70%)}
+.sec--flow .wrap{position:relative;z-index:1}
+.sec--flow .sec__head{margin-bottom:clamp(16px,1.9vw,24px)}
+
+/* Two panels in one composition: the diagram, and a drawer pulled out of its
+   right edge. The drawer sits lower in the stack, so the panel's rounded corner
+   cuts across it and the join reads as two planes rather than two boxes.
+
+   The dark tokens live here rather than on the section, because these two panels
+   are dark cards on a light band and everything inside them — surfaces, text,
+   the hint under the diagram — has to resolve against dark. */
+.vflow-stack{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) clamp(270px,29%,344px);
+  align-items:stretch;
+  --bg:#080D0E; --bg-2:#0D1517; --bg-3:#131D20;
+  --panel:#0D1517; --panel-2:#131D20; --surface:#111A1D;
+  --line:rgba(255,255,255,.11); --line-2:rgba(255,255,255,.2);
+  --ink:#F2F6F6; --ink-2:#A3B1B3; --ink-3:#8B9B9E;
+  --teal:#2DD4BF; --teal-deep:#5EEAD4;
+  --sh-1:0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 2px 4px rgba(0,0,0,.3),0 10px 24px -10px rgba(0,0,0,.6);
+}
+
+.vflow-panel{position:relative;z-index:2;
+  padding:clamp(16px,2.2vw,26px);border-radius:var(--r-xl);
+  border:1px solid var(--line);background:var(--panel);
+  box-shadow:var(--sh-2);
+  transition:box-shadow .5s var(--ease-out)}
+
+/* The second shadow is the panel casting onto the drawer it overlaps. Without it
+   the two panels just share an edge and the drawer stops reading as something
+   that slid out — but it only exists while the drawer is out. With the drawer
+   retracted there is nothing under it, and the shadow would land on the pale band
+   as a dark smear. It fades in step with the slide rather than popping. */
+html:not(.js) .vflow-panel,
+.js .vflow-stack.is-open .vflow-panel{
+  box-shadow:var(--sh-2),20px 0 40px -16px rgba(0,0,0,.9)}
+
+/* ---- the drawer slides out ----
+   At rest it sits a full width to the left, which puts it entirely under the
+   opaque panel it is stacked behind. What you see is therefore the drawer
+   emerging from the panel's edge, not a block travelling across the band.
+
+   `is-open` is reversible — script.js adds and removes it as the section enters
+   and leaves the viewport — so the drawer opens on the way down, retracts once
+   the section has been passed, and opens again coming back up. The transition
+   runs both ways; there is no transition on the closed state, so nothing animates
+   on first paint.
+
+   The hidden state is behind .js so the drawer is never left hidden when scripts
+   do not run. */
+@media (min-width:1001px){
+  .vflow-drawer{transition:transform 1s cubic-bezier(.22,1,.36,1) .08s}
+  .js .vflow-stack:not(.is-open) .vflow-drawer{transform:translateX(-100%)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .vflow-drawer{transition:none}
+  .js .vflow-stack:not(.is-open) .vflow-drawer{transform:none}
+}
+
+/* The drawer. Its left edge runs under the panel by the same amount as the
+   panel's corner radius, so the corner notch shows the drawer behind it. */
+.vflow-drawer{
+  position:relative;z-index:1;
+  margin-left:-26px;
+  display:flex;flex-direction:column;justify-content:center;gap:clamp(14px,1.7vw,22px);
+  padding:clamp(22px,2.6vw,34px);
+  padding-left:calc(26px + clamp(22px,2.6vw,34px));
+  border:1px solid var(--line);border-left:0;
+  border-radius:0 var(--r-xl) var(--r-xl) 0;
+  /* A shade lighter than the panel, with a top and bottom hairline, so it reads
+     as a separate plane rather than a painted-on strip. */
+  background:linear-gradient(100deg,#101B1E 0%,#16242A 44%,#1A2C33 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),
+             inset 0 -1px 0 rgba(255,255,255,.04);
+}
+
+/* Exactly two text sizes in here: the heading, and everything else. */
+.vflow-drawer__title{
+  margin:0 0 clamp(4px,.6vw,8px);font-size:clamp(18px,1.6vw,22px);line-height:1.25;
+  letter-spacing:-.025em;font-weight:600;color:var(--ink);text-wrap:balance;
+  padding-bottom:clamp(12px,1.4vw,16px);border-bottom:1px solid var(--line)}
+.vflow-drawer__list{margin:0;padding:0;list-style:none;
+  display:flex;flex-direction:column;gap:clamp(11px,1.2vw,15px)}
+.vflow-drawer__list li{font-size:14px;line-height:1.5;color:var(--ink-2)}
+.vflow-drawer__k{display:block;font-size:14px;font-weight:600;margin-bottom:1px}
+.vflow-drawer__k--safe{color:var(--vf-safe)}
+.vflow-drawer__k--neutral{color:var(--vf-neutral)}
+.vflow-drawer__k--risky{color:var(--vf-risky)}
+
+/* No dark-theme override for the drawer any more.
+
+   It used to invert to a light panel, and that solved a real problem at the time:
+   the band was #080D0E and the dark page was #0A0F10, so the whole composition
+   dissolved into the background. The band is the light results field now, which
+   means the panels are dark cards on a light band in both themes. There is
+   nothing left to invert for, and a white drawer here would sit on near-white and
+   lose its edge entirely. */
+
+/* Below this width a drawer has nowhere to pull out to, so the two panels stack
+   and join along a shared edge instead. */
+@media (max-width:1000px){
+  .vflow-stack{grid-template-columns:1fr}
+  .vflow-panel{border-radius:var(--r-xl) var(--r-xl) 0 0;border-bottom:0}
+  .vflow-drawer{
+    margin-left:0;padding:clamp(20px,3vw,28px);
+    border-left:1px solid var(--line);border-top:0;
+    border-radius:0 0 var(--r-xl) var(--r-xl);
+    box-shadow:inset 0 14px 20px -18px rgba(0,0,0,.95),
+               inset 0 -1px 0 rgba(255,255,255,.04);
+  }
+}
+
+/* ---- the diagram's palette ----
+   Declared on the SECTION rather than on <verafo-flow>, so every part of the
+   diagram reads from one place. These values are drawn for the near-black panel
+   the diagram sits on, which is still dark even though the band around it is now
+   light. */
+.sec--flow{
+  --vf-teal:#2DD4BF;
+  --vf-grey:#8BA0A0;
+  --vf-ink:#E6F0F0;
+  --vf-line-glow:rgba(45,212,191,.45);
+  --vf-glow-a:.26;
+  --vf-glow-b:.10;
+
+  /* Buyer tiles: dark glass, so they recede next to the verdicts. */
+  --vf-tile-a:#27313A;
+  --vf-tile-b:#161D24;
+  --vf-tile-line:rgba(255,255,255,.10);
+  --vf-icon:#C6D3D3;
+
+  /* Verdict tiles: saturated gradients, each with an ink dark enough to sit on
+     its own gradient. White icons measured under 3:1 on the mid-tone. */
+  --vf-safe:#4ADE80;   --vf-safe-a:#4ADE80;   --vf-safe-b:#15A34A;   --vf-safe-ink:#04220F;
+  --vf-neutral:#94A3B8;--vf-neutral-a:#A5B4C4;--vf-neutral-b:#64748B;--vf-neutral-ink:#0B141C;
+  --vf-risky:#FB7185;  --vf-risky-a:#FB7185;  --vf-risky-b:#E11D48;  --vf-risky-ink:#4A0618;
+
+  --vf-badge-a:#1B3B36;
+  --vf-badge-b:#0B1A18;
+
+  /* Chips: the share on the way out, the phone fragment on the way in. */
+  --vf-chip-in-bg:rgba(255,255,255,.07);
+  --vf-chip-in-line:rgba(255,255,255,.13);
+  --vf-chip-in-text:#C6D3D3;
+  --vf-chip-safe-bg:#15803D;   --vf-chip-safe-text:#F0FDF4;
+  --vf-chip-neutral-bg:#475569;--vf-chip-neutral-text:#F1F5F9;
+  --vf-chip-risky-bg:#BE123C;  --vf-chip-risky-text:#FFF1F2;
+}
+
+.vf-glow-a{stop-color:var(--vf-teal);stop-opacity:var(--vf-glow-a)}
+.vf-glow-b{stop-color:var(--vf-teal);stop-opacity:var(--vf-glow-b)}
+.vf-glow-c{stop-color:var(--vf-teal);stop-opacity:0}
+.vf-glow{transition:opacity .5s ease-out}
+
+/* Gradient stops, one class each so the whole diagram is recoloured from CSS. */
+.vf-tile-a{stop-color:var(--vf-tile-a)}   .vf-tile-b{stop-color:var(--vf-tile-b)}
+.vf-safe-a{stop-color:var(--vf-safe-a)}   .vf-safe-b{stop-color:var(--vf-safe-b)}
+.vf-neutral-a{stop-color:var(--vf-neutral-a)} .vf-neutral-b{stop-color:var(--vf-neutral-b)}
+.vf-risky-a{stop-color:var(--vf-risky-a)} .vf-risky-b{stop-color:var(--vf-risky-b)}
+.vf-badge-a{stop-color:var(--vf-badge-a)} .vf-badge-b{stop-color:var(--vf-badge-b)}
+
+/* The concentric wash behind the badge. Two filled discs rather than outlines:
+   they stack, so the middle is brighter than the rim, which is what makes it read
+   as a glow and not as a target. Blurred, because a crisp 1px edge turned them
+   into a bullseye. */
+.vf-ringglow{
+  fill:var(--vf-teal);fill-opacity:.055;
+  stroke:var(--vf-teal);stroke-opacity:.14;stroke-width:2;
+  filter:blur(9px);
+}
+
+/* ---- connectors ----
+   Inbound routes are dotted and neutral: nothing has been decided yet. Outbound
+   routes are solid and take the colour of the verdict they reach, which is what
+   makes the right-hand side readable without a key. */
+.vf-lines{filter:drop-shadow(0 0 6px var(--vf-line-glow))}
+.vf-line{transition:stroke-opacity .3s ease}
+.vf-line--in{
+  stroke:var(--vf-grey);stroke-opacity:.65;stroke-width:2;
+  stroke-dasharray:2 7;stroke-linecap:round;
+}
+.vf-line--out{stroke-width:2.5;stroke-linecap:round}
+.vf-line--safe{stroke:var(--vf-safe)}
+.vf-line--neutral{stroke:var(--vf-neutral)}
+.vf-line--risky{stroke:var(--vf-risky)}
+
+/* ---- chips ---- */
+.vf-chip__bg{stroke-width:1}
+.vf-chip__bg--in{fill:var(--vf-chip-in-bg);stroke:var(--vf-chip-in-line)}
+.vf-chip__bg--safe{fill:var(--vf-chip-safe-bg);stroke:transparent}
+.vf-chip__bg--neutral{fill:var(--vf-chip-neutral-bg);stroke:transparent}
+.vf-chip__bg--risky{fill:var(--vf-chip-risky-bg);stroke:transparent}
+.vf-chip__text{font-weight:600;letter-spacing:.01em}
+.vf-chip__text--in{fill:var(--vf-chip-in-text)}
+.vf-chip__text--safe{fill:var(--vf-chip-safe-text)}
+.vf-chip__text--neutral{fill:var(--vf-chip-neutral-text)}
+.vf-chip__text--risky{fill:var(--vf-chip-risky-text)}
+
+/* ---- tiles ---- */
+.vf-tile{stroke:var(--vf-tile-line);stroke-width:1;
+  filter:drop-shadow(0 10px 18px rgba(0,0,0,.55))}
+.vf-node--out .vf-tile{stroke:transparent;
+  filter:drop-shadow(0 12px 22px rgba(0,0,0,.5))}
+.vf-lit{fill:#FFFFFF;pointer-events:none}
+.vf-halo{fill:var(--vf-teal);stroke:var(--vf-teal)}
+
+.vf-icon{fill:none;stroke:var(--vf-icon);stroke-linecap:round;stroke-linejoin:round}
+.vf-icon--safe{stroke:var(--vf-safe-ink)}
+.vf-icon--neutral{stroke:var(--vf-neutral-ink)}
+.vf-icon--risky{stroke:var(--vf-risky-ink)}
+
+.vf-label{fill:var(--vf-ink);fill-opacity:.72}
+
+.vf-hubwrap{filter:drop-shadow(0 0 22px var(--vf-hub-shadow, rgba(45,212,191,.35)))}
+.vf-hub{stroke:var(--vf-teal);stroke-opacity:.55;stroke-width:1.5}
+.vf-glyph{fill:none;stroke:var(--vf-teal);stroke-width:3;stroke-linejoin:round}
+.vf-hubname{fill:var(--vf-ink);fill-opacity:.9}
+
+.vf-dot{fill:var(--vf-teal);filter:drop-shadow(0 0 5px var(--vf-dot-shadow, rgba(45,212,191,.9)))}
+.vf-dot--safe{fill:var(--vf-safe)}
+.vf-dot--neutral{fill:var(--vf-neutral)}
+.vf-dot--risky{fill:var(--vf-risky)}
+
+/* ---- focus ----
+   Hovering a buyer or a verdict dims everything that is not on that route.
+   Purely additive: with no data-focus the diagram is exactly as before. */
+/* bounding-box gives each node a generous hit area. Without it only the paint
+   responds, so the pointer had to find a hairline instead of the tile. Browsers
+   that do not support it fall back to the painted areas, which still work. */
+.vf-node{cursor:pointer;pointer-events:bounding-box}
+[data-focus] .vf-line{stroke-opacity:.08}
+[data-focus] .vf-node{opacity:.4}
+[data-focus] .vf-chip{opacity:.35}
+[data-focus] .vf-node:hover{opacity:1}
+
+[data-focus="c0"] .vf-line[data-key="c0"],
+[data-focus="c1"] .vf-line[data-key="c1"],
+[data-focus="c2"] .vf-line[data-key="c2"],
+[data-focus="c3"] .vf-line[data-key="c3"],
+[data-focus="o0"] .vf-line[data-key="o0"],
+[data-focus="o1"] .vf-line[data-key="o1"],
+[data-focus="o2"] .vf-line[data-key="o2"]{stroke-opacity:1;stroke-width:2.5}
+
+[data-focus="c0"] .vf-node[data-key="c0"],
+[data-focus="c1"] .vf-node[data-key="c1"],
+[data-focus="c2"] .vf-node[data-key="c2"],
+[data-focus="c3"] .vf-node[data-key="c3"],
+[data-focus="o0"] .vf-node[data-key="o0"],
+[data-focus="o1"] .vf-node[data-key="o1"],
+[data-focus="o2"] .vf-node[data-key="o2"]{opacity:1}
+
+/* No dark-theme override: the band and its palette are fixed dark, so a theme
+   switch changes nothing inside it. */
+
+/* The key that used to sit under the diagram is gone; the shares are chips on
+   the connectors, so this paragraph is the only thing left below the diagram. */
+.vflow-hint{margin:12px 0 0;text-align:center;font-family:var(--mono);
+  font-size:11px;letter-spacing:.05em;color:var(--ink-3);font-style:italic;opacity:.72}
+.vflow-hint--narrow{display:none}
+
+@media (max-width:640px){
+  .vflow-panel{padding:14px;border-radius:var(--r-lg)}
+  /* Shorter wording at 390px, where the desktop line runs under the
+     back-to-top button. */
+  .vflow-hint{font-size:10.5px;opacity:.6}
+  .vflow-hint--wide{display:none}
+  .vflow-hint--narrow{display:inline}
+}
+
+.hero__cta{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:44px}
+
+.trustbar{display:flex;gap:clamp(20px,3.4vw,44px);flex-wrap:wrap;padding-top:26px;border-top:1px solid var(--line)}
+.trustbar li{display:flex;flex-direction:column;gap:2px}
+.trustbar b{font-size:20px;font-weight:700;letter-spacing:-.03em;color:var(--ink);display:flex;align-items:baseline;gap:1px}
+.trustbar b i{font-style:normal}
+.trustbar .plus{font-size:.8em;color:var(--teal);font-weight:700}
+.trustbar .pct{font-size:.6em}
+.trustbar span{font-size:12px;color:var(--ink-3);letter-spacing:.03em}
+
+/* ---- hero art ---- */
+.hero__art{display:flex;justify-content:center;align-items:center}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pop{from{opacity:0;transform:rotate(45deg) scale(.2)}to{opacity:1;transform:rotate(45deg) scale(1)}}
+@keyframes fadeIn{to{opacity:1}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
+
+.risk-low{color:var(--teal-deep)}
+
+/* ============ GUARANTEE ============ */
+.guarantee{position:relative;margin:0;padding:clamp(30px,4vw,46px) 0;background:
+  linear-gradient(100deg,var(--tint),var(--tint-soft) 55%,var(--tint-strong));
+  border-block:1px solid rgba(20,184,166,.22)}
+.guarantee__in{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:clamp(20px,3vw,40px);align-items:center}
+.guarantee__badge{width:62px;height:62px;flex:none;color:var(--teal);display:grid;place-items:center;
+  border-radius:50%;background:var(--plate);border:1px solid var(--line);box-shadow:var(--sh-2)}
+.guarantee__badge svg{width:30px;height:30px}
+.guarantee h2{font-size:clamp(19px,2.1vw,26px);letter-spacing:-.026em;line-height:1.22;margin-bottom:8px}
+.guarantee p{color:var(--ink-2);font-size:14.5px;max-width:74ch}
+
+/* ============ BRAND LOGO BAR (scrolling) ============
+   Client logos in a slow continuous scroll, between the hero and the
+   guarantee band.
+
+   Sources are the transparent PNGs in logos/transparents/, so the marks sit
+   directly on the page with nothing behind them: no plates, no blend modes,
+   no filters needed to hide a background.
+
+   The track holds the list twice and the animation moves exactly -50%, so
+   the loop is seamless with no jump. */
+.brandbar{position:relative;margin-top:clamp(46px,5.5vw,76px);
+  padding:26px 0;border-block:1px solid var(--line);overflow:hidden;
+  mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.brandbar__track{display:flex;width:max-content;
+  animation:brandScroll 52s linear infinite}
+.brandbar:hover .brandbar__track{animation-play-state:paused}
+@keyframes brandScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+.logos{display:flex;align-items:center;gap:clamp(40px,5vw,84px);flex:none;
+  padding-right:clamp(40px,5vw,84px);margin:0;list-style:none}
+.logos li{display:flex;align-items:center;justify-content:center;flex:none;height:92px}
+.logos img{max-height:82px;max-width:330px;width:auto;height:auto;
+  opacity:.72;transition:opacity .3s,filter .35s}
+.logos img:hover{opacity:1}
+
+/* Dark mode only: every mark is drawn in dark ink for a light page, so on the
+   dark page they are inverted to read light. Nothing is filtered in the light
+   theme, where they are already correct as drawn. */
+[data-theme="dark"] .logos img{filter:invert(1)}
+[data-theme="dark"] .logos img:hover{filter:invert(1) contrast(1.15)}
+
+@media (max-width:680px){
+  .logos{gap:38px;padding-right:38px}
+  .logos li{height:64px}
+  .logos img{max-height:56px;max-width:230px}
+  .brandbar__track{animation-duration:38s}
+}
+
+/* Motion-sensitive visitors get the same logos, held still. */
+@media (prefers-reduced-motion:reduce){
+  .brandbar__track{animation:none}
+  .brandbar{overflow-x:auto;scrollbar-width:none}
+  .brandbar::-webkit-scrollbar{display:none}
+}
+
+/* ============ PROBLEM / CALC ============ */
+.calc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.82fr);gap:clamp(20px,3vw,34px);align-items:stretch}
+.calc__panel,.calc__out{border-radius:var(--r-lg);border:1px solid var(--line);background:var(--panel);padding:clamp(24px,3vw,38px);box-shadow:var(--sh-2)}
+.calc__title{font-size:17px;font-weight:600;color:var(--ink-2);margin-bottom:26px;letter-spacing:-.01em}
+
+/* Two rows per control: the name on the left and its value on the right, with
+   the slider spanning beneath. This column was `1fr`, a single column, which
+   stacked the label, track and value on top of each other and made the panel
+   roughly 900px tall. */
+.calc__rows{display:flex;flex-direction:column;gap:22px}
+.calc__row{display:grid;grid-template-columns:1fr auto;grid-template-areas:"name value" "track track";
+  column-gap:16px;row-gap:9px;align-items:baseline}
+.calc__row>span{grid-area:name;font-size:14px;color:var(--ink-2);font-weight:500}
+.calc__row input[type=range]{grid-area:track}
+.calc__row output{grid-area:value;font-family:var(--mono);font-size:15px;color:var(--teal);font-weight:500;
+  font-variant-numeric:tabular-nums;text-align:right}
+.calc__note{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3)}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:99px;background:rgba(10,15,16,.1)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-7.5px;border-radius:50%;
+  background:var(--teal);border:3px solid #FFFFFF;box-shadow:0 0 0 1px var(--teal),0 2px 8px rgba(20,184,166,.5);transition:transform .15s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.14)}
+input[type=range]::-moz-range-track{height:5px;border-radius:99px;background:rgba(10,15,16,.1)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--teal);border:3px solid #FFFFFF;box-shadow:0 0 0 1px var(--teal)}
+
+/* ---- Where the money goes ----
+   The composition of one month's loss, drawn from the same three numbers the
+   sliders drive. It turns the headline figure into something you can read at
+   a glance, and it moves whenever a slider moves. */
+.comp{margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
+.comp__h{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 14px}
+.comp__bar{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--bg-3);margin-bottom:14px}
+.comp__bar i{display:block;height:100%;transition:width .55s var(--ease-out)}
+.comp__seg--a{background:linear-gradient(90deg,#E11D48,#FDA4AF)}
+.comp__seg--b{background:linear-gradient(90deg,#F59E0B,#FCD34D)}
+.comp__seg--c{background:linear-gradient(90deg,#14B8A6,#5EEAD4)}
+.comp__legend{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.comp__legend li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;
+  font-size:12.8px;color:var(--ink-2)}
+.comp__legend i{width:9px;height:9px;border-radius:3px;flex:none}
+.comp__legend b{font-family:var(--mono);font-size:12.4px;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+
+@media (max-width:680px){
+  .calc__row{grid-template-columns:1fr;grid-template-areas:"name" "track" "value";row-gap:7px}
+  .calc__row output{text-align:left}
+}
+
+/* The output panel is stretched to match the controls panel beside it, and its
+   content is shorter. Rather than letting the slack pool in one place, the parts
+   are spread with equal space above and below the figure, and a closing line
+   sits at the foot, so the panel reads as a composed statement rather than a
+   label pinned to the top of an empty box. */
+.calc__out{display:flex;flex-direction:column;justify-content:space-evenly;gap:clamp(14px,1.6vw,22px);
+  background:linear-gradient(160deg,var(--tint),var(--surface));border-color:rgba(20,184,166,.28);box-shadow:var(--sh-3)}
+.calc__out-k{font-size:14px;color:var(--ink-2)}
+.calc__out-v{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.calc__out-v span{font-size:clamp(30px,3.8vw,46px);font-weight:800;letter-spacing:-.04em;color:var(--teal);font-variant-numeric:tabular-nums;line-height:1}
+.calc__out-v small{font-size:15px;color:var(--ink-3);font-weight:500}
+.calc__split{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:20px 0;border-block:1px solid var(--line)}
+.calc__split span{display:block;font-family:var(--mono);font-size:16px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.calc__split small{font-size:12px;color:var(--ink-3)}
+.calc__out-note{font-size:13px;color:var(--ink-3)}
+
+/* ============ STEPS ============ */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.step{background:var(--bg-2);padding:clamp(24px,3vw,38px);position:relative;transition:background .35s,box-shadow .35s}
+.step:hover{background:var(--bg-3);box-shadow:inset 0 3px 0 var(--teal)}
+.step__n{font-family:var(--mono);font-size:12px;color:var(--teal);letter-spacing:.12em;display:block;margin-bottom:18px}
+.step h3{font-size:17.5px;margin-bottom:9px;letter-spacing:-.018em}
+.step p{color:var(--ink-2);font-size:14.2px;line-height:1.6}
+.step--accent{background:linear-gradient(150deg,var(--tint),var(--bg-2))}
+.step--accent::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 100% 0%,rgba(20,184,166,.13),transparent 60%)}
+
+/* ============ DEMO ============ */
+/* The same soft teal field as the results band, on purpose: both are where the
+   page shows the product's own numbers, so they should read as the same kind of
+   surface rather than as two different ideas of "highlighted".
+
+   Fixed light in both themes, exactly like the results band. The token remap is
+   what makes that safe: in dark mode the page's ink is near-white, and without
+   it the headings and figures here would be invisible. */
+.sec--demo{position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#FFFFFF,#E9FBF8 42%,#DCF6F1 100%);
+  --bg:#FFFFFF; --bg-2:#F4FAF9; --bg-3:#EDF3F3;
+  --ink:#0A0F10; --ink-2:#3D4B4D; --ink-3:#5F6E70;
+  --line:rgba(10,15,16,.12); --line-2:rgba(10,15,16,.2);
+  --panel:#FFFFFF; --panel-2:#F4FAF9; --surface:#FFFFFF;
+  --teal:#0F766E; --teal-deep:#0F766E; --teal-glow:rgba(15,118,110,.3);
+  --sh-1:0 1px 2px rgba(10,15,16,.06);
+  --sh-2:0 2px 4px rgba(10,15,16,.04),0 10px 24px -10px rgba(10,15,16,.12);
+  color:var(--ink)}
+.sec--demo::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(60% 50% at 50% 0%,rgba(45,212,191,.20),transparent 70%)}
+.sec--demo .wrap{position:relative;z-index:1}
+.demo{display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);gap:clamp(16px,2.4vw,28px)}
+.demo__pick{display:flex;flex-direction:column;gap:10px}
+.demo__tab{text-align:left;padding:16px 18px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);cursor:pointer;
+  transition:.28s var(--ease);display:flex;flex-direction:column;gap:3px}
+.demo__tab:hover{border-color:var(--line-2);background:var(--panel-2);transform:translateX(3px)}
+.demo__tab.is-on{border-color:var(--teal);background:var(--tint);box-shadow:0 0 0 3px rgba(20,184,166,.12)}
+.demo__who{font-weight:600;font-size:15.5px}
+.demo__meta{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+
+.demo__view{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(20px,3vw,40px);align-items:center;
+  padding:clamp(24px,3vw,40px);border-radius:var(--r-lg);border:1px solid var(--line);background:var(--panel)}
+.demo__gauge{position:relative;width:clamp(160px,17vw,210px);flex:none}
+.gauge{width:100%;height:auto;transform:rotate(-90deg)}
+.gauge__track{fill:none;stroke:rgba(10,15,16,.08);stroke-width:12}
+.gauge__fill{fill:none;stroke:var(--teal);stroke-width:12;stroke-linecap:round;
+  stroke-dasharray:515;stroke-dashoffset:515;transition:stroke-dashoffset 1.1s var(--ease-out),stroke .5s}
+.demo__gauge-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.demo__score{font-size:clamp(28px,3.4vw,40px);font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.demo__verdict{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;font-weight:500}
+
+.demo__facts{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding-bottom:22px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.demo__facts b{display:block;font-size:22px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.demo__facts small{font-size:11.5px;color:var(--ink-3)}
+.demo__sub{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:500;margin-bottom:14px}
+.demo__signals{display:flex;flex-direction:column;gap:9px;margin-bottom:22px}
+.demo__signals li{display:flex;align-items:flex-start;gap:10px;font-size:14.5px;color:var(--ink-2);line-height:1.5;
+  opacity:0;transform:translateY(6px);animation:sigIn .45s var(--ease-out) forwards}
+@keyframes sigIn{to{opacity:1;transform:none}}
+.demo__signals li::before{content:"";width:6px;height:6px;margin-top:7px;flex:none;transform:rotate(45deg)}
+.demo__signals li[data-dir="up"]::before{background:var(--coral);box-shadow:0 0 8px rgba(251,113,133,.6)}
+.demo__signals li[data-dir="down"]::before{background:var(--teal);box-shadow:0 0 8px rgba(20,184,166,.5)}
+.demo__action{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;
+  padding:14px 18px;border-radius:var(--r);border:1px solid rgba(20,184,166,.28);background:var(--tint)}
+.demo__action-k{font-size:13px;color:var(--ink-3)}
+.demo__action-v{font-weight:600;font-size:15px;color:var(--teal-deep)}
+
+/* ============ FEATURES ============ */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{position:relative;padding:clamp(24px,2.6vw,34px);border-radius:var(--r-lg);border:1px solid var(--line);background:var(--panel);
+  transition:border-color .35s,background .35s,transform .35s var(--ease);overflow:hidden}
+.card::before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .4s;
+  background:radial-gradient(80% 70% at 20% 0%,rgba(20,184,166,.09),transparent 62%)}
+.card:hover{border-color:var(--line-2);background:var(--surface);transform:translateY(-4px);box-shadow:var(--sh-3)}
+.card:hover::before{opacity:1}
+.card--wide{grid-column:span 2}
+.card__ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;margin-bottom:20px;
+  background:var(--tint);border:1px solid rgba(20,184,166,.22);color:var(--teal-deep);position:relative}
+.card__ico svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.card h3{font-size:17.5px;margin-bottom:10px;letter-spacing:-.018em}
+.card p{color:var(--ink-2);font-size:14.2px;line-height:1.62}
+.card p em{color:var(--teal);font-style:normal;opacity:.9}
+.card--ask{border-color:rgba(20,184,166,.3);background:linear-gradient(120deg,var(--tint),var(--tint-lav))}
+
+.dash{margin-top:clamp(36px,4.6vw,62px)}
+.dash__frame{border-radius:var(--r-lg);border:1px solid var(--line-2);overflow:hidden;position:relative;
+  box-shadow:var(--sh-3),0 0 0 1px rgba(20,184,166,.08);
+  background:linear-gradient(180deg,var(--tint),var(--surface))}
+.dash__frame img{width:100%}
+.dash__frame::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,transparent 70%,rgba(10,15,16,.12))}
+
+/* The caption under the dashboard screenshot. The homepage dropped its copy but
+   features.html still shows this one, and without the rule the dot span renders
+   as an invisible empty inline element. */
+.dash__cap{display:flex;align-items:center;gap:11px;margin-top:16px;
+  font-size:13.5px;color:var(--ink-3)}
+.dash__cap p{margin:0}
+.dash__dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex:none;
+  box-shadow:0 0 10px var(--teal-glow)}
+
+.up{color:var(--teal-deep)}
+.down{color:var(--teal)}
+.teal{color:var(--teal)}
+
+/* ============ PROOF GRID ============
+   Still used by about.html, which keeps the six-cell figure grid. The homepage
+   now uses the single .proof band instead. */
+.proofgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.proofgrid>div{background:var(--bg-2);padding:clamp(22px,2.6vw,32px)}
+.proofgrid b{display:block;font-size:clamp(21px,2.5vw,30px);font-weight:700;letter-spacing:-.04em;margin-bottom:7px;font-variant-numeric:tabular-nums}
+.proofgrid span{font-size:13px;color:var(--ink-3);line-height:1.45}
+
+/* ============ METRICS (headline numbers) ============
+   Two figures side by side, each with one short line under it saying what the
+   number counts. The line is the difference between "100+" as a boast and "100+
+   brands" as a fact, so it stays. */
+.sec__head--center{max-width:820px;margin-inline:auto;text-align:center}
+.sec__head--center .sec__lead{margin-inline:auto}
+/* Balanced rather than left to break on its own: plain centring was leaving the
+   last line as a single short phrase, which is what made these subheadings look
+   misaligned. */
+.sec__head--center .sec__lead{max-width:56ch;text-wrap:balance}
+.sec__head--center .eyebrow{justify-content:center}
+
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.metric{position:relative;overflow:hidden;padding:clamp(28px,3.6vw,50px);border-radius:var(--r-xl);
+  border:1px solid var(--line);background:var(--surface);text-align:center;box-shadow:var(--sh-2)}
+.metric::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(90% 70% at 50% 0%,rgba(20,184,166,.08),transparent 62%)}
+.metric--accent{border-color:rgba(20,184,166,.36);
+  background:linear-gradient(165deg,var(--tint-strong),var(--surface) 70%);
+  box-shadow:var(--sh-3),0 0 0 1px rgba(20,184,166,.1)}
+.metric--accent::before{background:radial-gradient(90% 70% at 50% 0%,rgba(20,184,166,.16),transparent 64%)}
+.metric__label{position:relative;font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--teal-deep);margin-bottom:14px}
+.metric__value{position:relative;display:flex;align-items:baseline;justify-content:center;gap:6px;
+  font-size:clamp(40px,5.4vw,68px);font-weight:800;letter-spacing:-.05em;line-height:1;
+  font-variant-numeric:tabular-nums;margin-bottom:14px}
+.metric__value i{font-style:normal}
+.metric__cur{font-size:.34em;font-weight:600;letter-spacing:.02em;color:var(--ink-2)}
+.metric__suf{font-size:.42em;font-weight:700;color:var(--teal);letter-spacing:-.01em}
+.metric__note{position:relative;color:var(--ink-2);font-size:14px;line-height:1.55;
+  max-width:38ch;margin-inline:auto;text-wrap:pretty}
+
+/* ============ QUOTES ============ */
+/* Removed with the testimonial cards on the homepage. The block is kept as a
+   marker so the section is not silently re-added without its styles. */
+
+@media (max-width:720px){
+  /* One column so the two notes get the full width; side by side they would be
+     about 150px each and the note would break every second word. */
+  .metrics{grid-template-columns:1fr;gap:12px}
+  .quotes{grid-template-columns:1fr;gap:12px;margin-top:12px}
+  .metric{padding:24px 18px}
+  .metric__note{font-size:13px}
+  .proofgrid{grid-template-columns:1fr 1fr}
+}
+
+/* ============ PRICING ============
+   The one dark band on the page, and the only place teal and black carry a
+   whole section.
+
+   Rather than write a second set of component rules, the theme tokens are
+   remapped on the section itself. Every component inside therefore inherits
+   dark surfaces, light ink and the brighter teal automatically. It also
+   needs no card flip for the dark theme, because this band is dark in both
+   modes by design. */
+.sec--pricing{position:relative;overflow:hidden;
+  background:#080D0E;color:#F2F6F6;
+  --bg:#080D0E; --bg-2:#0D1517; --bg-3:#131D20;
+  --panel:#0D1517; --panel-2:#131D20; --surface:#111A1D; --plate:#0D1517;
+  --field:#0B1113;
+  --line:rgba(255,255,255,.11); --line-2:rgba(255,255,255,.2);
+  --ink:#F2F6F6; --ink-2:#A3B1B3; --ink-3:#748386;
+  --teal:#2DD4BF; --teal-deep:#5EEAD4; --teal-bright:#2DD4BF;
+  --tint:rgba(45,212,191,.1); --tint-soft:rgba(45,212,191,.06); --tint-strong:rgba(45,212,191,.15);
+  --tint-lav:rgba(167,139,250,.12);
+  --btn-teal-1:#38DCC7; --btn-teal-2:#20B7A4; --btn-teal-fg:#04201C;
+  --sh-1:0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 2px 4px rgba(0,0,0,.3),0 10px 24px -10px rgba(0,0,0,.6);
+  --sh-3:0 4px 8px rgba(0,0,0,.3),0 24px 48px -20px rgba(0,0,0,.75);
+}
+
+/* Two teal auras and a hairline grid, so the band reads as lit rather than
+   as a flat block of black. */
+.sec--pricing::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(52% 46% at 50% -6%,rgba(45,212,191,.20),transparent 68%),
+    radial-gradient(40% 38% at 88% 104%,rgba(20,184,166,.13),transparent 70%),
+    radial-gradient(38% 34% at 6% 96%,rgba(124,58,237,.09),transparent 72%)}
+.sec--pricing::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(78% 62% at 50% 34%,#000 8%,transparent 76%);
+  -webkit-mask-image:radial-gradient(78% 62% at 50% 34%,#000 8%,transparent 76%)}
+.sec--pricing .wrap{position:relative;z-index:1}
+
+/* Top and bottom edges fade into the white page rather than cutting hard. */
+.sec--pricing-dark{box-shadow:inset 0 1px 0 rgba(45,212,191,.22),inset 0 -1px 0 rgba(45,212,191,.16)}
+
+/* Staggered entrance. `both` keeps the cards hidden until their delay
+   elapses, which is what produces the lift rather than a plain fade. */
+.tiers .tier:nth-child(1){animation-delay:.04s}
+.tiers .tier:nth-child(2){animation-delay:.16s}
+.tiers .tier:nth-child(3){animation-delay:.28s}
+.sec--pricing-dark.is-in .tier{animation:tierRise .7s var(--ease-out) both}
+@keyframes tierRise{
+  from{opacity:0;transform:translateY(30px) scale(.985)}
+  to{opacity:1;transform:none}
+}
+
+/* The Founder One card lifts and lights up on hover now that it has a dark
+   field behind it. Its base shadow and border live with the rest of its
+   dressing further down, so only the hover change is here. */
+.tier--hero{transition:transform .4s var(--ease),box-shadow .4s,border-color .4s}
+
+/* The scarcity bar fills from empty when the section comes into view. */
+.sec--pricing-dark .spots__bar i{width:0;transition:width 1.5s .35s var(--ease-out)}
+.sec--pricing-dark.is-in .spots__bar i{width:var(--spots,87%)}
+
+.sec--pricing-dark .tiers__foot{color:#9AA8AB}
+.sec--pricing-dark .tiers__foot b{color:#FDA4AF}
+
+/* ---- Dark-band corrections ----
+   A few components carry colours that do not come from tokens, so they do
+   not follow the section's remap. Each one is corrected here. */
+.sec--pricing .spots__bar{background:rgba(255,255,255,.14)}
+.sec--pricing .btn--ghost{--btn-bg:rgba(255,255,255,.06);--btn-fg:#F2F6F6;--btn-bd:rgba(255,255,255,.22)}
+.sec--pricing .btn--ghost:hover{--btn-bg:rgba(255,255,255,.13);--btn-bd:rgba(255,255,255,.4)}
+/* .btn--teal is a pale mint fill with --teal-deep text, and this band remaps
+   --teal-deep to #5EEAD4, so the label came out pale on pale and the Standard
+   button was nearly unreadable. Teal-tinted dark fill with light text instead,
+   which also keeps it distinct from the solid primary button beside it. */
+.sec--pricing .btn--teal{--btn-bg:rgba(45,212,191,.14);--btn-fg:#5EEAD4;--btn-bd:rgba(45,212,191,.5)}
+.sec--pricing .btn--teal:hover{--btn-bg:rgba(45,212,191,.24);--btn-bd:#5EEAD4}
+.sec--pricing .tier__guar{background:rgba(45,212,191,.12);border-color:rgba(45,212,191,.34)}
+.sec--pricing .tier__list li{color:#B9C6C8}
+.sec--pricing .tier__meta{color:#9AA8AB}
+.sec--pricing .vstack li{color:#B9C6C8}
+
+/* Text that sits on the band itself, not inside a card, is set explicitly so
+   it can never inherit a dark ink from the page theme. */
+.sec--pricing .sec__h2{color:#FFFFFF}
+.sec--pricing .sec__lead{color:#A3B1B3}
+.sec--pricing .eyebrow{color:#5EEAD4}
+
+/* ============ MOAT ============
+   Two columns set against each other: what a blocklist does versus what a score
+   does. Used by how-it-works, features and about.
+
+   This block was removed once because the homepage section that used it was
+   deleted — but three other pages still use the class, and without these rules
+   they render as bare unstyled text. Checked with a class-usage sweep this time
+   rather than assuming the homepage was the only consumer. */
+.moat{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.moat__col{padding:clamp(24px,2.8vw,36px);border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--panel)}
+.moat__col--us{border-color:rgba(20,184,166,.3);
+  background:linear-gradient(150deg,var(--tint),var(--surface));box-shadow:var(--sh-2)}
+.moat__h{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  margin-bottom:18px;font-weight:500}
+.moat__h--them{color:var(--coral)}
+.moat__h--us{color:var(--teal-deep)}
+.moat__list{display:flex;flex-direction:column;gap:13px;list-style:none;margin:0;padding:0}
+.moat__list li{position:relative;padding-left:24px;font-size:14.6px;color:var(--ink-2);line-height:1.55}
+.moat__list li::before{content:"";position:absolute;left:4px;top:7px;width:7px;height:7px;
+  transform:rotate(45deg);background:var(--teal)}
+.moat__col:not(.moat__col--us) .moat__list li::before{background:var(--coral);opacity:.8}
+
+@media (max-width:720px){
+  .moat{grid-template-columns:1fr}
+}
+
+/* ---- Second dark band ----
+   Removed with the "Why neutral matters" section. The pricing band keeps its
+   own token remap under `.sec--pricing-dark`. */
+
+/* ============ PROOF / METRICS ============
+   The second colour band, and deliberately the opposite treatment to
+   pricing: a soft teal field rather than black. Two dark bands would be
+   heavy, and this keeps the page's rhythm to white, teal, white, black,
+   white. Tokens stay as they are; only the surfaces change, so the metric
+   cards and quote cards keep their normal styling and simply sit on teal. */
+/* The band is hard-coded light in both themes, so it has to carry its own light
+   tokens. In dark mode the inherited --ink is near-white (#F2F6F6), which made
+   the heading almost invisible on this gradient, and the metric cards inherited
+   a light surface. Remapping the tokens on the section fixes both at once, the
+   same approach the pricing band uses for its dark field. */
+/* The band is hard-coded light in both themes, so it carries its own light
+   tokens. In dark mode the inherited --ink is near-white, which made the heading
+   almost invisible here, and --bg-2 stayed dark, which made the figure grid a
+   black rectangle with black text in it. Both are remapped now.
+   The same approach the pricing band uses for its dark field. */
+.sec--proof{position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#FFFFFF,#E9FBF8 42%,#DCF6F1 100%);
+  --bg:#FFFFFF; --bg-2:#F4FAF9; --bg-3:#EDF3F3;
+  --ink:#0A0F10; --ink-2:#3D4B4D; --ink-3:#5F6E70;
+  --line:rgba(10,15,16,.12); --line-2:rgba(10,15,16,.2);
+  --panel:#FFFFFF; --panel-2:#F4FAF9; --surface:#FFFFFF;
+  --teal:#0F766E; --teal-deep:#0F766E; --teal-glow:rgba(15,118,110,.3);
+  --sh-1:0 1px 2px rgba(10,15,16,.06);
+  --sh-2:0 2px 4px rgba(10,15,16,.04),0 10px 24px -10px rgba(10,15,16,.12);
+  color:var(--ink)}
+.sec--proof::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(60% 50% at 50% 0%,rgba(45,212,191,.20),transparent 70%)}
+.sec--proof .wrap{position:relative;z-index:1}
+
+.sec--proof .sec__h2{color:var(--ink)}
+.sec--proof .sec__h2 .hl{color:#0F766E}
+
+@media (prefers-reduced-motion:reduce){
+  .sec--pricing-dark.is-in .tier{animation:none}
+  .tier--hero{transition:none}
+  .sec--pricing-dark .spots__bar i{transition:none;width:var(--spots,87%)}
+}
+/* `stretch` makes every card fill the row, so all three are the height of
+   the tallest. `.tier__list` already carries flex:1, which pushes each
+   button to the bottom and keeps them on one line across the row. */
+.tiers{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:14px;align-items:stretch}
+.tier{position:relative;padding:clamp(18px,1.85vw,24px);border-radius:var(--r-lg);border:1px solid var(--line);background:var(--panel);
+  display:flex;flex-direction:column;gap:13px}
+
+/* ---- card motion ----
+   Every card lifts on hover. Its contents then rise in just behind it on a
+   short stagger, so the lift reads as the whole card coming forward rather
+   than a box sliding under static text. The button is left out of the
+   cascade so it keeps its own, slightly stronger, response. */
+.tier{transition:transform .4s var(--ease),box-shadow .4s var(--ease),border-color .35s}
+.tier:hover{transform:translateY(-5px);box-shadow:var(--sh-3);border-color:rgba(45,212,191,.4)}
+
+.tier > :not(.btn){transition:transform .38s var(--ease)}
+.tier:hover > :not(.btn){transform:translateY(-2px)}
+.tier > :not(.btn):nth-child(2){transition-delay:.03s}
+.tier > :not(.btn):nth-child(3){transition-delay:.06s}
+.tier > :not(.btn):nth-child(4){transition-delay:.09s}
+.tier > :not(.btn):nth-child(5){transition-delay:.12s}
+.tier > :not(.btn):nth-child(6){transition-delay:.15s}
+.tier > :not(.btn):nth-child(7){transition-delay:.18s}
+
+/* The claim button settles a beat after the rest, so the eye finishes on it. */
+.tier > .btn{transition:transform .38s var(--ease),box-shadow .3s var(--ease),
+  background .25s,border-color .25s,color .25s}
+.tier:hover > .btn{transform:translateY(-4px)}
+
+/* ---- Founder One, the card that has to win the eye ----
+   It is the only card with an offer that expires, so it carries the visual
+   weight: a lit teal field instead of flat black, a brighter border with both
+   an inner and an outer glow, and a shine that crosses the headline every few
+   seconds. Everything is scoped to the dark pricing band, so specificity sits
+   level with the band's own overrides rather than fighting them.
+
+   Sizing is untouched. All three cards still stretch to the same height, which
+   was asked for earlier and still holds. */
+.sec--pricing-dark .tier--hero{
+  border-color:rgba(45,212,191,.6);
+  background:
+    radial-gradient(90% 60% at 50% -10%,rgba(45,212,191,.20),transparent 62%),
+    linear-gradient(168deg,#16262A 0%,#101B1E 52%,#0C1518 100%);
+  box-shadow:
+    0 0 0 1px rgba(45,212,191,.28),
+    0 0 44px -6px rgba(45,212,191,.28),
+    0 34px 76px -32px rgba(0,0,0,.85);
+  transition:transform .4s var(--ease),box-shadow .4s,border-color .4s}
+
+/* A hairline of light along the top edge, so the card reads as lit from above. */
+.sec--pricing-dark .tier--hero::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(94,234,212,.16),transparent 34%);
+  box-shadow:inset 0 1px 0 rgba(94,234,212,.55)}
+
+.sec--pricing-dark .tier--hero:hover{transform:translateY(-6px);
+  border-color:#5EEAD4;
+  box-shadow:
+    0 0 0 1px rgba(94,234,212,.45),
+    0 0 66px -4px rgba(45,212,191,.42),
+    0 38px 84px -32px rgba(0,0,0,.9)}
+
+/* The founder card rises further and later than the other two, so the eye
+   arrives on it last. */
+.tiers .tier--hero{animation-delay:.42s}
+.sec--pricing-dark.is-in .tier--hero{animation-name:tierRiseHero}
+@keyframes tierRiseHero{
+  from{opacity:0;transform:translateY(52px) scale(.97)}
+  to{opacity:1;transform:none}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .sec--pricing-dark.is-in .tier--hero{animation:none}
+  /* No lift and no cascade; the hover colour change still gives feedback. */
+  .tier,.tier > :not(.btn),.tier > .btn{transition:none}
+  .tier:hover,.tier:hover > :not(.btn),.tier:hover > .btn{transform:none}
+}
+
+.tier__name{font-size:16px;letter-spacing:-.015em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+
+/* ---- Founder One name row ----
+   Plan name, then the spots counter directly beneath it. The counter reads
+   from the same VERAFO_FOUNDING values the footer uses, so the two can never
+   disagree. */
+.sec--pricing-dark .spotbar{display:flex;flex-direction:column;gap:6px;margin:-2px 0 0}
+.sec--pricing-dark .spotbar__count{
+  margin:0;font-family:var(--mono);font-size:10.5px;font-weight:500;
+  color:#9AA8AB;white-space:nowrap}
+.sec--pricing-dark .spotbar__count i{font-style:normal}
+.sec--pricing-dark .spotbar__count i[data-spots-left]{color:#FDA4AF;font-weight:700}
+
+/* The progress bar. Static by design: set once from the configuration and
+   then left alone, so it reads as a standing fact rather than a widget that
+   might move while you are looking at it. */
+.spotbar__track{display:block;height:5px;border-radius:99px;overflow:hidden;
+  background:rgba(255,255,255,.13)}
+.spotbar__track i{display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#14B8A6,#5EEAD4)}
+
+/* ---- the price line ----
+   Free and Standard render their figure through this one element. The unit
+   ("/ forever", "/mo") rides its baseline rather than being offset. */
+.tier__price{
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:7px;
+  font-size:var(--price-size);font-weight:800;letter-spacing:-.035em;line-height:1.15;
+  font-variant-numeric:tabular-nums}
+.tier__price small{font-size:12.5px;font-weight:500;color:var(--ink-3);letter-spacing:0}
+/* ---- the Founder price block ----
+   Two lines now: the figure with the list price beside it, then the terms.
+
+   The figure is teal and large, because on this card the number that matters is
+   what is paid TODAY, which is nothing. The list price beside it is set smaller
+   and struck through: it is the anchor the figure is measured against, and the
+   strikethrough is what marks it as the old figure rather than the price. */
+.sec--pricing-dark .tier__deal .tier__deal-v{
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:9px;
+  margin:0;font-size:clamp(26px,2.8vw,33px);font-weight:800;letter-spacing:-.035em;
+  line-height:1.1;color:#5EEAD4;font-variant-numeric:tabular-nums}
+.sec--pricing-dark .tier__deal .tier__deal-v .tier__anchor{
+  font-size:13.5px;font-weight:500;letter-spacing:0;color:#8A9799;
+  text-decoration:line-through;text-decoration-thickness:1.5px}
+.sec--pricing-dark .tier__deal .tier__deal-terms{
+  margin:9px 0 0;font-size:13px;line-height:1.5;color:#B9C6C8}
+.sec--pricing-dark .tier__deal .tier__deal-terms b{color:#F2F6F6;font-weight:600}
+
+/* pricing.html carries the same block on the light pricing band, so the list
+   price gets the same treatment there. */
+.sec--pricing .tier__deal .tier__anchor{
+  font-size:13.5px;font-weight:500;letter-spacing:0;color:var(--ink-3);
+  text-decoration:line-through;text-decoration-thickness:1.5px}
+
+/* ---- the valued feature list ----
+   Feature on the left, what it is worth on the right, in a fixed width column
+   so the figures line up down the card. Used by the Founder card only; the
+   other two list their features plainly. */
+.tier__list--valued li{justify-content:space-between;gap:12px;padding-left:19px}
+.tier__list--valued li > span{min-width:0}
+.tier__list--valued li > em{
+  font-style:normal;flex:none;width:74px;text-align:right;white-space:nowrap;
+  font-family:var(--mono);font-size:11.6px;font-weight:500;color:#5EEAD4;
+  font-variant-numeric:tabular-nums}
+.tier__list--valued li > em.is-bonus{color:#5EEAD4;font-weight:700}
+/* The first row is a step up, not another feature line, so its value is muted
+   rather than another teal figure. */
+.tier__list--valued li:first-child > em{color:#9AA8AB;font-weight:500}
+
+/* The value stack closes on a total, separated from the list by a rule. */
+.sec--pricing-dark .vtotal{
+  display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+  margin:0;padding-top:10px;border-top:1px solid rgba(255,255,255,.13);
+  font-size:12.6px;font-weight:600;color:#F2F6F6}
+.sec--pricing-dark .vtotal em{
+  font-style:normal;font-family:var(--mono);font-size:12.6px;font-weight:700;
+  color:#5EEAD4;font-variant-numeric:tabular-nums}
+
+/* ---- the last call ----
+   Plain text, no box and no colour, immediately before the button. The
+   absence of decoration is what makes it land. */
+.sec--pricing-dark .tier__lastcall{margin:0;font-size:12.2px;line-height:1.5;color:#9AA8AB}
+
+/* The trial length, under the price and above the features. */
+.sec--pricing-dark .tier__terms{margin:0;font-size:12.4px;line-height:1.5;color:#9AA8AB}
+.sec--pricing-dark .tier__terms b{color:#F2F6F6;font-weight:600}
+
+/* ---- the feature list ----
+   One list for all three cards, so the check mark is drawn once and every card
+   matches. Rows are a set height so nothing wraps onto a second line, and the
+   list flexes so every button lands on the same line across the row. */
+.tier__list{display:flex;flex-direction:column;gap:1px;flex:1;margin:0;padding:0;list-style:none}
+.tier__list li{position:relative;padding-left:19px;font-size:12.8px;line-height:1.35;
+  min-height:23px;display:flex;align-items:center}
+.sec--pricing-dark .tier__list li{color:#B9C6C8}
+.tier__list li::before{
+  content:"";position:absolute;left:1px;top:50%;width:8px;height:4px;margin-top:-3px;
+  border-left:1.8px solid #2DD4BF;border-bottom:1.8px solid #2DD4BF;
+  transform:rotate(-45deg)}
+
+/* "Everything in Standard" is a step up, not another feature, so it reads
+   slightly brighter than the lines under it. */
+.sec--pricing-dark .tier__list li:first-child{color:#F2F6F6}
+
+/* Air between the price and the feature list, so the two do not crowd. */
+.sec--pricing-dark .tier__list{margin-top:4px}
+
+/* ---- the last call ----
+   Plain text, no box and no colour, immediately before the button. The
+   absence of decoration is what makes it land. */
+.sec--pricing-dark .tier__lastcall{margin:0;font-size:12.2px;line-height:1.5;color:#9AA8AB}
+
+/* ---- the guarantee box ----
+   One short sentence, with enough padding that the copy clears the border. */
+.sec--pricing-dark .tier__promise{
+  display:flex;gap:10px;align-items:flex-start;
+  margin-top:2px;padding:13px;border-radius:var(--r);
+  border:1px solid rgba(45,212,191,.3);
+  background:linear-gradient(180deg,rgba(45,212,191,.11),rgba(45,212,191,.03))}
+.sec--pricing-dark .tier__promise svg{
+  width:15px;height:15px;flex:none;margin-top:2px;
+  fill:none;stroke:#5EEAD4;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sec--pricing-dark .tier__promise p{margin:0;font-size:12.2px;line-height:1.45;color:#B9C6C8}
+.sec--pricing-dark .tier__promise b{color:#5EEAD4;font-weight:600}
+
+@media (prefers-reduced-motion:reduce){
+  .spotbar__track i{transition:none}
+}
+/* ---- the headline price ----
+   All three cards render the price through one of two elements: `.tier__price`
+   on Free and Standard, `.tier__deal-v` on Founder One, because that card also
+   carries a struck-through list price beside it.
+
+   Two elements meant two font sizes and two alignment rules, so the PKR figure
+   did not sit the same way on the third card as on the other two. Both now take
+   the size and the baseline behaviour from the same place. */
+.tiers{--price-size:clamp(26px,2.8vw,33px)}
+
+.tier__price{
+  display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;
+  font-size:var(--price-size);font-weight:800;letter-spacing:-.035em;line-height:1;
+  font-variant-numeric:tabular-nums}
+/* The unit sits on the same baseline as the figure, never floating beside it. */
+.tier__price small{font-size:12.5px;font-weight:500;color:var(--ink-3);letter-spacing:0}
+.spots{display:flex;align-items:center;gap:11px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+@keyframes shimmer{to{background-position:200% 0}}
+
+/* These serve pricing.html, which still has its own copy of the cards on the
+   older markup: the stacked deal block, the value-list rows and their Bonus
+   labels. index.html no longer uses any of them — it moved to the plain
+   .tier__list and a single .tier__price — but removing these would leave that
+   page unstyled. */
+.tier__deal{padding:16px 0;border-block:1px solid var(--line)}
+.tier__deal-v{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;
+  font-size:var(--price-size, 32px);font-weight:800;letter-spacing:-.035em;line-height:1;color:var(--teal)}
+.tier__deal-v .tier__was{font-size:calc(var(--price-size, 32px) * 0.44);font-weight:500;letter-spacing:0;color:var(--ink-3);
+  text-decoration:line-through;font-style:normal;font-variant-numeric:tabular-nums}
+.tier__deal-terms{margin-top:10px;font-size:12.8px;color:var(--ink-2);line-height:1.5}
+.tier__deal-terms b{color:var(--ink)}
+.vstack em.bonus{color:var(--teal)}
+
+/* Retired from the Founder One card when its duplicate copy was trimmed.
+   Kept because pricing.html still uses the box. */
+.tier__guar{padding:14px 16px;border-radius:var(--r);border:1px solid rgba(20,184,166,.28);background:var(--tint);
+  font-size:13px;color:var(--ink-2);line-height:1.5}
+
+.tiers__foot{text-align:center;margin-top:20px;font-size:13.5px;color:var(--ink-3)}
+.tiers__foot b{color:var(--coral)}
+/* The install link beside the plans. Its own colour rather than inherited, so it
+   stays legible on the dark pricing band where .tiers__foot is greyed down. */
+.tiers__foot--install{margin-top:10px;font-size:14px}
+.tiers__foot--install a{color:var(--teal-deep);font-weight:600;
+  border-bottom:1px solid rgba(45,212,191,.4);padding-bottom:1px;
+  transition:color .25s,border-color .25s}
+.tiers__foot--install a:hover{color:var(--teal);border-bottom-color:var(--teal)}
+
+/* ============ APPLY ============ */
+.sec--apply{background:linear-gradient(180deg,var(--tint-soft),var(--bg))}
+.apply{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
+  gap:clamp(26px,3.4vw,52px);align-items:start}
+.apply__intro p{color:var(--ink-2);font-size:15px;line-height:1.6;max-width:50ch}
+.apply__promise{display:flex;flex-direction:column;gap:11px;margin:24px 0}
+.apply__promise li{display:flex;gap:14px;align-items:baseline;padding-bottom:11px;border-bottom:1px solid var(--line)}
+.apply__promise b{font-size:15px;color:var(--teal-deep);min-width:98px;letter-spacing:-.01em}
+.apply__promise span{font-size:13.8px;color:var(--ink-2)}
+.apply__alt{font-size:13.8px;color:var(--ink-2)}
+.apply__alt a{color:var(--teal-deep);border-bottom:1px solid rgba(20,184,166,.4)}
+.apply__addr{margin-top:6px;color:var(--ink-3);font-size:13px}
+
+.form{position:relative;padding:clamp(18px,2vw,24px);border-radius:var(--r-lg);border:1px solid var(--line);
+  background:var(--surface);
+  box-shadow:var(--sh-3)}
+
+/* ---- Three-step skeleton ----
+   One compact line: three dots, each with a label and a live summary. Two
+   lines per step read better but pushed the card past a laptop screen, which
+   is most of why the form felt enormous. */
+.fs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  padding-bottom:11px;margin-bottom:11px;border-bottom:1px solid var(--line)}
+.fs__col{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px;align-items:center;min-width:0}
+.fs__pip{position:relative;width:14px;height:14px;border-radius:50%;
+  border:1.5px solid var(--line-2);background:var(--surface);
+  transition:border-color .35s,background .35s}
+.fs__pip::after{content:"";position:absolute;left:3px;top:3px;width:5px;height:5px;border-radius:50%;
+  background:var(--teal);transform:scale(0);transition:transform .3s var(--ease-out)}
+.fs__txt{min-width:0}
+.fs__txt small{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-3);line-height:1.3;transition:color .3s}
+.fs__txt b{display:block;font-size:11.4px;font-weight:500;color:var(--ink-3);line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .3s}
+
+.fs__col.is-done .fs__pip{border-color:var(--teal);background:var(--teal)}
+.fs__col.is-done .fs__pip::after{background:#FFFFFF;transform:scale(1)}
+.fs__col.is-done .fs__txt small{color:var(--teal-deep)}
+.fs__col.is-done .fs__txt b{color:var(--ink-2)}
+.fs__col.is-now .fs__pip{border-color:var(--teal)}
+.fs__col.is-now .fs__pip::after{transform:scale(1)}
+.fs__col.is-now .fs__txt small{color:var(--teal-deep)}
+.fs__col.is-now .fs__txt b{color:var(--ink)}
+
+.form__step{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 10px}
+
+/* ---- the three steps ----
+   `display:flex` here has the same specificity as the browser's own
+   `[hidden] { display: none }`, and author styles win ties, so the hidden
+   attribute did nothing: every step stayed on screen at once. The explicit
+   rule below restores it. */
+.form__set{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.form__set[hidden]{display:none}
+
+/* Each step animates in, so moving forward reads as the card changing
+   rather than the page jumping. Reversed slightly on the way back. */
+.form__set{animation:stepIn .42s var(--ease-out) both}
+@keyframes stepIn{
+  from{opacity:0;transform:translateY(14px) scale(.985)}
+  to{opacity:1;transform:none}
+}
+.form__set[data-dir="back"]{animation-name:stepBack}
+@keyframes stepBack{
+  from{opacity:0;transform:translateY(-14px) scale(.985)}
+  to{opacity:1;transform:none}
+}
+/* Reduced motion: swap instantly, no slide. */
+@media (prefers-reduced-motion:reduce){
+  .form__set, .form__done{animation:none}
+}
+
+/* Reminder of which brand is being applied for, with a way back. */
+.form__reco{margin:0 0 1px;font-size:12.4px;color:var(--ink-2)}
+.form__reco[hidden]{display:none}
+.form__reco b{color:var(--ink);font-weight:600}
+.form__reco button{background:none;border:0;padding:0;cursor:pointer;font:inherit;font-size:12.4px;
+  color:var(--teal-deep);border-bottom:1px solid rgba(20,184,166,.4)}
+
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12.6px;font-weight:500;color:var(--ink-2)}
+.req{color:var(--coral)}
+.field input,.field select,.field textarea{
+  width:100%;padding:9px 12px;border-radius:9px;
+  background:var(--field);border:1px solid var(--line-2);
+  font-size:14px;transition:border-color .22s,box-shadow .22s,background .22s;
+}
+.field textarea{resize:vertical;min-height:54px;font-family:inherit}
+.field select{appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='var(--select-arrow)' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+.field input::placeholder,.field textarea::placeholder{color:var(--ph)}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal);background:var(--field);box-shadow:0 0 0 3px rgba(20,184,166,.14)}
+.field select option{background:var(--field);color:var(--ink)}
+.field.is-bad input,.field.is-bad select,.field.is-bad textarea{border-color:var(--coral);box-shadow:0 0 0 3px rgba(225,29,72,.12)}
+.field__hint{font-size:11.4px;color:var(--coral);line-height:1.4;max-height:0;opacity:0;
+  transition:max-height .25s var(--ease),opacity .25s;display:block}
+.field__hint.is-on{max-height:34px;opacity:1}
+
+.check{display:flex;gap:10px;align-items:flex-start;font-size:12.2px;color:var(--ink-2);line-height:1.45;cursor:pointer}
+.check input{appearance:none;width:17px;height:17px;flex:none;margin-top:1px;border-radius:5px;border:1.5px solid var(--line-2);
+  background:var(--surface);cursor:pointer;transition:.2s;position:relative}
+.check input:checked{background:var(--teal);border-color:var(--teal)}
+.check input:checked::after{content:"";position:absolute;left:5px;top:1.5px;width:4px;height:9px;
+  border-right:2px solid #FFFFFF;border-bottom:2px solid #FFFFFF;transform:rotate(42deg)}
+.check.is-bad input{border-color:var(--coral)}
+
+.form__err{margin:0;padding:8px 12px;border-radius:9px;background:var(--err-bg);
+  border:1px solid rgba(225,29,72,.3);color:var(--err-fg);font-size:12.4px}
+.form__err[hidden]{display:none}
+.form__nav{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:0}
+.form__nav .btn{padding:9px 18px;font-size:14px}
+
+.form__done{text-align:center;padding:clamp(14px,2vw,24px) 0;animation:stepIn .5s var(--ease-out)}
+.form__done[hidden]{display:none}
+.form__done-ico{width:56px;height:56px;color:var(--teal);margin:0 auto 18px}
+.form__done-ico svg{width:100%;height:100%}
+.form__done h3{font-size:22px;margin-bottom:10px;letter-spacing:-.03em}
+.form__done p{color:var(--ink-2);font-size:14px;max-width:46ch;margin:0 auto 22px;line-height:1.6}
+.form__done a{color:var(--teal-deep);border-bottom:1px solid rgba(20,184,166,.4)}
+
+.form__store{margin-top:16px;padding:13px;border-radius:var(--r);border:1px dashed rgba(217,119,6,.4);background:#FFFBEB}
+.form__store[hidden]{display:none}
+.form__store p{font-size:12.8px;color:#92400E;line-height:1.6;margin-bottom:12px}
+.form__store code{font-family:var(--mono);font-size:11.8px;background:rgba(217,119,6,.1);padding:2px 6px;border-radius:4px;color:#78350F}
+.form__store textarea{width:100%;font-family:var(--mono);font-size:11.5px;background:var(--field);
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:11px;color:var(--ink-2);resize:vertical;margin-bottom:12px}
+
+/* ============ CLOSING ============ */
+.closing{padding:clamp(70px,9vw,120px) 0;border-top:1px solid var(--line);
+  background:linear-gradient(180deg,var(--bg),var(--tint))}
+.closing__in{text-align:center;max-width:920px}
+.closing h2{font-size:clamp(26px,3.6vw,44px);letter-spacing:-.038em;line-height:1.14;margin-bottom:22px;font-weight:800}
+.closing p{color:var(--ink-2);font-size:16.5px;margin-bottom:34px}
+.closing__cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* ============ FOOTER ============
+   Deliberately dark in both themes, like the pricing band, so the page
+   closes on Verafo's black and teal rather than a grey strip. Only the
+   palette is set here, never the theme, so the badges and links below stay
+   legible whichever mode the visitor is in. */
+.site-foot{border-top:1px solid rgba(255,255,255,.1);background:#080D0E;color:#F2F6F6;
+  padding-top:clamp(52px,6vw,82px);position:relative;overflow:hidden;
+  --ink:#F2F6F6; --ink-2:#A3B1B3; --ink-3:#748386;
+  --line:rgba(255,255,255,.1); --line-2:rgba(255,255,255,.2);
+  --teal:#2DD4BF; --teal-deep:#5EEAD4}
+.site-foot::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(50% 60% at 12% 0%,rgba(45,212,191,.10),transparent 68%)}
+.site-foot .wrap{position:relative;z-index:1}
+
+/* Brand column wider than the link columns, as in the reference. */
+.site-foot__in{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,2.5fr);
+  gap:clamp(32px,5vw,72px);padding-bottom:clamp(36px,4.5vw,56px)}
+.site-foot__brand{min-width:0}
+.site-foot__desc{color:#9AA8AB;font-size:13.6px;line-height:1.62;margin:18px 0 0;max-width:46ch}
+.site-foot__tag{color:#748386;font-size:13px;margin:12px 0 0}
+.site-foot__mail{color:#9AA8AB;font-size:13.4px;margin:18px 0 0}
+.site-foot__mail + .site-foot__mail{margin-top:6px}
+.site-foot__mail span{color:#748386}
+.site-foot__mail a{color:#5EEAD4;border-bottom:1px solid rgba(45,212,191,.35)}
+.site-foot__mail a:hover{border-color:var(--teal)}
+
+/* Four link columns with monospace headings, matching the pricing band. */
+.site-foot__nav{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(18px,2.4vw,34px)}
+.site-foot__col h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:#5EEAD4;font-weight:500;margin:0 0 16px}
+.site-foot__col a{display:block;font-size:13.8px;color:#A3B1B3;padding:5px 0;
+  transition:color .2s,transform .2s var(--ease)}
+.site-foot__col a:hover{color:#F2F6F6;transform:translateX(3px)}
+
+/* Removed with the old three-column footer: .site-foot__contact,
+   .site-foot__handle and .site-foot__social no longer appear in the markup.
+   The brand column now carries the contact lines instead. */
+
+/* Bottom bar: copyright left, trust badges right. */
+.site-foot__base{display:flex;justify-content:space-between;align-items:center;
+  gap:20px;flex-wrap:wrap;
+  padding-block:20px;border-top:1px solid rgba(255,255,255,.1);
+  font-size:12.8px;color:#748386}
+.site-foot__badges{display:flex;gap:9px;flex-wrap:wrap;list-style:none;margin:0;padding:0}
+.site-foot__badges li{display:inline-flex;align-items:center;gap:7px;
+  padding:7px 12px;border-radius:99px;
+  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
+  font-size:12.2px;color:#A3B1B3;white-space:nowrap}
+.site-foot__badge-ico{display:grid;place-items:center;width:14px;height:14px;flex:none}
+.site-foot__badge-ico svg{width:14px;height:14px;fill:none;stroke:#5EEAD4;
+  stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+@media (max-width:900px){
+  .site-foot__in{grid-template-columns:1fr;gap:34px}
+  .site-foot__desc{max-width:none}
+  .site-foot__nav{grid-template-columns:repeat(2,1fr);gap:26px 20px}
+}
+@media (max-width:680px){
+  .site-foot__nav{grid-template-columns:1fr 1fr}
+  .site-foot__base{flex-direction:column;align-items:flex-start;gap:14px}
+  .site-foot__badges{gap:7px}
+  .site-foot__badges li{font-size:11.6px;padding:6px 10px}
+}
+
+/* ============ SUBPAGE ============ */
+.page-hero{padding:clamp(46px,5.5vw,76px) 0 clamp(30px,3.4vw,46px);border-bottom:1px solid var(--line)}
+.page-hero h1{font-size:clamp(30px,3.9vw,46px);letter-spacing:-.032em;line-height:1.1;margin-bottom:18px}
+.page-hero p{font-size:clamp(15px,1.1vw,16.5px);color:var(--ink-2);max-width:62ch;line-height:1.62}
+.prose{max-width:76ch}
+.prose--doc{max-width:none}
+.prose h2{font-size:clamp(22px,2.3vw,30px);margin:44px 0 14px;letter-spacing:-.03em}
+.prose h3{font-size:18px;margin:30px 0 10px}
+.prose p,.prose li{color:var(--ink-2);font-size:15.5px;line-height:1.68;margin-bottom:14px}
+.prose ul{margin:0 0 18px;padding-left:0;list-style:none}
+.prose ul li{position:relative;padding-left:24px}
+.prose ul li::before{content:"";position:absolute;left:3px;top:9px;width:9px;height:5px;
+  border-left:2px solid var(--teal);border-bottom:2px solid var(--teal);transform:rotate(-45deg)}
+.prose strong{color:var(--ink);font-weight:600}
+.prose a{color:var(--teal-deep);border-bottom:1px solid rgba(20,184,166,.4)}
+.prose .updated{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase}
+
+/* ============ STORY ============
+   The Our Story page. It is mostly prose, so it leans on the same .prose rules
+   the legal pages use and adds only what a story needs that a document does not:
+   a wider type scale for the opening, a pull quote to break the page, and figures
+   that sit beside the text instead of under it. */
+.story-body{max-width:64ch}
+
+/* The opening. The hero and the first act share one grid, so the tall photograph
+   runs down both of them instead of the top of the page ending in an empty
+   column. The photograph keeps its own aspect ratio — nothing is cropped. */
+.story-open{padding:clamp(34px,4.2vw,62px) 0 clamp(42px,5vw,74px)}
+.story-open__in{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(0,.82fr);
+  gap:clamp(26px,3.6vw,56px);align-items:start}
+.story-open__h1{font-size:clamp(40px,5.6vw,68px);line-height:1;letter-spacing:-.038em;
+  font-weight:800;margin-bottom:22px;text-wrap:balance}
+.story-open__sub{font-size:clamp(15px,1.05vw,16.5px);color:var(--ink-2);max-width:58ch;
+  line-height:1.65;text-wrap:pretty}
+/* The one phrase the brand highlights, styled the same way it is in the homepage
+   hero so the sentence reads as the same sentence on both pages. */
+.story-open__sub strong{color:var(--teal-deep);font-weight:600}
+.story-open__body{margin-top:clamp(26px,3.2vw,42px)}
+.story-open__media{margin:0}
+.story-open__media img{display:block;width:100%;height:auto;border-radius:var(--r-lg);
+  border:1px solid var(--line-2);box-shadow:var(--sh-3),0 0 0 1px rgba(20,184,166,.08)}
+
+@media (max-width:820px){
+  .story-open__in{grid-template-columns:1fr}
+}
+/* The opening line. Scoped through .prose because `.prose p` would otherwise win
+   on specificity and set it back to body size. */
+.prose .story-lede{font-size:clamp(19px,1.7vw,24px);line-height:1.4;color:var(--ink);
+  font-weight:600;max-width:40ch;margin-bottom:20px}
+
+/* The three things it was not. Stacked rather than run together as a sentence,
+   and marked with the coral the site already gives the problem side of a
+   comparison, so the shape of the argument is visible before it is read. */
+.story-body .story-negate{list-style:none;margin:22px 0 20px;padding:0;display:grid;gap:10px}
+.story-body .story-negate li{position:relative;padding-left:26px;
+  font-size:clamp(15.5px,1.25vw,17.5px);font-weight:500;color:var(--ink-2);line-height:1.4}
+/* Diamond bullets, the same mark the comparison cards use, so the negation reads
+   as a list of things ruled out rather than three stray dashes. */
+.story-body .story-negate li::before{content:"";position:absolute;left:4px;top:.56em;
+  width:8px;height:8px;border-radius:1px;background:var(--coral);
+  transform:rotate(45deg);border:0}
+/* The line that resolves them: larger, darker, and the only one that answers. */
+.story-body .story-resolve{font-size:clamp(17px,1.55vw,21px);line-height:1.45;
+  color:var(--ink);font-weight:600;max-width:44ch}
+
+/* Key words in body copy take the same teal as the headings. */
+.story-body strong,.story-p strong,.story-resolve strong{color:var(--teal-deep);
+  font-weight:600}
+
+/* The hero's gradient underline, so headings further down the page can carry the
+   same emphasis rather than only shifting colour. */
+.story-open__h1 .hl,.story-h2 .hl,.story-quote blockquote .hl{position:relative;
+  display:inline-block}
+.story-open__h1 .hl::after,.story-h2 .hl::after,.story-quote blockquote .hl::after{
+  content:"";position:absolute;left:0;right:-4px;bottom:.03em;height:.055em;
+  border-radius:4px;
+  background:linear-gradient(90deg,var(--teal-bright),rgba(45,212,191,.12))}
+
+/* A pull quote, in the same display face as the headings rather than a serif
+   counterpoint, so the page speaks in one voice from top to bottom. */
+.story-quote{margin:0;padding:clamp(34px,4.4vw,58px) 0;text-align:center;
+  border-block:1px solid var(--line)}
+.story-quote blockquote{margin:0 auto;max-width:26ch;
+  font-size:clamp(24px,3.2vw,42px);line-height:1.12;letter-spacing:-.034em;
+  font-weight:800;color:var(--ink);text-wrap:balance}
+/* Plain, not a letter-spaced label: the page has no eyebrows left, and this would
+   have been the last one hiding as an attribution. */
+.story-quote p{margin:20px 0 0;font-size:clamp(15px,1.05vw,16.5px);
+  line-height:1.65;color:var(--ink-2)}
+
+/* Text and a photograph side by side, both starting at the same top edge. The
+   picture keeps its own ratio, so its width is what is set here, not its height. */
+.story-split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
+  gap:clamp(26px,3.6vw,56px);align-items:start}
+.story-split--flip .story-media{order:-1}
+/* When the picture comes first it takes the narrower column, so the text keeps the
+   width its larger headings now need. */
+.story-split--media-first{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr)}
+.story-split .story-body{max-width:none}
+/* Section headings, set in the same display face and weight as the page's opening
+   line so the page reads as one voice. One step down from the h1, which is what
+   keeps a hierarchy after the eyebrows are gone.
+   The second selector is for headings inside .prose, where `.prose h2` would
+   otherwise win on specificity and pull the size back down to 30px. */
+.story-h2,.prose .story-h2{font-size:clamp(32px,4.3vw,52px);letter-spacing:-.036em;
+  line-height:1.04;font-weight:800;margin:0 0 16px;text-wrap:balance}
+/* The comparison grid is full width under a split, so it needs its own gap. */
+.story-split + .moat{margin-top:clamp(30px,3.8vw,54px)}
+
+/* The comparison card headings, taken out of the letter-spaced label style they
+   share with the other pages. On this page the eyebrows are gone, so a tracked
+   uppercase line would have been the last one standing. The coral and teal
+   colours still come from .moat__h--them / --us. */
+.story-moat-h{font-family:inherit;font-size:19px;letter-spacing:-.015em;
+  text-transform:none;font-weight:700;margin-bottom:16px}
+
+/* Body copy for a column that sits beside a photograph. */
+.story-p{font-size:clamp(15px,1.05vw,16.5px);color:var(--ink-2);line-height:1.65;
+  max-width:52ch}
+.story-p + .story-p{margin-top:14px}
+
+/* A centred act, to break up the split ones either side of it.
+   The column is centred on the page; the text inside it is not. Centring the lines
+   as well left every line starting and ending somewhere different, which reads as
+   ragged rather than deliberate. One left edge, centred column. */
+.story-center{max-width:62ch;margin-inline:auto;text-align:left}
+.story-center .story-h2{margin-bottom:18px}
+.story-center .story-body{max-width:none;text-align:left}
+/* pretty, not balance. Balance is for short centred headings; on left-aligned
+   prose it shortens every line to a common width, so the column ended up centred
+   while the text inside it sat left of centre. */
+.story-center .story-body p{text-wrap:pretty}
+
+.story-media{margin:0}
+.story-media img{display:block;width:100%;height:auto;border-radius:var(--r-lg);
+  border:1px solid var(--line-2);box-shadow:var(--sh-2)}
+.story-media figcaption{margin-top:13px;font-family:var(--mono);font-size:11.5px;
+  letter-spacing:.06em;line-height:1.5;color:var(--ink-3)}
+
+/* A figure that spans the column. */
+.story-figure{margin:clamp(30px,4vw,52px) 0 0}
+
+/* The one-line conclusion under the market figures. */
+.story-kicker{margin:clamp(22px,2.6vw,30px) auto 0;max-width:52ch;text-align:center;
+  font-size:clamp(15px,1.05vw,16.5px);line-height:1.65;color:var(--ink);font-weight:600;
+  text-wrap:balance}
+
+/* ---- opening: tuned so the text column finishes level with the photograph ----
+   At desktop widths the text ran about 90px past the picture. Nothing about the
+   type changes here — same face, size, colour and weight — the difference is given
+   back entirely out of the whitespace between the blocks. */
+.story-open__h1{margin-bottom:14px}
+.story-open__body{margin-top:22px}
+.story-open .prose p{margin-bottom:8px;line-height:1.6}
+.story-open .story-negate{margin:10px 0 10px;gap:7px}
+.story-open .story-negate li{line-height:1.34}
+
+@media (max-width:820px){
+  .story-split{grid-template-columns:1fr;gap:24px}
+  .story-split--flip .story-media{order:0}
+  .story-lede{max-width:none}
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:1100px){
+  .tiers{grid-template-columns:1fr 1fr;gap:22px}
+  .tier--hero{grid-column:span 2}
+  .steps{grid-template-columns:1fr 1fr}
+  .flow{grid-template-columns:1fr 1fr;gap:14px}
+  .flow__step:not(:last-child)::after{display:none}
+  .cards{grid-template-columns:1fr 1fr}
+  .card--wide{grid-column:span 2}
+  .page-doc{grid-template-columns:1fr}
+  .toc{margin-bottom:8px}
+  .toc ol{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}
+}
+@media (max-width:860px){
+  .toc ol{grid-template-columns:1fr}
+}
+@media (max-width:980px){
+  .nav,.site-head__cta .btn--ghost,.theme-toggle--inline,.sound-toggle--inline{display:none}
+  /* The header already carries navigation on phones; a second sticky bar
+     would eat too much of a short screen. */
+  .subnav{display:none}
+  .burger{display:block}
+  .mobile-nav:not([hidden]){display:flex}
+  .hero__in{grid-template-columns:1fr;gap:34px}
+  /* The scan card used to come before the headline on a narrow screen. The
+     headline is the thing that says what the product is, so it leads; the card
+     follows as the illustration, which is what it is. */
+  .hero__art{order:1}
+  .hero__h1{font-size:clamp(34px,9vw,52px)}
+  .hexstage{width:min(78%,380px)}
+  .calc,.demo,.apply,.pilots,.metrics,.quotes{grid-template-columns:1fr}
+  .demo__view{grid-template-columns:1fr;gap:28px}
+  .demo__gauge{margin-inline:auto}
+  .guarantee__in{grid-template-columns:auto 1fr;row-gap:22px}
+  .guarantee__in .btn{grid-column:1/-1;justify-self:start}
+  .site-foot__in{grid-template-columns:1fr 1fr}
+  .site-foot__nav{grid-template-columns:repeat(2,1fr)}
+  .proofgrid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:680px){
+  body{font-size:15px}
+  .wrap{padding-inline:18px}
+  .tiers{grid-template-columns:1fr}
+  .tier--hero{grid-column:auto}
+  .steps,.cards,.pilots,.proofgrid,.site-foot__in,.site-foot__nav{grid-template-columns:1fr}
+  .flow{grid-template-columns:1fr}
+  .card--wide{grid-column:auto}
+  .hero__cta .btn,.closing__cta .btn{width:100%}
+  .trustbar{gap:20px 26px}
+  .trustbar b{font-size:19px}
+  .calc__split{grid-template-columns:1fr}
+  .demo__facts{grid-template-columns:1fr 1fr;gap:18px}
+  .pilot__stats{grid-template-columns:1fr;gap:14px}
+  .pilot__stats>div{display:flex;align-items:baseline;gap:12px}
+  .pilot__stats small{margin:0}
+  .hexcard--a{left:-2%}
+  .hexcard--b{right:-2%}
+  .guarantee__in{grid-template-columns:1fr}
+  .tier__pill{left:24px}
+  .form__nav .btn{flex:1}
+  .site-foot__base{flex-direction:column;gap:10px}
+  .subnav__in{gap:4px;padding-block:8px}
+  .subnav a{padding:6px 12px;font-size:13px}
+  .totop{right:14px;bottom:14px;width:44px;height:44px}
+  .mobile-cta{display:flex}
+  /* The sticky bar owns the bottom of the screen on phones. */
+  .totop{bottom:74px}
+  body{padding-bottom:72px}
+}
+
+/* ============ PRINT ============ */
+@media print{
+  .bg-fx,.readbar,.subnav,.totop,.announce,.site-head,.mobile-nav,
+  .closing,.guarantee,.brandbar,.hero__art,.burger{display:none !important}
+  body{background:#FFF;color:#000;font-size:11.5pt}
+  .sec{padding:14pt 0;break-inside:avoid}
+  .wrap{max-width:none;padding:0}
+  .prose,.prose__body{max-width:none}
+  .toc{position:static;border:1px solid #CCC;box-shadow:none;break-inside:avoid}
+  h1,h2,h3{break-after:avoid}
+  a{color:#000;text-decoration:none}
+  .site-foot{background:#FFF;border-top:1px solid #CCC}
+}

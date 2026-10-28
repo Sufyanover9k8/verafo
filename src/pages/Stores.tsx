@@ -139,7 +139,7 @@ export function Stores() {
             detail="Only administrators can view and manage stores. Head back to the dashboard to continue."
             action={
               <Button asChild className="h-11 gap-2 rounded-full px-5">
-                <Link to="/">
+                <Link to="/dashboard">
                   <ArrowRight className="size-4" /> Back to dashboard
                 </Link>
               </Button>

@@ -128,7 +128,7 @@ export function Admin() {
             detail="Only administrators can send notifications. Head back to the dashboard to continue."
             action={
               <Button asChild className="gap-2 rounded-full px-5">
-                <Link to="/">
+                <Link to="/dashboard">
                   <ArrowRight className="size-4" /> Back to dashboard
                 </Link>
               </Button>
