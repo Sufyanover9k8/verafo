@@ -49,6 +49,42 @@ export function Auth() {
   const [error, setError] = useState<string | null>(null)
   const [resetSent, setResetSent] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Show "send the confirmation link again" next to the notice. */
+  const [canResend, setCanResend] = useState(false)
+  const [resending, setResending] = useState(false)
+
+  /**
+   * Send the confirmation mail again.
+   *
+   * Supabase rate-limits this endpoint and reports the limit in the error, so the
+   * copy has to explain the wait rather than looking like another silent failure.
+   */
+  async function resendConfirmation() {
+    if (!supabase || resending) return
+    const address = email.trim()
+    if (!address) return
+    setResending(true)
+    setError(null)
+    try {
+      const { error: resendErr } = await supabase.auth.resend({
+        type: 'signup',
+        email: address,
+        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+      })
+      if (resendErr) {
+        const limited = /rate limit|too many|security purposes|after \d+ seconds/i.test(resendErr.message)
+        setError(
+          limited
+            ? 'Verafo can only send a few emails per hour. Wait a few minutes, then try once more.'
+            : resendErr.message,
+        )
+        return
+      }
+      setNotice(`Confirmation email sent again to ${address}. The link expires in 24 hours.`)
+    } finally {
+      setResending(false)
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -72,12 +108,33 @@ export function Auth() {
               options: { emailRedirectTo: `${window.location.origin}/dashboard` },
             })
       if (res.error) {
+        // A merchant who signed up once and lost the mail lands here on the next
+        // attempt. "Email not confirmed" is not a wrong password — say so, and
+        // offer to send the link again instead of leaving them stuck.
+        if (/email not confirmed|not confirmed/i.test(res.error.message)) {
+          setNotice('That account exists but is not confirmed yet. Send yourself a fresh confirmation link below.')
+          setCanResend(true)
+          return
+        }
         setError(res.error.message)
         return
       }
       if (mode === 'up' && !res.data.session) {
+        /*
+         * Supabase hides whether an address is already registered: an existing
+         * email comes back with an empty `identities` array and no session. It
+         * used to read as success — "check your email" — which is a dead end for
+         * a merchant who already has the account (and the mail never arrives).
+         */
+        const alreadyRegistered = Array.isArray(res.data.user?.identities) && res.data.user!.identities!.length === 0
+        if (alreadyRegistered) {
+          setNotice('That email already has a Verafo account. Sign in below — or use “Forgot password?” if you never set one.')
+          setMode('in')
+          return
+        }
         toast.push({ kind: 'success', title: 'Account created', detail: 'We emailed you a link. Click it, then sign in.' })
-        setNotice('Check your email to confirm your account')
+        setNotice('Check your email to confirm your account — the link expires in 24 hours. If it does not arrive in a minute, send it again below and check spam.')
+        setCanResend(true)
         setMode('in')
         return
       }
@@ -284,9 +341,24 @@ export function Auth() {
             )}
 
             {notice && (
-              <p className="rounded-[10px] border border-risk-safe/40 bg-risk-safe-soft px-3 py-2 text-[13px] text-risk-safe-strong">
-                {notice}
-              </p>
+              <div className="space-y-2 rounded-[10px] border border-risk-safe/40 bg-risk-safe-soft px-3 py-2 text-[13px] text-risk-safe-strong">
+                <p>{notice}</p>
+                {canResend && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <button
+                      type="button"
+                      className="inline-flex h-11 items-center rounded-[8px] border border-risk-safe/40 bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60 md:h-8"
+                      disabled={resending || !email.trim()}
+                      onClick={() => void resendConfirmation()}
+                    >
+                      {resending ? 'Sending…' : 'Send confirmation email again'}
+                    </button>
+                    <span className="text-[12px] text-foreground/70">
+                      Nothing arriving? Check spam, or mail us at verafo.support@gmail.com.
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
 
             {error && (
