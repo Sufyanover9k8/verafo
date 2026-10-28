@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/shell/app-shell'
+import { RouteBoundary } from './components/app/route-boundary'
 import { Skeleton } from './components/primitives/Skeleton'
 import { FEATURES } from './lib/features'
 import { useSession } from './lib/session'
@@ -56,8 +57,11 @@ export function App() {
 
   const shell = (
     <AppShell>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
+      {/* Keyed on the path so a crashed screen cannot poison the next one: a
+          merchant who sees the recovery card can navigate and keep working. */}
+      <RouteBoundary key={location.pathname}>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
           {/* The app lives under /dashboard. `/` belongs to the public site,
               which the deployment serves as a static page (see vercel.json), so
               a browser that reaches the router at `/` is redirected here. */}
@@ -87,7 +91,8 @@ export function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </Suspense>
+        </Suspense>
+      </RouteBoundary>
     </AppShell>
   )
 
