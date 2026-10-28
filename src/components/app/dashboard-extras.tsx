@@ -1,17 +1,23 @@
 import { Link } from 'react-router-dom'
-import { Check, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatPKR } from '@/lib/ui'
 import { readPref, writePref } from '@/lib/ui/prefs'
+import { parseCollapsedAt, SETUP_CHECKLIST_KEY, setupCardMode } from '@/lib/ui/setup-checklist'
 import { useState } from 'react'
 
-export const CHECKLIST_HIDDEN_KEY = 'dashboard.checklistHidden'
+/** Kept for callers/tests that referenced the old name. */
+export const CHECKLIST_HIDDEN_KEY = SETUP_CHECKLIST_KEY
 
 /**
  * A small "get started" card for a store that has not finished setting up.
- * Each item is detected from data the dashboard already loaded â€” nothing is
- * assumed and nothing is scored. The card disappears on its own once every
- * item is done, and the merchant can hide it for good on this device.
+ * Each item is detected from data the dashboard already loaded — nothing is
+ * assumed and nothing is scored.
+ *
+ * Hide minimises it to one row instead of removing it: setup is the only thing
+ * a brand-new merchant has to do, so the reminder stays (with the next step as a
+ * button) until the work is actually done. The full card also comes back by
+ * itself after a week — see lib/ui/setup-checklist.ts.
  */
 interface FirstRunChecklistProps {
   /** A store row exists for this merchant. */
@@ -23,7 +29,9 @@ interface FirstRunChecklistProps {
 }
 
 export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: FirstRunChecklistProps) {
-  const [hidden, setHidden] = useState(() => readPref(CHECKLIST_HIDDEN_KEY) === '1')
+  const [collapsedAt, setCollapsedAt] = useState<number | null>(() =>
+    parseCollapsedAt(readPref(SETUP_CHECKLIST_KEY)),
+  )
 
   const items = [
     { label: 'Store connected', done: hasStore, to: '/settings', cta: 'Open settings' },
@@ -32,12 +40,76 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
   ]
 
   const allDone = items.every((i) => i.done)
-  // Nothing to nudge: either finished, or the merchant hid it.
-  if (allDone || hidden) return null
-
+  // Expiry is decided inside the helper (it owns the clock), so the component
+  // stays pure.
+  const mode = setupCardMode({ allDone, collapsedAt })
   const doneCount = items.filter((i) => i.done).length
   /** The first thing still missing: the only step offered as a filled button. */
   const nextStep = items.find((i) => !i.done)
+  const percent = Math.round((doneCount / items.length) * 100)
+
+  if (mode === 'hidden') return null
+
+  /*
+   * Minimised: one row that cannot be dismissed away. It carries the progress,
+   * the next step as a real button, and the way back to the full card — so
+   * "Hide" buys quiet without losing the thread.
+   */
+  if (mode === 'compact') {
+    return (
+      <section
+        aria-label="Finish setting up"
+        className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[var(--r-card)] border border-primary/30 bg-primary/[0.06] px-4 py-3"
+      >
+        <span
+          className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary text-primary-foreground"
+          aria-hidden="true"
+        >
+          <Sparkles className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1 basis-full sm:basis-0">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-[13.5px] font-semibold text-foreground">
+            Finish setting up
+            <span className="font-normal text-muted-foreground">
+              {doneCount} of {items.length} done
+              {nextStep ? ` · next: ${nextStep.label.toLowerCase()}` : ''}
+            </span>
+          </p>
+          <div
+            className="mt-2 h-1 w-full max-w-[320px] overflow-hidden rounded-full bg-primary/15"
+            role="progressbar"
+            aria-valuenow={doneCount}
+            aria-valuemin={0}
+            aria-valuemax={items.length}
+            aria-label={`${doneCount} of ${items.length} setup steps done`}
+          >
+            <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {nextStep && (
+            <Link
+              to={nextStep.to}
+              className="inline-flex h-11 items-center rounded-[10px] bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 md:h-9"
+            >
+              {nextStep.cta}
+            </Link>
+          )}
+          <button
+            type="button"
+            aria-expanded={false}
+            className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:bg-muted md:h-9"
+            onClick={() => {
+              writePref(SETUP_CHECKLIST_KEY, null)
+              setCollapsedAt(null)
+            }}
+          >
+            <ChevronDown className="size-3.5" aria-hidden="true" /> Show steps
+          </button>
+        </div>
+      </section>
+    )
+  }
 
   return (
     /* Brand-coloured and at the top of the page: while setup is unfinished there
@@ -61,13 +133,16 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
         </div>
         <button
           type="button"
+          aria-label="Minimise setup steps"
+          title="Minimise — the reminder stays until setup is finished"
           className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:bg-muted md:h-8"
           onClick={() => {
-            writePref(CHECKLIST_HIDDEN_KEY, '1')
-            setHidden(true)
+            const at = Date.now()
+            writePref(SETUP_CHECKLIST_KEY, String(at))
+            setCollapsedAt(at)
           }}
         >
-          <X className="size-3.5" /> Hide
+          <X className="size-3.5" aria-hidden="true" /> Hide
         </button>
       </div>
 
@@ -82,7 +157,7 @@ export function FirstRunChecklist({ hasStore, hasScoredOrder, hasOutcome }: Firs
       >
         <span
           className="block h-full rounded-full bg-primary transition-[width] duration-500"
-          style={{ width: `${Math.round((doneCount / items.length) * 100)}%` }}
+          style={{ width: `${percent}%` }}
         />
       </div>
 
