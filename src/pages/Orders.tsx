@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Phone } from 'lucide-react'
 import { Icon } from '../components/Icon'
@@ -21,6 +21,9 @@ import type { OrderRow, OutcomeStatus } from '../lib/types'
 type StatusFilter = 'all' | 'pending' | 'accepted' | 'refused'
 
 interface Row extends OrderRow {
+  /** Present in the table but not on the shared OrderRow type. */
+  order_reference?: string | null
+  courier_tracking_number?: string | null
   buyers?: {
     risk_score: number
     total_orders: number
@@ -39,6 +42,91 @@ function csv(rows: Record<string, unknown>[]): string {
   return [keys.join(','), ...rows.map((r) => keys.map((k) => esc(r[k])).join(','))].join('\n')
 }
 
+/**
+ * One order as a card: four facts while collapsed, everything on demand.
+ * The header is the toggle, so the whole card is keyboard reachable.
+ */
+function OrderCard({
+  order,
+  actions,
+  showStore,
+}: {
+  order: Row
+  actions: ReactNode
+  showStore: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const status = (order.outcomes?.status ?? 'pending') as OutcomeStatus
+  const detail = (label: string, value: ReactNode, wide = false) => (
+    <div className={wide ? 'col-span-2 min-w-0' : 'min-w-0'}>
+      <dt className="m-0 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
+      <dd className="m-0 mt-0.5 break-words text-[12.5px] text-foreground">{value}</dd>
+    </div>
+  )
+
+  return (
+    <article
+      className={`rounded-[16px] border bg-card transition-colors ${
+        expanded ? 'border-[color-mix(in_srgb,var(--teal)_40%,var(--line))]' : 'border-border hover:border-line-2'
+      }`}
+    >
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 rounded-[16px] bg-transparent p-4 text-left"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[13px] font-semibold text-foreground">
+              {phone(order.buyer_phone)}
+            </span>
+            <VerdictBadge riskScore={order.buyers?.risk_score} totalOrders={order.buyers?.total_orders} />
+          </span>
+          <span className="mt-1 block truncate text-[12px] text-muted-foreground">
+            {dateTime(order.ordered_at)}
+            {order.city ? ` · ${order.city}` : ''}
+          </span>
+        </span>
+        <span className="flex flex-none flex-col items-end gap-1.5">
+          <span className="text-[15px] font-semibold tabular-nums text-foreground">
+            {money(order.price)}
+            {order.quantity && order.quantity > 1 ? (
+              <span className="ms-1 text-[12px] font-medium text-muted-foreground">× {order.quantity}</span>
+            ) : null}
+          </span>
+          <StatusBadge status={status} />
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border px-4 py-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {detail('Product', order.product_name || order.product_category || 'Untitled product', true)}
+            {showStore && detail('Store', order.stores?.name ?? '—')}
+            {detail('Reference', order.order_reference || '—')}
+            {detail('Tracking', order.courier_tracking_number || '—')}
+            {detail('Quantity', String(order.quantity ?? 1))}
+            {detail('Ordered', dateTime(order.ordered_at))}
+            {order.outcomes?.resolved_at && detail('Resolved', dateTime(order.outcomes.resolved_at))}
+            {order.outcomes?.refusal_reason && detail('Reason', order.outcomes.refusal_reason, true)}
+          </dl>
+          {status === 'pending' && (
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+              <Link
+                className="text-[12.5px] font-semibold text-primary-text hover:underline"
+                to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
+              >
+                Open buyer
+              </Link>
+              {actions}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  )
+}
 export function Orders() {
   const toast = useToast()
   const { role, store, stores: adminStores, scopeStoreIds } = useStoreScope()
@@ -58,6 +146,14 @@ export function Orders() {
   /** The whole filter panel starts hidden; the kebab toggles it. */
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [sort, setSort] = useState<OrderSortKey>('date_desc')
+  /** List or cards. Remembered per browser so the choice survives a reload. */
+  const [view, setView] = useState<'list' | 'cards'>(() =>
+    localStorage.getItem('verafo.ordersView') === 'cards' ? 'cards' : 'list',
+  )
+  const changeView = (next: 'list' | 'cards') => {
+    setView(next)
+    localStorage.setItem('verafo.ordersView', next)
+  }
   const [working, setWorking] = useState<string | null>(null)
   /** The bulk "Do recommended" action writes many rows at once. */
   const [bulkWorking, setBulkWorking] = useState(false)
@@ -228,6 +324,54 @@ export function Orders() {
 
   if (!isConfigured) return <NeedsSetup />
 
+  /**
+   * The decision controls, shared by the table row and the card view so the two
+   * can never drift apart.
+   */
+  const actionsFor = (o: Row) => {
+    const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
+    if (s !== 'pending') return <span className="text-[13px] text-muted-foreground">—</span>
+    const busy = working === o.id
+    return (
+      <span className="flex items-center justify-end gap-2 whitespace-nowrap">
+        {/* The decision. Deliberately the biggest target. */}
+        <button
+          type="button"
+          className="inline-flex h-10 min-w-[104px] items-center justify-center gap-1.5 rounded-full bg-[var(--cta-bg)] px-4 text-[13px] font-semibold text-[var(--cta-fg)] transition-colors hover:bg-[var(--cta-bg-hover)] disabled:opacity-60"
+          disabled={busy}
+          onClick={() => void mark(o, 'accepted')}
+          aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
+        >
+          {busy ? <Icon name="refresh" size={15} className="spin" /> : <Icon name="check" size={15} />}
+          Accept
+        </button>
+
+        {/* Placeholder: calling is not wired up yet, so it does nothing. */}
+        <button
+          type="button"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+          disabled={busy}
+          title="Call buyer — not available yet"
+          aria-label={`Call ${phone(o.buyer_phone)} (not available yet)`}
+        >
+          <Phone size={15} strokeWidth={2} />
+        </button>
+
+        {/* Refuse is just an X — the tooltip and aria-label carry the word. */}
+        <button
+          type="button"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-risk-high/40 bg-card text-risk-high-strong transition-colors hover:bg-risk-high-soft disabled:opacity-60"
+          disabled={busy}
+          onClick={() => void mark(o, 'refused')}
+          title="Refuse this order"
+          aria-label={`Mark ${phone(o.buyer_phone)} as refused`}
+        >
+          <Icon name="close" size={16} />
+        </button>
+      </span>
+    )
+  }
+
   const columns: Column<Row>[] = [
     {
       key: 'buyer',
@@ -290,53 +434,7 @@ export function Orders() {
     {
       key: 'actions',
       label: 'Action',
-      render: (o) => {
-        const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
-        if (s !== 'pending') return <span className="text-[13px] text-muted-foreground">—</span>
-        const busy = working === o.id
-        return (
-          <span className="flex items-center justify-end gap-2 whitespace-nowrap">
-            {/* The decision. Deliberately the biggest target in the row. */}
-            <button
-              type="button"
-              className="inline-flex h-10 min-w-[104px] items-center justify-center gap-1.5 rounded-full bg-[var(--cta-bg)] px-4 text-[13px] font-semibold text-[var(--cta-fg)] transition-colors hover:bg-[var(--cta-bg-hover)] disabled:opacity-60"
-              disabled={busy}
-              onClick={() => void mark(o, 'accepted')}
-              aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
-            >
-              {busy ? (
-                <Icon name="refresh" size={15} className="spin" />
-              ) : (
-                <Icon name="check" size={15} />
-              )}
-              Accept
-            </button>
-
-            {/* Placeholder: calling is not wired up yet, so it does nothing. */}
-            <button
-              type="button"
-              className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
-              disabled={busy}
-              title="Call buyer — not available yet"
-              aria-label={`Call ${phone(o.buyer_phone)} (not available yet)`}
-            >
-              <Phone size={15} strokeWidth={2} />
-            </button>
-
-            {/* Refuse is just an X — the tooltip and aria-label carry the word. */}
-            <button
-              type="button"
-              className="inline-flex size-10 items-center justify-center rounded-full border border-risk-high/40 bg-card text-risk-high-strong transition-colors hover:bg-risk-high-soft disabled:opacity-60"
-              disabled={busy}
-              onClick={() => void mark(o, 'refused')}
-              title="Refuse this order"
-              aria-label={`Mark ${phone(o.buyer_phone)} as refused`}
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </span>
-        )
-      },
+      render: (o) => actionsFor(o),
     },
   ]
 
@@ -523,7 +621,9 @@ export function Orders() {
               type="button"
               aria-pressed={status === s}
               className={`inline-flex h-11 items-center gap-2 rounded-[10px] px-3 text-[13px] font-semibold transition-colors md:h-8 ${
-                status === s ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+                status === s
+                  ? 'bg-muted text-foreground'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setStatus(s)}
             >
@@ -533,6 +633,29 @@ export function Orders() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="inline-flex items-center rounded-[10px] border border-border bg-card p-0.5"
+            role="group"
+            aria-label="Order view"
+          >
+            {(['list', 'cards'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={view === option}
+                onClick={() => changeView(option)}
+                title={option === 'list' ? 'List view' : 'Card view'}
+                aria-label={option === 'list' ? 'List view' : 'Card view'}
+                className={`inline-flex h-8 w-9 items-center justify-center rounded-[8px] transition-colors ${
+                  view === option
+                    ? 'bg-muted text-foreground'
+                    : 'bg-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon name={option} size={15} />
+              </button>
+            ))}
+          </div>
           <label className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-card px-3 py-1.5">
             <Icon name="git-compare" size={14} className="text-muted-foreground" />
             <select
@@ -558,32 +681,45 @@ export function Orders() {
         </div>
       </div>
 
-      {/* The table. Wide tables scroll inside this box, never the page. */}
-      <div className="overflow-hidden rounded-[16px] border border-border bg-card">
-        {loading ? (
-          <div className="flex flex-col gap-3 p-6">
+      {/* The orders: a table, or cards, or the states that replace both. */}
+      {loading ? (
+        <div className="rounded-[16px] border border-border bg-card p-6">
+          <div className="flex flex-col gap-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} width="100%" height={16} />
             ))}
           </div>
-        ) : loadError ? (
-          <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-            <p className="text-[15px] text-foreground">We could not load your orders.</p>
-            <button
-              type="button"
-              className="inline-flex h-11 items-center rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground hover:bg-muted md:h-9"
-              onClick={() => void load()}
-            >
-              Retry
-            </button>
-          </div>
-        ) : filtered.length === 0 ? (
+        </div>
+      ) : loadError ? (
+        <div
+          role="alert"
+          className="flex flex-col items-center gap-3 rounded-[16px] border border-border bg-card px-6 py-10 text-center"
+        >
+          <p className="text-[15px] text-foreground">We could not load your orders.</p>
+          <button
+            type="button"
+            className="inline-flex h-11 items-center rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground hover:bg-muted md:h-9"
+            onClick={() => void load()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-[16px] border border-border bg-card">
           <EmptyState
             icon="clipboard"
             title={rows.length === 0 ? 'No orders yet' : 'No orders match'}
             detail={rows.length === 0 ? 'Orders will appear here as they come in.' : 'Try a different filter.'}
           />
-        ) : (
+        </div>
+      ) : view === 'cards' ? (
+        <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {sorted.map((o) => (
+            <OrderCard key={o.id} order={o} actions={actionsFor(o)} showStore={isAdmin} />
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-[16px] border border-border bg-card">
           <Table
             columns={columns}
             rows={sorted}
@@ -594,8 +730,8 @@ export function Orders() {
               }
             }}
           />
-        )}
-      </div>
+        </div>
+      )}
     </PageShell>
   )
 }
