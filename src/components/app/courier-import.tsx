@@ -109,15 +109,27 @@ export function CourierImport({ stores }: { stores: Store[] }) {
       title: 'Columns detected',
       detail: `${Object.keys(result.mapping).length} of ${Object.keys(result.mapping).length + result.missing.length} fields mapped by AI.`,
     })
+    // Detection only exists to feed the preview, so continue straight into it
+    // instead of asking for a second click. The mapping is passed explicitly
+    // because the state update above has not re-rendered yet.
+    if (storeId) {
+      await buildPreview(result.mapping)
+    } else {
+      toast.push({
+        kind: 'info',
+        title: 'Columns saved',
+        detail: 'Pick a store above and the rows will be matched against it.',
+      })
+    }
   }
 
-  async function buildPreview() {
+  async function buildPreview(mappingOverride?: Partial<Record<CourierField, string>>) {
     if (!supabase) return
     if (!storeId) {
       toast.push({ kind: 'error', title: 'Pick a store', detail: 'Courier rows are matched against one store.' })
       return
     }
-    const parsed = parseCourierRows(headers, cells, aiMapping)
+    const parsed = parseCourierRows(headers, cells, mappingOverride ?? aiMapping)
     if (parsed.length === 0) {
       toast.push({ kind: 'error', title: 'Nothing to match', detail: 'No reference, tracking number or phone found in that file.' })
       return
