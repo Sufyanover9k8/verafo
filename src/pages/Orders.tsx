@@ -10,6 +10,7 @@ import { StatusBadge } from '../components/app/status-badge'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
+import { isPending, recommendedAcceptances } from '../lib/ui/recommended-outcomes'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -53,6 +54,8 @@ export function Orders() {
   const [filterStoreId, setFilterStoreId] = useState('')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
+  /** The bulk "Do recommended" action writes many rows at once. */
+  const [bulkWorking, setBulkWorking] = useState(false)
 
   const load = useCallback(async () => {
     if (!supabase) return
@@ -115,6 +118,51 @@ export function Orders() {
     }
     return c
   }, [rows])
+
+  /** Pending low-risk orders the bulk action would accept — respects filters. */
+  const recommended = useMemo(() => recommendedAcceptances(filtered), [filtered])
+
+  /**
+   * "Do recommended": accept every pending order whose buyer carries a scored
+   * LOW RISK verdict. Medium, high and UNKNOWN buyers are deliberately left for
+   * the merchant — an unscored buyer is not a safe one.
+   */
+  async function doRecommended() {
+    if (!supabase || bulkWorking || recommended.length === 0) return
+    setBulkWorking(true)
+    try {
+      const resolvedAt = new Date().toISOString()
+      const { error } = await supabase.from('outcomes').upsert(
+        recommended.map((o) => ({
+          order_id: o.id,
+          status: 'accepted',
+          resolved_at: resolvedAt,
+        })),
+        { onConflict: 'order_id' },
+      )
+      if (error) throw error
+
+      const pendingBefore = filtered.filter(isPending).length
+      const left = Math.max(0, pendingBefore - recommended.length)
+      toast.push({
+        kind: 'success',
+        title: `Accepted ${recommended.length} low-risk order${recommended.length === 1 ? '' : 's'}`,
+        detail:
+          left > 0
+            ? `${left} other order${left === 1 ? '' : 's'} in this view still need your call.`
+            : 'Nothing else is pending in this view.',
+      })
+      await load()
+    } catch (err) {
+      toast.push({
+        kind: 'error',
+        title: 'Could not accept the recommended orders',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setBulkWorking(false)
+    }
+  }
 
   async function mark(order: Row, next: 'accepted' | 'refused') {
     if (!supabase || working) return
@@ -271,13 +319,37 @@ export function Orders() {
             : 'Every order across your stores, with its buyer risk and outcome.'
         }
         actions={
-          <button
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50 md:h-9"
-            onClick={exportCsv}
-            disabled={filtered.length === 0}
-          >
-            <Icon name="download" size={14} /> Export CSV
-          </button>
+          <>
+            <button
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 md:h-9"
+              onClick={() => void doRecommended()}
+              disabled={bulkWorking || loading || recommended.length === 0}
+              title={
+                recommended.length === 0
+                  ? 'No pending orders with a scored low-risk buyer in this view. Unknown and medium/high-risk buyers stay for your call.'
+                  : `Accepts ${recommended.length} pending order${recommended.length === 1 ? '' : 's'} whose buyer is scored low risk. Medium, high and unknown buyers are left for you.`
+              }
+            >
+              {bulkWorking ? (
+                <Icon name="refresh" size={14} className="spin" />
+              ) : (
+                <Icon name="flash" size={14} />
+              )}
+              Do recommended
+              {recommended.length > 0 && (
+                <span className="rounded-full bg-primary-foreground/15 px-1.5 text-[12px] tabular-nums">
+                  {recommended.length}
+                </span>
+              )}
+            </button>
+            <button
+              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50 md:h-9"
+              onClick={exportCsv}
+              disabled={filtered.length === 0}
+            >
+              <Icon name="download" size={14} /> Export CSV
+            </button>
+          </>
         }
       />
 
