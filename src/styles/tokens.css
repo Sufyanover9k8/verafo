@@ -215,6 +215,12 @@
   --cta-fg: #FFFFFF;
   --cta-ring: rgba(20, 184, 166, .30);
 
+  /* Cyan variant of the CTA: the accent colour carries the action, with ink
+     text on it — white on #14B8A6 is ~2.3:1 and fails AA. */
+  --cta-accent-bg: #14B8A6;
+  --cta-accent-hover: #2DD4BF;
+  --cta-accent-fg: #04201C;
+
   /* Legacy shadow names */
   --shadow: var(--sh-1);
   --shadow-sm: var(--sh-1);
@@ -274,6 +280,10 @@
   --cta-bg-hover: #5EEAD4;
   --cta-fg: #04201C;
   --cta-ring: rgba(45, 212, 191, .35);
+
+  --cta-accent-bg: #2DD4BF;
+  --cta-accent-hover: #5EEAD4;
+  --cta-accent-fg: #04201C;
 
   --v-canvas: radial-gradient(58% 42% at 6% -10%, rgba(45, 212, 191, .10), transparent 62%),
               radial-gradient(50% 38% at 102% 0%, rgba(20, 184, 166, .07), transparent 60%),

@@ -321,7 +321,7 @@ export function Orders() {
         actions={
           <>
             <button
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 md:h-9"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-[var(--cta-accent-bg)] px-4 text-[13px] font-semibold text-[var(--cta-accent-fg)] shadow-sm transition-colors hover:bg-[var(--cta-accent-hover)] disabled:opacity-50 md:h-9"
               onClick={() => void doRecommended()}
               disabled={bulkWorking || loading || recommended.length === 0}
               title={
@@ -337,7 +337,7 @@ export function Orders() {
               )}
               Do recommended
               {recommended.length > 0 && (
-                <span className="rounded-full bg-primary-foreground/15 px-1.5 text-[12px] tabular-nums">
+                <span className="rounded-full bg-black/10 px-1.5 text-[12px] tabular-nums">
                   {recommended.length}
                 </span>
               )}
