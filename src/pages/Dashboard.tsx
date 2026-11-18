@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, RefreshCw } from 'lucide-react'
 import { GeoMap } from '@/components/charts/GeoMap'
@@ -36,6 +36,19 @@ interface BuyerLight {
   phone: string
   risk_score: number
   total_orders: number
+}
+
+/**
+ * Ticks on its own so the "Updated 2 minutes ago" label stays live without
+ * re-rendering the whole dashboard — and every chart on it — every 30 seconds.
+ */
+function UpdatedLabel({ since }: { since: number }) {
+  useNowTicker(true, 30_000)
+  return (
+    <span className="text-[12.5px] text-muted-foreground">
+      Updated {timeAgo(new Date(since).toISOString())}
+    </span>
+  )
 }
 
 function keyOf(d: Date): string {
@@ -103,13 +116,25 @@ export function Dashboard() {
   const [range, setRange] = useState<RangeDays>(7)
   /** When the last successful load finished, for the "Updated…" line. */
   const [lastLoaded, setLastLoaded] = useState<number | null>(null)
+  /** Same value, without triggering a render, for the staleness check. */
+  const lastLoadedRef = useRef(0)
 
-  const load = useCallback(async () => {
+  /**
+   * Load the dashboard.
+   *
+   * `silent` is the background refresh: it must not flip `loading` (that swaps
+   * the page for skeletons and flashes) and must not toast on failure (a
+   * transient network blip every 90s would nag, and each toast used to
+   * re-trigger the load).
+   */
+  const load = useCallback(async (silent = false) => {
     if (!supabase) return
-    setLoading(true)
-    setOrdersError(false)
-    setBuyersError(false)
-    setSalesError(false)
+    if (!silent) {
+      setLoading(true)
+      setOrdersError(false)
+      setBuyersError(false)
+      setSalesError(false)
+    }
 
     let ordersQuery = supabase
       .from('orders')
@@ -124,7 +149,9 @@ export function Dashboard() {
 
     if (ordersRes.error) {
       setOrdersError(true)
-      toast.push({ kind: 'error', title: 'Could not load orders', detail: ordersRes.error.message })
+      if (!silent) {
+        toast.push({ kind: 'error', title: 'Could not load orders', detail: ordersRes.error.message })
+      }
     } else {
       setOrders(ordersData)
     }
@@ -135,7 +162,9 @@ export function Dashboard() {
       const { data, error: buyersErr } = await supabase.from('buyers').select('phone, risk_score, total_orders').limit(5000)
       if (buyersErr) {
         setBuyersError(true)
-        toast.push({ kind: 'error', title: 'Could not load buyers', detail: buyersErr.message })
+        if (!silent) {
+          toast.push({ kind: 'error', title: 'Could not load buyers', detail: buyersErr.message })
+        }
       } else setBuyers((data ?? []) as BuyerLight[])
     } else {
       const phones = [...new Set(ordersData.map((o) => o.buyer_phone).filter(Boolean))]
@@ -148,7 +177,9 @@ export function Dashboard() {
           .in('phone', phones.slice(0, 1000))
         if (buyersErr) {
           setBuyersError(true)
-          toast.push({ kind: 'error', title: 'Could not load buyers', detail: buyersErr.message })
+          if (!silent) {
+            toast.push({ kind: 'error', title: 'Could not load buyers', detail: buyersErr.message })
+          }
         } else setBuyers((data ?? []) as BuyerLight[])
       }
     }
@@ -170,17 +201,27 @@ export function Dashboard() {
     }
 
     setLoading(false)
-    setLastLoaded(Date.now())
+    const now = Date.now()
+    lastLoadedRef.current = now
+    setLastLoaded(now)
   }, [toast, range, isAdmin, store, scopeStoreIds])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  // Keep the numbers fresh while the merchant is looking at them. Pauses when
-  // the tab is hidden, and never runs two loads at once.
-  useAutoRefresh(load, 90_000, !loading)
-  useNowTicker(lastLoaded != null && !loading)
+  /**
+   * Background refresh. Two guardrails on top of the timer:
+   *  · silent, so nothing flashes or re-sorts under the merchant's cursor
+   *  · skipped when the data is younger than 30s, so flitting between tabs
+   *    does not fire a request every time the window regains focus
+   */
+  const refreshIfStale = useCallback(() => {
+    if (Date.now() - lastLoadedRef.current < 30_000) return
+    void load(true)
+  }, [load])
+
+  useAutoRefresh(refreshIfStale, 90_000, !loading)
 
   const stats = useMemo(() => {
     const now = new Date()
@@ -440,11 +481,7 @@ export function Dashboard() {
             >
               <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} /> Refresh
             </Button>
-            {lastLoaded != null && !loading && (
-              <span className="text-[12.5px] text-muted-foreground">
-                Updated {timeAgo(new Date(lastLoaded).toISOString())}
-              </span>
-            )}
+            {lastLoaded != null && !loading && <UpdatedLabel since={lastLoaded} />}
           </div>
         }
       />

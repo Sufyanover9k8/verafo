@@ -1,5 +1,41 @@
 project_id = "verafo"
 
+# Auth settings mirrored from the hosted project (Supabase → Authentication).
+# `supabase start` uses these for a local stack; the hosted project is the
+# source of truth and is configured via the Management API / dashboard.
+[auth]
+site_url = "http://localhost:5173"
+# Local dev + all deployed origins. Keep in sync with the hosted project's
+# `uri_allow_list`; the app builds its redirects from window.location.origin.
+additional_redirect_urls = [
+  "http://localhost:5173/**",
+  "http://127.0.0.1:5173/**",
+  "https://www.verafo.com/**",
+  "https://verafo.com/**",
+  "https://verafo.vercel.app/**",
+]
+# New sign-ups must click the emailed link before they get a session. Without
+# this the client receives a session immediately and drops a brand-new user
+# straight onto the dashboard, skipping confirmation and onboarding.
+enable_confirmations = true
+enable_signup = true
+minimum_password_length = 8
+jwt_expiry = 3600
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+
+# Transactional mail goes out through Resend. The API key is never committed:
+# export RESEND_API_KEY in your shell before `supabase start`.
+[auth.email.smtp]
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "noreply@verafo.com"
+sender_name = "Verafo"
+
 [functions.verafo-ai]
 enabled = true
 verify_jwt = false

@@ -19,7 +19,7 @@ import {
   ensureStoreLink,
   graphqlNodeToPayload,
   listStoreOrders,
-  recordShopifyOrder,
+  recordShopifyOrdersBatch,
   type VerafoOrderRow,
 } from "../lib/verafo";
 import { computeVerdict } from "../lib/risk";
@@ -89,7 +89,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     distribution[verdict.tone]++;
   }
 
-  return { shop, linked, stats, distribution, recent: orders.slice(0, 10) };
+  return {
+    shop,
+    linked,
+    stats,
+    distribution,
+    recent: orders.slice(0, 10),
+    // The dashboard, not the Vercel deployment host. Merchants should never be
+    // sent to *.vercel.app, so this is configurable and defaults to the app's
+    // real address (the marketing site is at "/", the SPA lives at "/dashboard").
+    dashboardUrl: process.env.VERAFO_DASHBOARD_URL ?? "https://www.verafo.com/dashboard",
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -107,19 +117,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const edges = json.data?.orders?.edges ?? [];
-  let created = 0;
-  let skipped = 0;
-  for (const { node } of edges) {
-    const result = await recordShopifyOrder(graphqlNodeToPayload(node), storeId);
-    if (result.created) created++;
-    else skipped++;
-  }
+  // Batched: one buyer upsert + one order upsert + two outcome upserts per page.
+  const summary = await recordShopifyOrdersBatch(
+    edges.map(({ node }) => graphqlNodeToPayload(node)),
+    storeId,
+  );
 
-  return { created, skipped, total: edges.length };
+  return { created: summary.processed, skipped: summary.skipped, total: edges.length };
 };
 
 export default function Index() {
-  const { linked, stats, distribution, recent } = useLoaderData<typeof loader>();
+  const { linked, stats, distribution, recent, dashboardUrl } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const appBridge = useAppBridge();
 
@@ -156,13 +164,18 @@ export default function Index() {
   return (
     <Page>
       <TitleBar title="Verafo risk">
-        <button
-          variant="primary"
-          loading={syncing}
-          onClick={() => fetcher.submit({}, { method: "POST" })}
-        >
-          {syncing ? "Syncing…" : "Sync recent orders"}
-        </button>
+        <>
+          <Button url={dashboardUrl} target="_blank" external>
+            Open Verafo dashboard
+          </Button>
+          <button
+            variant="primary"
+            loading={syncing}
+            onClick={() => fetcher.submit({}, { method: "POST" })}
+          >
+            {syncing ? "Syncing…" : "Sync recent orders"}
+          </button>
+        </>
       </TitleBar>
       <BlockStack gap="500">
         {!linked && (

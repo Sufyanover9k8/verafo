@@ -2,24 +2,16 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
 /**
- * Admin allowlist. Set VITE_ADMIN_EMAILS to a comma-separated list of the
- * Verafo team's emails — those users see every store's data (the network view).
- * Everyone else is a merchant and only ever sees their own store.
+ * The admin role comes from the database: `verafo_is_admin()` checks
+ * `verafo_admins` against the signed-in JWT. That means the UI role and the
+ * row-level security policies can never disagree, there is no second list to
+ * keep in sync, and no team email address is compiled into the public bundle.
  *
- * Local dev only: set VITE_DEMO_ADMIN=1 to treat every signed-in user as an
- * admin without an allowlist. Never set that in production.
+ * Add or remove admins in SQL (`verafo_admins`), never here.
+ *
+ * VITE_DEMO_ADMIN=1 treats every signed-in user as an admin — local dev only.
  */
-const ADMIN_EMAILS = ((import.meta.env.VITE_ADMIN_EMAILS as string | undefined) ?? '')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean)
-
 const DEMO_ADMIN = String(import.meta.env.VITE_DEMO_ADMIN ?? '') === '1'
-
-export function isAdminEmail(email: string | null | undefined): boolean {
-  if (DEMO_ADMIN) return true
-  return !!email && ADMIN_EMAILS.includes(email.toLowerCase())
-}
 
 export interface AdminState {
   admin: boolean
@@ -27,8 +19,7 @@ export interface AdminState {
 }
 
 export function useIsAdmin(): AdminState {
-  // Default: NOT admin. Only flips true once the signed-in email is confirmed
-  // on the allowlist (or demo mode is explicitly on).
+  // Default: NOT admin. Only flips true once the server confirms it.
   const [admin, setAdmin] = useState(DEMO_ADMIN)
   const [checking, setChecking] = useState(!DEMO_ADMIN)
 
@@ -43,14 +34,27 @@ export function useIsAdmin(): AdminState {
       return
     }
     let alive = true
-    const apply = (email: string | null | undefined) => {
+
+    const apply = async (email: string | null | undefined) => {
       if (!alive) return
-      setAdmin(isAdminEmail(email))
+      if (!email) {
+        setAdmin(false)
+        setChecking(false)
+        return
+      }
+      const { data, error } = await supabase!.rpc('verafo_is_admin')
+      if (!alive) return
+      // Fail closed: if the function is missing or errors, this is a merchant.
+      // RLS enforces the same answer, so the UI never shows permissions the
+      // server would refuse.
+      if (error) console.error('Could not resolve admin role:', error)
+      setAdmin(!error && data === true)
       setChecking(false)
     }
-    void supabase.auth.getUser().then(({ data }) => apply(data.user?.email))
+
+    void supabase.auth.getUser().then(({ data }) => void apply(data.user?.email))
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      apply(session?.user?.email)
+      void apply(session?.user?.email)
     })
     return () => {
       alive = false

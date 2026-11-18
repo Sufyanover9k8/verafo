@@ -1,162 +1,39 @@
-import { useIsAdmin } from '../lib/admin'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useIsAdmin } from '../lib/admin'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { Reveal } from '../components/Reveal'
 import { NeedsSetup } from '../components/States'
-import { normalizePhone } from '../lib/format'
+import { money } from '../lib/format'
 import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
+import {
+  failedRowsCsv,
+  parseImport,
+  stripBom,
+  TEMPLATE_COLUMNS,
+  TEMPLATE_CSV,
+  type ParsedRow,
+} from '../lib/ui/import'
 
-const TEMPLATE = [
-  'phone,store,category,product,price,quantity,address,city,ordered_at,outcome,resolved_at',
-  '+923001112222,Sanicore,skincare,Vitamin C serum 30ml,2499,1,House 12 Block B Model Town,Lahore,2026-07-01 14:30,refused,2026-07-03 10:00',
-  '+923214445555,Urban Threads,clothing,Cotton t-shirt,1199,2,PECHS Block 2,Karachi,2026-07-05 18:00,accepted,2026-07-06 12:00',
-  '+923337778888,Sanicore,skincare,Retinol cream 30ml,2699,1,House 2 F-11 Markaz,Islamabad,2026-07-10 09:15,pending,',
-].join('\n')
+/** Rows per network round-trip. Big enough to be fast, small enough to retry. */
+const CHUNK_SIZE = 200
+/** Refuse absurd files before the browser tries to upload them. */
+const MAX_ROWS = 20000
 
-const HEADER_ALIASES: Record<string, string> = {
-  phone: 'phone',
-  buyer: 'phone',
-  buyer_phone: 'phone',
-  mobileno: 'phone',
-  number: 'phone',
-  store: 'store',
-  storename: 'store',
-  store_name: 'store',
-  category: 'category',
-  product_category: 'category',
-  product: 'product',
-  productname: 'product',
-  product_name: 'product',
-  item: 'product',
-  name: 'product',
-  price: 'price',
-  amount: 'price',
-  value: 'price',
-  quantity: 'quantity',
-  qty: 'quantity',
-  address: 'address',
-  city: 'city',
-  ordered_at: 'ordered_at',
-  date: 'ordered_at',
-  orderdate: 'ordered_at',
-  order_date: 'ordered_at',
-  outcome: 'outcome',
-  status: 'outcome',
-  result: 'outcome',
-  resolved_at: 'resolved_at',
-}
-
-type Outcome = 'accepted' | 'refused' | 'pending'
-
-interface ParsedRow {
+interface Failure {
   line: number
-  phone: string
-  store: string
-  category: string
-  product: string
-  price: number | null
-  quantity: number
-  address: string
-  city: string
-  ordered_at: string | null
-  outcome: Outcome | null
-  resolved_at: string | null
+  reason: string
 }
 
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let cur = ''
-  let inQuotes = false
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          cur += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        cur += c
-      }
-    } else if (c === '"') {
-      inQuotes = true
-    } else if (c === ',') {
-      row.push(cur)
-      cur = ''
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++
-      row.push(cur)
-      cur = ''
-      if (row.some((x) => x.trim() !== '')) rows.push(row)
-      row = []
-    } else {
-      cur += c
-    }
-  }
-  row.push(cur)
-  if (row.some((x) => x.trim() !== '')) rows.push(row)
-  return rows
-}
-
-function toIso(v: string): string | null {
-  const t = v.trim()
-  if (!t) return null
-  const d = new Date(t.includes(' ') ? t.replace(' ', 'T') : t)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString()
-}
-
-function parseRows(text: string): { rows: ParsedRow[]; header: string[]; lineErrors: string[] } {
-  const cells = parseCsv(text)
-  if (cells.length === 0) return { rows: [], header: [], lineErrors: ['File is empty'] }
-  const header = cells[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
-  const col = new Map<string, number>()
-  header.forEach((h, i) => {
-    const mapped = HEADER_ALIASES[h]
-    if (mapped && !col.has(mapped)) col.set(mapped, i)
-  })
-  const missing = ['phone', 'store'].filter((k) => !col.has(k))
-  if (missing.length > 0) {
-    return { rows: [], header, lineErrors: [`Missing required column(s): ${missing.join(', ')}`] }
-  }
-  const lineErrors: string[] = []
-  const rows: ParsedRow[] = []
-  for (let i = 1; i < cells.length; i++) {
-    const r = cells[i]
-    const get = (k: string) => (col.has(k) ? (r[col.get(k)!] ?? '').trim() : '')
-    rows.push({
-      line: i + 1,
-      phone: normalizePhone(get('phone')),
-      store: get('store'),
-      category: get('category'),
-      product: get('product'),
-      price: (() => {
-        const p = parseFloat(get('price'))
-        return Number.isNaN(p) || !get('price') ? null : p
-      })(),
-      quantity: Math.max(1, parseInt(get('quantity'), 10) || 1),
-      address: get('address'),
-      city: get('city'),
-      ordered_at: toIso(get('ordered_at')),
-      outcome: (() => {
-        const s = get('outcome').toLowerCase()
-        return s === 'accepted' || s === 'refused' || s === 'pending' ? s : null
-      })(),
-      resolved_at: toIso(get('resolved_at')),
-    })
-  }
-  const badLines = rows.filter((r) => !r.phone || r.phone.length < 6)
-  if (badLines.length > 0) {
-    lineErrors.push(`Missing or invalid phone on line(s): ${badLines.map((r) => r.line).join(', ')}`)
-  }
-  return { rows, header, lineErrors }
+interface ImportResult {
+  imported: number
+  skipped: number
+  failed: Failure[]
+  total: number
 }
 
 export function BulkImport() {
@@ -165,16 +42,24 @@ export function BulkImport() {
   const { role, stores: myStores } = useStoreScope()
   const [stores, setStores] = useState<Store[]>([])
   const [text, setText] = useState('')
+  const [storeId, setStoreId] = useState('')
   const [importing, setImporting] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [result, setResult] = useState<{ imported: number; failed: { line: number; reason: string }[] } | null>(null)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const [result, setResult] = useState<ImportResult | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [genStores, setGenStores] = useState(3)
   const [genBuyers, setGenBuyers] = useState(5)
   const [genOrders, setGenOrders] = useState(6)
   const [genMix, setGenMix] = useState<'safe' | 'balanced' | 'risky'>('balanced')
   const [genBusy, setGenBusy] = useState(false)
-  const [genResult, setGenResult] = useState<{ stores: number; buyers: number; orders: number; refused: number; pending: number; accepted: number } | null>(null)
+  const [genResult, setGenResult] = useState<{
+    stores: number
+    buyers: number
+    orders: number
+    refused: number
+    pending: number
+    accepted: number
+  } | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -191,33 +76,94 @@ export function BulkImport() {
       })
   }, [role, myStores])
 
-  const parsed = useMemo(() => parseRows(text), [text])
+  // Default the picker to the only store, so single-store merchants never
+  // think about it — and admins always see which store they are writing to.
+  useEffect(() => {
+    if (storeId && stores.some((s) => s.id === storeId)) return
+    setStoreId(stores.length === 1 ? stores[0].id : '')
+  }, [stores, storeId])
 
-  const storeNames = useMemo(
-    () => new Set(stores.map((s) => s.name.trim().toLowerCase())),
-    [stores],
+  const parsed = useMemo(() => parseImport(text), [text])
+
+  const storesByName = useMemo(() => {
+    const map = new Map<string, Store[]>()
+    for (const s of stores) {
+      const key = s.name.trim().toLowerCase()
+      const list = map.get(key)
+      if (list) list.push(s)
+      else map.set(key, [s])
+    }
+    return map
+  }, [stores])
+
+  /** Which store a row belongs to, and why it might be ambiguous. */
+  const resolveStore = useMemo(() => {
+    return (row: ParsedRow): { store: Store | null; reason: string | null } => {
+      const name = row.store.trim().toLowerCase()
+      if (name) {
+        const matches = storesByName.get(name) ?? []
+        if (matches.length === 1) return { store: matches[0], reason: null }
+        if (matches.length > 1) {
+          return {
+            store: null,
+            reason: `${matches.length} stores are named "${row.store}" — pick the store above instead of using the store column`,
+          }
+        }
+        return { store: null, reason: `unknown store "${row.store}"` }
+      }
+      const picked = stores.find((s) => s.id === storeId) ?? null
+      if (picked) return { store: picked, reason: null }
+      return { store: null, reason: 'no store selected and the row has no store column' }
+    }
+  }, [storesByName, stores, storeId])
+
+  const rowChecks = useMemo(
+    () => parsed.rows.map((r) => ({ row: r, ...resolveStore(r) })),
+    [parsed.rows, resolveStore],
   )
 
-  const preview = useMemo(() => {
-    if (parsed.rows.length === 0) return []
-    return parsed.rows.slice(0, 6).map((r) => ({
-      ...r,
-      storeOk: storeNames.has(r.store.trim().toLowerCase()),
-    }))
-  }, [parsed.rows, storeNames])
+  const readyRows = useMemo(
+    () => rowChecks.filter((r) => r.row.errors.length === 0 && r.store !== null),
+    [rowChecks],
+  )
+
+  const blockedCount = rowChecks.length - readyRows.length
+
+  const duplicateRefs = useMemo(() => {
+    const seen = new Set<string>()
+    let dupes = 0
+    for (const { row } of rowChecks) {
+      if (row.errors.length > 0) continue
+      if (seen.has(row.importRef)) dupes++
+      else seen.add(row.importRef)
+    }
+    return dupes
+  }, [rowChecks])
+
+  const preview = rowChecks.slice(0, 6)
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
+    if (f.size > 25 * 1024 * 1024) {
+      toast.push({ kind: 'error', title: 'File too large', detail: 'Split it into files under 25 MB.' })
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
-    reader.onload = () => setText(String(reader.result ?? ''))
+    reader.onload = () => {
+      // Excel sometimes writes UTF-16; stripBom + the parser handle UTF-8 and
+      // UTF-16LE BOMs, and anything else degrades to readable ASCII.
+      const buf = reader.result
+      setText(typeof buf === 'string' ? stripBom(buf) : '')
+    }
     reader.readAsText(f)
     e.target.value = ''
   }
 
   async function copyTemplate() {
     try {
-      await navigator.clipboard.writeText(TEMPLATE)
+      await navigator.clipboard.writeText(TEMPLATE_CSV)
       toast.push({
         kind: 'success',
         title: 'Template copied',
@@ -245,7 +191,11 @@ export function BulkImport() {
           mix: genMix,
         }),
       })
-      const json = (await res.json()) as { ok?: boolean; summary?: { stores: number; buyers: number; orders: number; refused: number; pending: number; accepted: number }; error?: string }
+      const json = (await res.json()) as {
+        ok?: boolean
+        summary?: { stores: number; buyers: number; orders: number; refused: number; pending: number; accepted: number }
+        error?: string
+      }
       if (!res.ok || !json.ok || !json.summary) throw new Error(json.error ?? 'Request failed')
       setGenResult(json.summary)
       toast.push({
@@ -265,317 +215,563 @@ export function BulkImport() {
     }
   }
 
+  function orderPayload(row: ParsedRow, store: Store) {
+    return {
+      buyer_phone: row.phone,
+      store_id: store.id,
+      product_category: row.category || null,
+      product_name: row.product || null,
+      price: row.price,
+      quantity: row.quantity,
+      address: row.address || null,
+      city: row.city || null,
+      // Omitting the key lets the column default to now().
+      ...(row.orderedAt ? { ordered_at: row.orderedAt } : {}),
+      import_ref: row.importRef,
+    }
+  }
+
   async function runImport() {
     if (!supabase) return
-    if (parsed.rows.length === 0) {
-      toast.push({ kind: 'error', title: 'Nothing to import', detail: parsed.lineErrors.join(' · ') || 'No valid rows.' })
+    if (parsed.fileErrors.length > 0) {
+      toast.push({ kind: 'error', title: 'Nothing to import', detail: parsed.fileErrors.join(' · ') })
       return
     }
-    const storeMap = new Map(stores.map((s) => [s.name.trim().toLowerCase(), s]))
-    const total = parsed.rows.length
+    if (readyRows.length === 0) {
+      toast.push({
+        kind: 'error',
+        title: 'Nothing to import',
+        detail: blockedCount > 0 ? `${blockedCount} row(s) need fixing first.` : 'No valid rows.',
+      })
+      return
+    }
+    if (readyRows.length > MAX_ROWS) {
+      toast.push({
+        kind: 'error',
+        title: 'File too large',
+        detail: `Split it into files of ${MAX_ROWS.toLocaleString()} rows or fewer.`,
+      })
+      return
+    }
+
     setImporting(true)
     setResult(null)
-    setProgress(0)
+    setProgress({ done: 0, total: readyRows.length })
+
+    const failed: Failure[] = []
     let imported = 0
-    const failed: { line: number; reason: string }[] = []
+    let skipped = 0
 
-    for (let i = 0; i < total; i++) {
-      const r = parsed.rows[i]
-      setProgress(i + 1)
-      const store = storeMap.get(r.store.trim().toLowerCase())
-      if (!store) {
-        failed.push({ line: r.line, reason: `unknown store "${r.store || 'blank'}"` })
-        continue
-      }
-      if (!r.phone) {
-        failed.push({ line: r.line, reason: 'missing phone' })
-        continue
-      }
-      try {
-        // ignoreDuplicates → ON CONFLICT DO NOTHING: we only need the stub row
-        // to exist so orders.buyer_phone has something to point at. The real
-        // totals/score are written by the recompute trigger, which (unlike a
-        // plain UPDATE from here) isn't subject to RLS — see rls-production.sql.
-        const { error: buyerErr } = await supabase
-          .from('buyers')
-          .upsert({ phone: r.phone }, { onConflict: 'phone', ignoreDuplicates: true })
-        if (buyerErr) throw buyerErr
-
-        const { data: order, error: orderErr } = await supabase
-          .from('orders')
-          .insert({
-            buyer_phone: r.phone,
-            store_id: store.id,
-            product_category: r.category || null,
-            product_name: r.product || null,
-            price: r.price,
-            quantity: r.quantity,
-            address: r.address || null,
-            city: r.city || null,
-            ordered_at: r.ordered_at ?? undefined,
-          })
-          .select('id')
-          .single()
-        if (orderErr) throw orderErr
-
-        if (r.outcome && r.outcome !== 'pending') {
-          const { error: outErr } = await supabase.from('outcomes').insert({
-            order_id: order.id,
-            status: r.outcome,
-            resolved_at: r.resolved_at,
-          })
-          if (outErr) throw outErr
-        }
-        imported++
-      } catch (err) {
-        failed.push({ line: r.line, reason: err instanceof Error ? err.message : String(err) })
-      }
+    for (let offset = 0; offset < readyRows.length; offset += CHUNK_SIZE) {
+      const chunk = readyRows.slice(offset, offset + CHUNK_SIZE)
+      const chunkResult = await importChunk(chunk)
+      imported += chunkResult.imported
+      skipped += chunkResult.skipped
+      failed.push(...chunkResult.failed)
+      setProgress({ done: offset + chunk.length, total: readyRows.length })
     }
 
     setImporting(false)
-    setResult({ imported, failed })
+    setResult({ imported, skipped, failed, total: readyRows.length })
     toast.push({
-      kind: 'success',
-      title: `Imported ${imported} of ${total} rows`,
-      detail: failed.length > 0 ? `${failed.length} failed — see the list below` : 'Scores recomputed automatically.',
+      kind: failed.length > 0 ? 'error' : 'success',
+      title: `Imported ${imported} order${imported === 1 ? '' : 's'}`,
+      detail:
+        (skipped > 0 ? `${skipped} already in Verafo, ` : '') +
+        (failed.length > 0 ? `${failed.length} failed — see the list below.` : 'Scores recomputed automatically.'),
     })
   }
 
+  /** Import one chunk: 3 statements instead of 3 per row. */
+  async function importChunk(
+    chunk: { row: ParsedRow; store: Store | null }[],
+  ): Promise<{ imported: number; skipped: number; failed: Failure[] }> {
+    if (!supabase) return { imported: 0, skipped: 0, failed: [] }
+    const client = supabase
+    const failed: Failure[] = []
+    const usable = chunk.filter((c): c is { row: ParsedRow; store: Store } => c.store !== null)
+
+    // One buyer upsert for the chunk. ignoreDuplicates keeps existing totals.
+    const phones = [...new Set(usable.map((c) => c.row.phone))]
+    const { error: buyerErr } = await client
+      .from('buyers')
+      .upsert(
+        phones.map((phone) => ({ phone })),
+        { onConflict: 'phone', ignoreDuplicates: true },
+      )
+
+    if (buyerErr) {
+      // Fall back to per-row so one bad phone cannot sink the whole chunk.
+      return importRowByRow(usable)
+    }
+
+    const byRef = new Map<string, { row: ParsedRow; store: Store }>()
+    for (const c of usable) byRef.set(`${c.store.id}:${c.row.importRef}`, c)
+
+    const payload = usable.map((c) => orderPayload(c.row, c.store))
+    const { data: inserted, error: orderErr } = await client
+      .from('orders')
+      .upsert(payload, { onConflict: 'store_id,import_ref', ignoreDuplicates: true })
+      .select('id, import_ref, store_id')
+
+    if (orderErr) return importRowByRow(usable)
+
+    const rows = (inserted ?? []) as { id: string; import_ref: string; store_id: string }[]
+    const skipped = usable.length - rows.length
+    const imported = rows.length
+
+    // Outcomes only for the orders this run actually created, so a re-import
+    // never overwrites an outcome a merchant has since edited.
+    const lineById = new Map<string, number>()
+    const outcomeRows: { order_id: string; status: string; resolved_at: string | null }[] = []
+    for (const o of rows) {
+      const match = byRef.get(`${o.store_id}:${o.import_ref}`)
+      if (!match) continue
+      lineById.set(o.id, match.row.line)
+      const r = match.row
+      if (r.outcome === 'pending' && !r.resolvedAt) continue
+      outcomeRows.push({
+        order_id: o.id,
+        status: r.outcome,
+        resolved_at: r.resolvedAt ?? (r.outcome === 'pending' ? null : new Date().toISOString()),
+      })
+    }
+
+    if (outcomeRows.length > 0) {
+      const { error: outcomeErr } = await client
+        .from('outcomes')
+        .upsert(outcomeRows, { onConflict: 'order_id', ignoreDuplicates: true })
+      if (outcomeErr) {
+        // The orders are in; report the outcome problem without hiding it.
+        for (const o of outcomeRows) {
+          failed.push({ line: lineById.get(o.order_id) ?? 0, reason: outcomeErr.message })
+        }
+      }
+    }
+
+    return { imported, skipped, failed }
+  }
+
+  /** Slow path: one row at a time, so a single bad row is attributable. */
+  async function importRowByRow(
+    chunk: { row: ParsedRow; store: Store }[],
+  ): Promise<{ imported: number; skipped: number; failed: Failure[] }> {
+    if (!supabase) return { imported: 0, skipped: 0, failed: [] }
+    const client = supabase
+    const failed: Failure[] = []
+    let imported = 0
+    let skipped = 0
+
+    for (const { row, store } of chunk) {
+      const { error: buyerErr } = await client
+        .from('buyers')
+        .upsert({ phone: row.phone }, { onConflict: 'phone', ignoreDuplicates: true })
+      if (buyerErr) {
+        failed.push({ line: row.line, reason: buyerErr.message })
+        continue
+      }
+
+      const { data, error } = await client
+        .from('orders')
+        .upsert(orderPayload(row, store), { onConflict: 'store_id,import_ref', ignoreDuplicates: true })
+        .select('id')
+      if (error) {
+        failed.push({ line: row.line, reason: error.message })
+        continue
+      }
+      const created = (data ?? [])[0] as { id: string } | undefined
+      if (!created) {
+        skipped++
+        continue
+      }
+
+      if (row.outcome !== 'pending' || row.resolvedAt) {
+        const { error: outcomeErr } = await client.from('outcomes').upsert(
+          {
+            order_id: created.id,
+            status: row.outcome,
+            resolved_at: row.resolvedAt ?? (row.outcome === 'pending' ? null : new Date().toISOString()),
+          },
+          { onConflict: 'order_id', ignoreDuplicates: true },
+        )
+        if (outcomeErr) {
+          failed.push({ line: row.line, reason: outcomeErr.message })
+          continue
+        }
+      }
+      imported++
+    }
+
+    return { imported, skipped, failed }
+  }
+
+  function downloadFailures() {
+    if (!result || result.failed.length === 0) return
+    const blob = new Blob([failedRowsCsv(result.failed)], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'verafo-import-failures.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (!isConfigured) return <NeedsSetup />
+
+  const hasStoreColumn = parsed.header.includes('store')
 
   return (
     <PageShell>
       <PageHeader
         title="Bulk Import"
-        description="Load many orders (and their outcomes) from a CSV. Risk scores recompute automatically."
+        description="Load past orders (and their outcomes) from a CSV. Re-importing the same file is safe — rows already in Verafo are skipped."
       />
 
       <Reveal stagger>
-      <div className="card import-card">
-        <div className="import-head">
-          <h3 className="card-title">
-            <Icon name="document-text-outline" size={16} /> CSV format
-          </h3>
-          <button className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" onClick={() => void copyTemplate()}>
-            <Icon name="copy-outline" size={15} /> Copy template
-          </button>
+        <div className="card import-card">
+          <div className="import-head">
+            <h3 className="card-title">
+              <Icon name="document-text-outline" size={16} /> CSV format
+            </h3>
+            <button
+              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
+              onClick={() => void copyTemplate()}
+            >
+              <Icon name="copy-outline" size={15} /> Copy template
+            </button>
+          </div>
+          <pre className="csv-pre">{TEMPLATE_CSV}</pre>
+          <p className="import-note">
+            Required: <strong>phone</strong>, plus a <strong>store</strong> column or a store picked
+            below. Outcomes accept <code>delivered</code>/<code>fulfilled</code>,{' '}
+            <code>returned</code>/<code>RTO</code>/<code>cancelled</code>, or blank for pending. Prices
+            may include <code>Rs.</code> and thousands separators. Dates may be ISO or{' '}
+            <code>DD/MM/YYYY</code> (read as Pakistan time). Columns:{' '}
+            {TEMPLATE_COLUMNS.join(', ')}.
+          </p>
+          <p className="import-note">
+            <strong>On Shopify?</strong> Connect the store through the Verafo for Shopify app and
+            use <em>Import history</em> there — it reads your orders straight from Shopify and
+            feeds the same buyer and risk pipeline, so this CSV is only needed for other
+            platforms.
+          </p>
         </div>
-        <pre className="csv-pre">{TEMPLATE}</pre>
-        <p className="import-note">
-          <strong>phone</strong> and <strong>store</strong> are required (store must match an
-          existing store name). <strong>outcome</strong> can be{' '}
-          <code>accepted</code>, <code>refused</code> or left blank (pending). Dates accept{' '}
-          <code>YYYY-MM-DD HH:MM</code> or ISO. Other columns are optional.
-        </p>
-      </div>
 
-      {admin && (
-      <div className="card import-card">
-        <div className="import-head">
-          <h3 className="card-title">
-            <Icon name="sparkles-outline" size={16} /> AI dummy data generator
-          </h3>
-          <span className="prompt-hint">
-            <Icon name="flash-outline" size={13} /> one click, generated by GPT
-          </span>
-        </div>
-        <p className="import-note">
-          Creates new stores with realistic buyers and order histories (products, prices,
-          addresses, outcomes). Phones are generated fresh, risk scores are computed
-          automatically, and everything lands in the network instantly.
-        </p>
-        <div className="gen-grid">
-          <label className="field">
-            <span className="field-label">Stores</span>
-            <input
-              type="number"
-              min={1}
-              max={5}
-              value={genStores}
-              onChange={(e) => setGenStores(parseInt(e.target.value, 10) || 1)}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Buyers per store</span>
-            <input
-              type="number"
-              min={1}
-              max={6}
-              value={genBuyers}
-              onChange={(e) => setGenBuyers(parseInt(e.target.value, 10) || 1)}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Orders per buyer</span>
-            <input
-              type="number"
-              min={2}
-              max={8}
-              value={genOrders}
-              onChange={(e) => setGenOrders(parseInt(e.target.value, 10) || 2)}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Refusal mix</span>
-            <select value={genMix} onChange={(e) => setGenMix(e.target.value as typeof genMix)}>
-              <option value="safe">Mostly safe (~15% refusals)</option>
-              <option value="balanced">Balanced (~35% refusals)</option>
-              <option value="risky">Risky network (~60% refusals)</option>
-            </select>
-          </label>
-        </div>
-        <div className="import-actions">
-          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={genBusy} onClick={() => void generateDummy()}>
-            {genBusy ? (
-              <>
-                <Icon name="refresh-outline" size={16} className="spin" /> Generating…
-              </>
-            ) : (
-              <>
-                <Icon name="sparkles-outline" size={16} /> Generate {genStores} store{genStores === 1 ? '' : 's'} × {genBuyers} buyers
-              </>
-            )}
-          </button>
-        </div>
-        {genResult && (
-          <div className="import-result">
-            <div className="result-banner ok">
-              <Icon name="checkmark-circle" size={16} />
-              Created <strong>{genResult.stores}</strong> store{genResult.stores === 1 ? '' : 's'},{' '}
-              <strong>{genResult.buyers}</strong> buyer{genResult.buyers === 1 ? '' : 's'} and{' '}
-              <strong>{genResult.orders}</strong> order{genResult.orders === 1 ? '' : 's'} —{' '}
-              {genResult.accepted} accepted, {genResult.refused} refused, {genResult.pending} pending.
+        {admin && (
+          <div className="card import-card">
+            <div className="import-head">
+              <h3 className="card-title">
+                <Icon name="sparkles-outline" size={16} /> AI dummy data generator
+              </h3>
+              <span className="prompt-hint">
+                <Icon name="flash-outline" size={13} /> one click, generated by GPT
+              </span>
             </div>
             <p className="import-note">
-              Try a Buyer Lookup on any of the new numbers, or mark the pending orders on the
-              Mark Outcome screen.
+              Creates new stores with realistic buyers and order histories (products, prices,
+              addresses, outcomes). Phones are generated fresh, risk scores are computed
+              automatically, and everything lands in the network instantly.
             </p>
-          </div>
-        )}
-      </div>
-      )}
-
-      <div className="card import-card">
-        <div className="import-head">
-          <h3 className="card-title">
-            <Icon name="cloud-upload-outline" size={16} /> Upload or paste
-          </h3>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="file-input"
-            onChange={onFile}
-          />
-        </div>
-
-        <textarea
-          className="import-textarea"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Paste CSV here — or pick a .csv file above."
-          rows={6}
-        />
-
-        {parsed.lineErrors.length > 0 && (
-          <div className="line-errors">
-            {parsed.lineErrors.map((e, i) => (
-              <div key={i} className="line-error">
-                <Icon name="alert-circle-outline" size={14} /> {e}
+            <div className="gen-grid">
+              <label className="field">
+                <span className="field-label">Stores</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={genStores}
+                  onChange={(e) => setGenStores(parseInt(e.target.value, 10) || 1)}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Buyers per store</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={genBuyers}
+                  onChange={(e) => setGenBuyers(parseInt(e.target.value, 10) || 1)}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Orders per buyer</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={8}
+                  value={genOrders}
+                  onChange={(e) => setGenOrders(parseInt(e.target.value, 10) || 2)}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Refusal mix</span>
+                <select value={genMix} onChange={(e) => setGenMix(e.target.value as typeof genMix)}>
+                  <option value="safe">Mostly safe (~15% refusals)</option>
+                  <option value="balanced">Balanced (~35% refusals)</option>
+                  <option value="risky">Risky network (~60% refusals)</option>
+                </select>
+              </label>
+            </div>
+            <div className="import-actions">
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                disabled={genBusy}
+                onClick={() => void generateDummy()}
+              >
+                {genBusy ? (
+                  <>
+                    <Icon name="refresh-outline" size={16} className="spin" /> Generating…
+                  </>
+                ) : (
+                  <>
+                    <Icon name="sparkles-outline" size={16} /> Generate {genStores} store
+                    {genStores === 1 ? '' : 's'} × {genBuyers} buyers
+                  </>
+                )}
+              </button>
+            </div>
+            {genResult && (
+              <div className="import-result">
+                <div className="result-banner ok">
+                  <Icon name="checkmark-circle" size={16} />
+                  Created <strong>{genResult.stores}</strong> store
+                  {genResult.stores === 1 ? '' : 's'}, <strong>{genResult.buyers}</strong> buyer
+                  {genResult.buyers === 1 ? '' : 's'} and <strong>{genResult.orders}</strong> order
+                  {genResult.orders === 1 ? '' : 's'} — {genResult.accepted} accepted,{' '}
+                  {genResult.refused} refused, {genResult.pending} pending.
+                </div>
+                <p className="import-note">
+                  Try a Buyer Lookup on any of the new numbers, or mark the pending orders on the
+                  Mark Outcome screen.
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-
-        {preview.length > 0 && (
-          <div className="preview-wrap">
-            <div className="preview-title">First {preview.length} rows</div>
-            <table className="preview-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>phone</th>
-                  <th>store</th>
-                  <th>product</th>
-                  <th>price</th>
-                  <th>qty</th>
-                  <th>city</th>
-                  <th>outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.map((r) => (
-                  <tr key={r.line} className={!r.storeOk ? 'row-bad' : ''}>
-                    <td>{r.line}</td>
-                    <td>{r.phone}</td>
-                    <td>
-                      {r.store}
-                      {!r.storeOk && <span className="bad-mark"> unknown</span>}
-                    </td>
-                    <td>{r.product || '—'}</td>
-                    <td>{r.price ?? '—'}</td>
-                    <td>{r.quantity}</td>
-                    <td>{r.city || '—'}</td>
-                    <td>{r.outcome ?? 'pending'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="import-actions">
-          <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            disabled={importing || parsed.rows.length === 0}
-            onClick={() => void runImport()}
-          >
-            {importing ? (
-              <>
-                <Icon name="refresh-outline" size={16} className="spin" /> Importing {progress}/{parsed.rows.length}…
-              </>
-            ) : (
-              <>
-                <Icon name="cloud-upload-outline" size={16} /> Import {parsed.rows.length > 0 ? `${parsed.rows.length} rows` : ''}
-              </>
             )}
-          </button>
-          {text && (
-            <button className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9" onClick={() => setText('')} disabled={importing}>
-              <Icon name="trash-outline" size={15} /> Clear
+          </div>
+        )}
+
+        <div className="card import-card">
+          <div className="import-head">
+            <h3 className="card-title">
+              <Icon name="cloud-upload-outline" size={16} /> Upload or paste
+            </h3>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="file-input"
+              onChange={onFile}
+            />
+          </div>
+
+          <div className="gen-grid">
+            <label className="field">
+              <span className="field-label">
+                Import into{hasStoreColumn ? ' (used when a row has no store)' : ''}
+              </span>
+              <select value={storeId} onChange={(e) => setStoreId(e.target.value)}>
+                <option value="">
+                  {stores.length === 0 ? 'No stores yet' : 'Select a store…'}
+                </option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <textarea
+            className="import-textarea"
+            value={text}
+            onChange={(e) => setText(stripBom(e.target.value))}
+            placeholder="Paste CSV here — or pick a .csv file above."
+            rows={6}
+          />
+
+          {(parsed.fileErrors.length > 0 || (text && parsed.rows.length === 0)) && (
+            <div className="line-errors">
+              {parsed.fileErrors.map((e, i) => (
+                <div key={i} className="line-error">
+                  <Icon name="alert-circle-outline" size={14} /> {e}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {text && parsed.rows.length > 0 && (
+            <div className="line-errors">
+              {parsed.counts.invalid > 0 && (
+                <div className="line-error">
+                  <Icon name="alert-circle-outline" size={14} /> {parsed.counts.invalid} row
+                  {parsed.counts.invalid === 1 ? '' : 's'} will be skipped — see the preview and the
+                  failure list after importing.
+                </div>
+              )}
+              {blockedCount > parsed.counts.invalid && (
+                <div className="line-error">
+                  <Icon name="alert-circle-outline" size={14} /> {blockedCount - parsed.counts.invalid}{' '}
+                  row(s) cannot be matched to a store (unknown or ambiguous name).
+                </div>
+              )}
+              {parsed.unknownOutcomes.length > 0 && (
+                <div className="line-error">
+                  <Icon name="information-circle" size={14} /> Unrecognised status
+                  {parsed.unknownOutcomes.length === 1 ? '' : 'es'} treated as pending:{' '}
+                  {parsed.unknownOutcomes.slice(0, 5).join(', ')}
+                  {parsed.unknownOutcomes.length > 5 ? '…' : ''}
+                </div>
+              )}
+              {parsed.counts.correctedPrices > 0 && (
+                <div className="line-error">
+                  <Icon name="information-circle" size={14} /> {parsed.counts.correctedPrices} price
+                  value(s) were read through currency symbols or separators.
+                </div>
+              )}
+              {parsed.counts.ambiguousDates > 0 && (
+                <div className="line-error">
+                  <Icon name="information-circle" size={14} /> {parsed.counts.ambiguousDates} date(s)
+                  could be DD/MM or MM/DD — read as DD/MM.
+                </div>
+              )}
+              {parsed.counts.missingDates > 0 && (
+                <div className="line-error">
+                  <Icon name="information-circle" size={14} /> {parsed.counts.missingDates} row(s)
+                  have no order date — they will be timestamped now.
+                </div>
+              )}
+              {duplicateRefs > 0 && (
+                <div className="line-error">
+                  <Icon name="information-circle" size={14} /> {duplicateRefs} row(s) are duplicates
+                  of another row in this file and will be skipped.
+                </div>
+              )}
+            </div>
+          )}
+
+          {preview.length > 0 && (
+            <div className="preview-wrap">
+              <div className="preview-title">First {preview.length} rows</div>
+              <table className="preview-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>phone</th>
+                    <th>store</th>
+                    <th>product</th>
+                    <th>price</th>
+                    <th>qty</th>
+                    <th>city</th>
+                    <th>outcome</th>
+                    <th>check</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((c) => {
+                    const problems = [...c.row.errors]
+                    if (c.reason && c.row.errors.length === 0) problems.push(c.reason)
+                    return (
+                      <tr key={c.row.line} className={problems.length > 0 ? 'row-bad' : ''}>
+                        <td>{c.row.line}</td>
+                        <td>{c.row.phone || '—'}</td>
+                        <td>{c.store?.name ?? (c.row.store || '—')}</td>
+                        <td>{c.row.product || '—'}</td>
+                        <td>{c.row.price == null ? '—' : money(c.row.price)}</td>
+                        <td>{c.row.quantity}</td>
+                        <td>{c.row.city || '—'}</td>
+                        <td>{c.row.outcome}</td>
+                        <td>
+                          {problems.length === 0 ? (
+                            <span className="bad-mark" style={{ color: 'var(--risk-safe-strong, #067647)' }}>
+                              ok
+                            </span>
+                          ) : (
+                            <span className="bad-mark">{problems[0]}</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="import-actions">
+            <button
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              disabled={importing || readyRows.length === 0}
+              onClick={() => void runImport()}
+            >
+              {importing ? (
+                <>
+                  <Icon name="refresh-outline" size={16} className="spin" /> Importing{' '}
+                  {progress.done}/{progress.total}…
+                </>
+              ) : (
+                <>
+                  <Icon name="cloud-upload-outline" size={16} /> Import{' '}
+                  {readyRows.length > 0 ? `${readyRows.length} rows` : ''}
+                </>
+              )}
             </button>
+            {text && (
+              <button
+                className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
+                onClick={() => setText('')}
+                disabled={importing}
+              >
+                <Icon name="trash-outline" size={15} /> Clear
+              </button>
+            )}
+          </div>
+
+          {importing && (
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }}
+              />
+            </div>
+          )}
+
+          {result && (
+            <div className="import-result">
+              <div className={`result-banner${result.failed.length > 0 ? ' warn' : ' ok'}`}>
+                <Icon
+                  name={result.failed.length > 0 ? 'alert-circle' : 'checkmark-circle'}
+                  size={16}
+                />
+                Imported <strong>{result.imported}</strong> of <strong>{result.total}</strong> rows.
+                {result.skipped > 0 && <> {result.skipped} were already in Verafo and were skipped.</>}
+                {result.failed.length === 0 && result.skipped === 0 && ' Scores recomputed automatically.'}
+              </div>
+              {result.failed.length > 0 && (
+                <>
+                  <div className="fail-list">
+                    {result.failed.slice(0, 100).map((f, i) => (
+                      <div key={`${f.line}-${i}`} className="fail-row">
+                        <span className="fail-line">line {f.line}</span>
+                        <span className="fail-reason">
+                          <Icon name="close-circle" size={12} /> {f.reason}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {result.failed.length > 100 && (
+                    <p className="import-note">Showing the first 100 failures.</p>
+                  )}
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted"
+                    onClick={downloadFailures}
+                  >
+                    <Icon name="download-outline" size={15} /> Download failed rows
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
-
-        {importing && (
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${(progress / Math.max(1, parsed.rows.length)) * 100}%` }} />
-          </div>
-        )}
-
-        {result && (
-          <div className="import-result">
-            <div className="result-banner ok">
-              <Icon name="checkmark-circle" size={16} />
-              Imported <strong>{result.imported}</strong> of{' '}
-              <strong>{result.imported + result.failed.length}</strong> rows.
-              {result.failed.length === 0 && ' Scores recomputed automatically.'}
-            </div>
-            {result.failed.length > 0 && (
-              <div className="fail-list">
-                {result.failed.map((f) => (
-                  <div key={f.line} className="fail-row">
-                    <span className="fail-line">line {f.line}</span>
-                    <span className="fail-reason">
-                      <Icon name="close-circle" size={12} /> {f.reason}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
       </Reveal>
     </PageShell>
   )

@@ -34,7 +34,7 @@ and webhook host) and is **not** the product — nothing in `src/` imports it.
 | `/lookup` | Buyer Lookup — full cross-store profile for a phone number |
 | `/map` | RTO Insights — buyers across two dimensions, colour-coded by risk |
 | `/chat` | Ask Verafo — questions answered against your own order data |
-| `/import` | Bulk Import — load past orders from CSV |
+| `/import` | Bulk Import — load past orders from CSV (idempotent; Shopify history is pulled in-app) |
 | `/settings` | Settings — appearance, data and connection |
 | `/stores` | Stores (admins) — every connected brand |
 
@@ -71,6 +71,8 @@ Display and analytics logic that is pure, tested, and has no database access:
 1. Create a project at [supabase.com](https://supabase.com).
 2. Open **SQL Editor** and run, in this order:
    - `supabase/schema.sql`
+   - `supabase/import-hardening.sql` — idempotent imports, canonical phone
+     numbers, buyer write lockdown, Shopify backfill state
    - `supabase/rls-production.sql` — **edit the admin email list at the top first**
    - `supabase/store-plans-migration.sql` (optional; only if you use the plan badge)
    - `supabase/shopify-migration.sql` (only if you use the Shopify integration)
@@ -85,6 +87,21 @@ npm run dev
 ```
 
 Other scripts: `npm run build`, `npm run preview`, `npm test`, `npm run lint`.
+
+### 3. Auth email (Resend)
+
+Sign-up confirmations and password resets are sent through Resend over SMTP
+(`smtp.resend.com:465`, user `resend`, the API key as the password, sender
+`noreply@verafo.com`). Confirmations are **on**: a new account gets a session
+only after clicking the emailed link. Password-reset links land on
+`/reset-password`; the redirect is built from the current origin, so every
+origin you use must also be on the Supabase redirect allow-list. The full
+checklist, including the redirect URLs and the flows, is in
+[DEPLOY.md](DEPLOY.md#5-auth-email-resend).
+
+Passwords need **8+ characters** with no character-class rules, are confirmed by
+email before first sign-in, and can be changed from Settings → Security.
+Signed-out deep links survive the login round-trip (`/login?next=…`).
 
 ## Testing notes
 

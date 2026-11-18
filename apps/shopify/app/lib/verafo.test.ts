@@ -2,16 +2,24 @@ import { describe, expect, it } from "vitest";
 import {
   normalizePhone,
   mapOrder,
+  outcomeFor,
+  planOutcomeWrite,
   graphqlNodeToPayload,
   type ShopifyOrderLike,
 } from "./verafo";
 
 describe("normalizePhone", () => {
-  it("keeps digits and a leading plus", () => {
+  it("collapses every Pakistani form into one canonical number", () => {
     expect(normalizePhone("+92 300 111 2222")).toBe("+923001112222");
-    expect(normalizePhone("0301 234 5678")).toBe("03012345678");
+    expect(normalizePhone("0301 234 5678")).toBe("+923012345678");
+    expect(normalizePhone("00923012345678")).toBe("+923012345678");
+    expect(normalizePhone("3012345678")).toBe("+923012345678");
     expect(normalizePhone(null)).toBe("");
     expect(normalizePhone(undefined)).toBe("");
+  });
+
+  it("keeps international numbers", () => {
+    expect(normalizePhone("+1 (555) 123-4567")).toBe("+15551234567");
   });
 });
 
@@ -34,7 +42,9 @@ describe("mapOrder", () => {
       buyerPhone: "+923001112222",
       productCategory: "skincare",
       productName: "Vitamin C serum",
-      price: 2499,
+      // 2499 total across 2 units → unit price, because the dashboard
+      // multiplies price × quantity to get order value.
+      price: 1249.5,
       quantity: 2,
       address: "House 12, Block B, Punjab",
       city: "Lahore",
@@ -45,7 +55,7 @@ describe("mapOrder", () => {
   it("falls back to top-level phone when customer is missing", () => {
     const mapped = mapOrder({ id: "55", phone: "03012345678" } as ShopifyOrderLike);
     expect(mapped).not.toHaveProperty("error");
-    if ("buyerPhone" in mapped) expect(mapped.buyerPhone).toBe("03012345678");
+    if ("buyerPhone" in mapped) expect(mapped.buyerPhone).toBe("+923012345678");
   });
 
   it("rejects orders with no phone (cannot anchor a buyer)", () => {
@@ -56,6 +66,41 @@ describe("mapOrder", () => {
   it("rejects orders with no id", () => {
     const mapped = mapOrder({ name: "#1003" } as ShopifyOrderLike);
     expect(mapped).toMatchObject({ error: "order has no id" });
+  });
+});
+
+describe("outcomeFor", () => {
+  it("reads cancelled as refused and fulfilled as accepted", () => {
+    expect(
+      outcomeFor({ id: 1, cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "customer" }),
+    ).toMatchObject({ status: "refused", reason: "customer" });
+    expect(outcomeFor({ id: 2, fulfillment_status: "fulfilled" })).toMatchObject({
+      status: "accepted",
+    });
+    expect(outcomeFor({ id: 3 })).toMatchObject({ status: "pending", resolvedAt: null });
+  });
+});
+
+describe("planOutcomeWrite", () => {
+  it("writes when there is no outcome yet", () => {
+    expect(planOutcomeWrite(null, "pending")).toBe("insert");
+    expect(planOutcomeWrite(undefined, "refused")).toBe("insert");
+  });
+
+  it("upgrades a pending outcome once Shopify has a resolution", () => {
+    expect(planOutcomeWrite("pending", "refused")).toBe("update");
+    expect(planOutcomeWrite("pending", "accepted")).toBe("update");
+  });
+
+  it("never overwrites a decision a merchant already made", () => {
+    expect(planOutcomeWrite("accepted", "refused")).toBe("skip");
+    expect(planOutcomeWrite("refused", "accepted")).toBe("skip");
+    expect(planOutcomeWrite("refused", "pending")).toBe("skip");
+  });
+
+  it("skips when nothing would change", () => {
+    expect(planOutcomeWrite("pending", "pending")).toBe("skip");
+    expect(planOutcomeWrite("accepted", "accepted")).toBe("skip");
   });
 });
 

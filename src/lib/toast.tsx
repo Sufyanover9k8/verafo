@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 
 type ToastKind = 'success' | 'error' | 'info'
@@ -25,17 +25,33 @@ const KIND_META: Record<ToastKind, { icon: string; color: string; border: string
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const nextId = useRef(1)
+  const timers = useRef<number[]>([])
+
+  useEffect(() => {
+    const pending = timers.current
+    return () => {
+      pending.forEach((id) => window.clearTimeout(id))
+      pending.length = 0
+    }
+  }, [])
 
   const push = useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = nextId.current++
     setToasts((prev) => [...prev.slice(-3), { ...t, id }])
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setToasts((prev) => prev.filter((x) => x.id !== id))
     }, 4800)
+    timers.current.push(timer)
   }, [])
 
+  // The context value must be stable: pages put `toast` in their loader's
+  // dependency list, so a fresh object here re-ran every page's load callback —
+  // i.e. any toast caused a full data reload, and an erroring load could toast
+  // itself into a reload loop.
+  const value = useMemo(() => ({ push }), [push])
+
   return (
-    <ToastContext.Provider value={{ push }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((t) => {

@@ -19,8 +19,10 @@
 --
 -- ⚠️ RUN ORDER (see DEPLOY.md):
 --   1. Deploy the new frontend build (the one with login) + set its
---      VITE_SUPABASE_* / VITE_ADMIN_EMAILS env on Vercel.
---   2. INSERT your team's emails into verafo_admins (below).
+--      VITE_SUPABASE_* env on Vercel.
+--   2. INSERT your team's emails into verafo_admins (below). This table is the
+--      single source of truth for the admin role — the app reads it through
+--      verafo_is_admin(), so no VITE_ADMIN_EMAILS entry is needed.
 --   3. Only then run the rest of this file. Un-logged-in / anon traffic will
 --      get nothing after this — which is fine, the app now requires login.
 --

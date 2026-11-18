@@ -28,7 +28,33 @@ export function phone(p: string | null | undefined): string {
   return out
 }
 
-export const normalizePhone = (p: string): string => p.replace(/[^\d+]/g, '')
+/**
+ * One canonical form per human, used as the buyer key everywhere.
+ *
+ * Pakistani numbers collapse to +92XXXXXXXXXX (0300…, 92…, 0092…, bare
+ * 3001234567 and +92 300… all become the same string), so the same person is
+ * never split across two buyer rows. International numbers keep their + prefix.
+ * The Postgres `canonical_phone()` function implements exactly this rule and
+ * runs as a trigger, so the client and the database always agree.
+ */
+export function canonicalPhone(p: string | null | undefined): string {
+  if (!p) return ''
+  let d = String(p).replace(/[^\d+]/g, '')
+  if (!d) return ''
+  const hadPlus = d.startsWith('+')
+  d = d.replace(/\+/g, '')
+
+  if (d.startsWith('0092')) d = d.slice(2)
+  if (d.startsWith('92') && d.length >= 11) d = '0' + d.slice(2)
+  else if (!hadPlus && d.length === 10 && d.startsWith('3')) d = '0' + d
+
+  if (d.length === 11 && /^03\d{9}$/.test(d)) return '+92' + d.slice(1)
+  if (hadPlus && d.length >= 8) return '+' + d
+  return d
+}
+
+/** Kept for existing callers: normalising now means canonicalising. */
+export const normalizePhone = (p: string): string => canonicalPhone(p)
 
 export function dateTime(iso: string | null | undefined): string {
   if (!iso) return '—'

@@ -35,7 +35,7 @@ export function Settings() {
   const toast = useToast()
   const { admin } = useIsAdmin()
   const { store } = useStoreScope()
-  const { displayName } = useSession()
+  const { displayName, user } = useSession()
   const { theme, reducedMotion, resolved, setTheme, setReducedMotion } = useTheme()
   const [exporting, setExporting] = useState<'buyers' | 'orders' | null>(null)
   const [clearing, setClearing] = useState(false)
@@ -44,6 +44,11 @@ export function Settings() {
   const [orderCount, setOrderCount] = useState<number | null>(null)
   const [name, setName] = useState<string>(displayName)
   const [savingName, setSavingName] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
 
   useEffect(() => {
     setName(displayName)
@@ -211,6 +216,62 @@ export function Settings() {
     })
   }
 
+  const changePassword = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!supabase) return
+    setPasswordError(null)
+    if (newPassword.length < 8) {
+      setPasswordError('Use at least 8 characters.')
+      return
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('Choose a password you have not used here before.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords don't match.")
+      return
+    }
+    setSavingPassword(true)
+
+    // Prove the person at the keyboard knows the current password before we
+    // change it — a borrowed session should not be able to take over an account.
+    const email = user?.email
+    if (!email) {
+      setSavingPassword(false)
+      setPasswordError('You are not signed in. Reload the page and try again.')
+      return
+    }
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    })
+    if (verifyError) {
+      setSavingPassword(false)
+      setPasswordError(
+        /invalid login credentials/i.test(verifyError.message)
+          ? 'That current password is not right. If you signed up with Google, use "Forgot password?" on the sign-in screen instead.'
+          : verifyError.message,
+      )
+      return
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    setSavingPassword(false)
+    if (error) {
+      setPasswordError(error.message)
+      return
+    }
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    toast.push({
+      kind: 'success',
+      title: 'Password changed',
+      detail: 'Use the new password the next time you sign in.',
+    })
+  }
+
   if (!isConfigured || !supabase) return <NeedsSetup />
 
   // While the connection check is still running, show a skeleton instead of
@@ -263,6 +324,77 @@ export function Settings() {
                 />
                 <button className="btn btn-ghost btn-sm" type="submit" disabled={savingName}>
                   {savingName ? <Icon name="refresh" size={14} className="spin" /> : 'Save'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section className="card settings-section">
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
+              <Icon name="shield-checkmark" size={16} />
+            </span>
+            <span className="eyebrow">Security</span>
+          </div>
+          <div className="settings-rows">
+            <div className="setting-row" style={{ alignItems: 'flex-start' }}>
+              <div className="setting-info">
+                <div className="setting-title">Password</div>
+                <div className="setting-desc">
+                  Change the password you sign in with. We ask for the current one first.
+                </div>
+              </div>
+              <form
+                className="setting-control"
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, maxWidth: 260 }}
+                onSubmit={(e) => void changePassword(e)}
+              >
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value)
+                    setPasswordError(null)
+                  }}
+                  placeholder="Current password"
+                  aria-label="Current password"
+                  autoComplete="current-password"
+                  required
+                />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value)
+                    setPasswordError(null)
+                  }}
+                  placeholder="New password (8+ characters)"
+                  aria-label="New password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value)
+                    setPasswordError(null)
+                  }}
+                  placeholder="Confirm new password"
+                  aria-label="Confirm new password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+                {passwordError && <span className="field-error">{passwordError}</span>}
+                <button className="btn btn-ghost btn-sm" type="submit" disabled={savingPassword}>
+                  {savingPassword ? (
+                    <Icon name="refresh" size={14} className="spin" />
+                  ) : (
+                    'Change password'
+                  )}
                 </button>
               </form>
             </div>

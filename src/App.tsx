@@ -5,6 +5,7 @@ import { Skeleton } from './components/primitives/Skeleton'
 import { FEATURES } from './lib/features'
 import { useSession } from './lib/session'
 import { useStoreScope } from './lib/store'
+import { LOGIN_PATH, loginPathWithNext, RESET_PASSWORD_PATH, safeNextPath } from './lib/ui/auth-redirect'
 
 // Dashboard pulls in recharts (charts) — lazy-load it like every other route so
 // the initial bundle every user downloads (including on the login screen)
@@ -96,22 +97,42 @@ export function App() {
     )
   }
 
-  // 2. Not signed in → the login screen.
-  if (!session && location.pathname !== '/login') {
-    return <Navigate to="/login" replace />
-  }
-  if (location.pathname === '/login') {
+  // The reset email redirects to /reset-password explicitly (see
+  // src/lib/ui/auth-redirect.ts). If the session is already live — a refresh
+  // after the recovery event — still show the form rather than the dashboard.
+  if (session && location.pathname === RESET_PASSWORD_PATH) {
     return (
       <Suspense fallback={<RouteFallback />}>
-        <Auth />
+        <ResetPassword />
       </Suspense>
     )
   }
 
-  // 3. Signed in — resolving role + which stores this user owns.
+  // 2. Not signed in → the login screen (and only the login screen), carrying
+  //    the page they were trying to reach so sign-in can return them there.
+  if (!session) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        {location.pathname === LOGIN_PATH ? (
+          <Auth />
+        ) : (
+          <Navigate to={loginPathWithNext(`${location.pathname}${location.search}`)} replace />
+        )}
+      </Suspense>
+    )
+  }
+
+  // 3. Signed in but still sitting on /login — this is where a confirmation
+  //    link lands (…/login#access_token=…&type=signup). Without this the user
+  //    would confirm their email and be shown the sign-in form again.
+  if (location.pathname === LOGIN_PATH) {
+    return <Navigate to={safeNextPath(location.search)} replace />
+  }
+
+  // 4. Signed in — resolving role + which stores this user owns.
   if (scopeLoading) return <RouteFallback />
 
-  // 4. A merchant with no store yet → one-step onboarding.
+  // 5. A merchant with no store yet → one-step onboarding.
   if (needsStore) {
     return (
       <Suspense fallback={<RouteFallback />}>

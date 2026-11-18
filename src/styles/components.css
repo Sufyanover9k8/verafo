@@ -616,6 +616,35 @@ textarea:focus-visible {
 .field-hint { font-size: var(--t-caption); color: var(--v-ink-400); }
 .field-error { font-size: var(--t-caption); color: var(--v-risk-strong); }
 
+/* Password field with a show/hide toggle. The input keeps its own styling;
+   only extra right padding so the text never runs under the button. */
+.field-password { position: relative; display: block; }
+.field-password input { padding-right: 46px; }
+.field-password-toggle {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--v-ink-400);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.field-password-toggle:hover { color: var(--ink); background: var(--tint); }
+.field-password-toggle:active { transform: translateY(-50%) scale(.94); }
+.field-password-toggle:focus-visible {
+  outline: var(--v-focus-ring);
+  outline-offset: 1px;
+}
+
 input[type='text'],
 input[type='tel'],
 input[type='number'],
@@ -1801,27 +1830,41 @@ code {
    Auth
    ──────────────────────────────────────────────────────────── */
 
+/* The auth screen is a fixed light surface in BOTH themes: a first-time
+   visitor has not chosen a theme yet, and this layout is a single designed
+   contrast pair rather than two. Pinning the palette here (instead of letting
+   the tokens follow the theme) is what keeps every label readable. */
 .auth-split {
+  --bg: #FFFFFF;
+  --bg-2: #F6F8F8;
+  --bg-3: #EDF3F3;
+  --panel: #FFFFFF;
+  --line: rgba(10, 15, 16, .10);
+  --line-2: rgba(10, 15, 16, .18);
+  --ink: #0A0F10;
+  --ink-2: #43504F;
+  --ink-3: #5E6C6B;
+  --teal-deep: #0F766E;
+  --tint: #E9FBF8;
+  --v-ink-050: #0A0F10;
+  --v-ink-300: #43504F;
+  --v-ink-400: #5E6C6B;
+
   display: grid;
   grid-template-columns: 48fr 52fr;
   min-height: 100vh;
 }
 @media (max-width: 1023px) { .auth-split { grid-template-columns: 1fr; } }
 
-/* Left panel is deliberately fixed-dark and the right panel fixed-light,
-   regardless of the visitor's own theme preference — an auth screen this
-   graphic-heavy needs one designed contrast pair, not two (dark-on-dark /
-   light-on-light) depending on a toggle nobody's set yet. */
+/* Left panel: light mint wash, dark type. Two soft cyan glows drift behind the
+   content so the panel breathes instead of sitting flat. Both are composited
+   layers animated only with transform/opacity, and they stop entirely under
+   the user's "Reduced motion" setting (base.css disables every animation). */
 .auth-left {
-  --v-ink-050: #FFFFFF;         /* headings on the dark teal panel */
-  --v-ink-100: var(--tint);     /* body copy on the dark teal panel */
-  --v-ink-300: rgba(255, 255, 255, .72);
-  --v-ink-400: rgba(255, 255, 255, .55);
-
-  background:
-    radial-gradient(60% 50% at 100% 0%, rgba(45, 212, 191, .22), transparent 60%),
-    radial-gradient(45% 40% at 0% 100%, rgba(20, 184, 166, .12), transparent 60%),
-    linear-gradient(160deg, var(--bg-2) 0%, var(--bg-3) 100%);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--bg-2) 0%, var(--bg-3) 100%);
   padding: var(--s-12);
   display: flex;
   flex-direction: column;
@@ -1829,6 +1872,49 @@ code {
   gap: var(--s-10);
   color: var(--ink);
 }
+
+/* Two full-bleed glow layers, each larger than the panel (inset: -30%) so no
+   layer edge can ever appear inside the visible area — only the panel's own
+   overflow clips them. Animated with transform/opacity only, so they stay on
+   the compositor; base.css stops them entirely under "Reduced motion". */
+.auth-left::before,
+.auth-left::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  z-index: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.auth-left::before {
+  background:
+    radial-gradient(38% 34% at 24% 16%, rgba(45, 212, 191, .52) 0%, rgba(45, 212, 191, 0) 70%),
+    radial-gradient(34% 32% at 78% 72%, rgba(20, 184, 166, .40) 0%, rgba(20, 184, 166, 0) 72%);
+  animation: auth-glow-a 26s ease-in-out infinite alternate;
+}
+
+.auth-left::after {
+  background:
+    radial-gradient(30% 26% at 62% 94%, rgba(45, 212, 191, .34) 0%, rgba(45, 212, 191, 0) 72%),
+    radial-gradient(26% 24% at 88% 26%, rgba(13, 148, 136, .26) 0%, rgba(13, 148, 136, 0) 74%);
+  animation: auth-glow-b 34s ease-in-out infinite alternate;
+}
+
+@keyframes auth-glow-a {
+  0%   { transform: translate3d(-2%, -1%, 0) scale(1);    opacity: .75; }
+  50%  { transform: translate3d(3%, 2.5%, 0) scale(1.14); opacity: 1; }
+  100% { transform: translate3d(-1%, 3.5%, 0) scale(1.05); opacity: .82; }
+}
+
+@keyframes auth-glow-b {
+  0%   { transform: translate3d(2%, 2%, 0) scale(1.06);   opacity: .55; }
+  50%  { transform: translate3d(-3.5%, -3%, 0) scale(1.16); opacity: .85; }
+  100% { transform: translate3d(3%, -1%, 0) scale(1);     opacity: .5; }
+}
+
+/* Content always sits above the glows. */
+.auth-left > * { position: relative; z-index: 1; }
 .auth-wordmark { display: flex; align-items: center; gap: var(--s-3); }
 .auth-wordmark .sidebar-brand-mark { background: var(--v-grad-brand); }
 .auth-left-title {
@@ -1857,10 +1943,11 @@ code {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, .78);
+  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: var(--s-3) var(--s-4);
+  box-shadow: 0 1px 2px rgba(10, 15, 16, .04);
   backdrop-filter: blur(6px);
 }
 .auth-feature-icon {
@@ -1885,8 +1972,10 @@ code {
   padding: 3px 9px;
   border-radius: var(--r-full);
 }
-.auth-feature-pill.safe { background: color-mix(in srgb, var(--v-safe) 18%, transparent); color: var(--v-safe); }
-.auth-feature-pill.risk { background: color-mix(in srgb, var(--v-risk) 18%, transparent); color: var(--v-risk); text-decoration: line-through; }
+/* Fixed hexes: the pill sits on white glass, so it cannot inherit the
+   theme's bright teal/red, which are tuned for dark surfaces. */
+.auth-feature-pill.safe { background: #D3F2EC; color: #0B5F58; }
+.auth-feature-pill.risk { background: #FDE2E4; color: #B01236; text-decoration: line-through; }
 
 .auth-trust-badge {
   display: inline-flex;
@@ -1895,8 +1984,8 @@ code {
   align-self: flex-start;
   font-size: 12.5px;
   color: var(--v-ink-300);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, .78);
+  border: 1px solid var(--line);
   border-radius: var(--r-full);
   padding: var(--s-2) var(--s-4);
   margin-top: auto;

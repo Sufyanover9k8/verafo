@@ -6,6 +6,13 @@ dist
 
 .vercel
 .env*
+# Local-only credential files (never commit these)
+.resend
+.supabase
+.shopifydev
+# The client ID is public (it is in every OAuth URL) and now lives in
+# apps/shopify/shopify.app.toml; this is just the local scratch copy.
+.shopifyclientid
 dev-*.log
 dev-*.txt
 supabase/.temp/

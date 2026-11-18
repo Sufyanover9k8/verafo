@@ -13,5 +13,10 @@ export default defineConfig({
     port: 5173,
     // Allow public preview tunnels (e.g. cloudflared) to reach the dev server.
     allowedHosts: ['.trycloudflare.com'],
+    watch: {
+      // Editors and tools write short-lived temp files/dirs into the project
+      // root; watching them throws EBUSY on Windows and kills the dev server.
+      ignored: ['**/.*.tmpdir/**', '**/*.tmp', '**/.~*'],
+    },
   },
 })

@@ -1,8 +1,14 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { PasswordField } from '../components/app/password-field'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useToast } from '../lib/toast'
+import { safeNextPath } from '../lib/ui/auth-redirect'
+
+/** Matches the project's Supabase password policy (password_min_length = 8). */
+const MIN_PASSWORD_LENGTH = 8
 
 /**
  * Shown instead of the normal app when the user arrives via a "reset your
@@ -13,18 +19,21 @@ import { useToast } from '../lib/toast'
  */
 export function ResetPassword() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { clearPasswordRecovery } = useSession()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  /** The recovery session is gone (link opened twice, or the tab sat too long). */
+  const [expired, setExpired] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!supabase) return
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.')
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
     if (password !== confirm) {
@@ -36,11 +45,21 @@ export function ResetPassword() {
     const { error: updateErr } = await supabase.auth.updateUser({ password })
     setBusy(false)
     if (updateErr) {
-      setError(updateErr.message)
+      if (/session|expired|invalid|token/i.test(updateErr.message)) {
+        setExpired(true)
+        setError('This reset link is no longer valid. Request a new one from the sign-in screen.')
+      } else {
+        setError(updateErr.message)
+      }
       return
     }
     setDone(true)
     toast.push({ kind: 'success', title: 'Password updated', detail: "You're signed in with your new password." })
+  }
+
+  function leave() {
+    clearPasswordRecovery()
+    navigate(safeNextPath(), { replace: true })
   }
 
   return (
@@ -64,41 +83,45 @@ export function ResetPassword() {
           <p>
             {done
               ? "All set — you're signed in."
-              : "You're verified via your reset link. Choose a new password to finish."}
+              : expired
+                ? 'This reset link is no longer valid. Head back to the sign-in screen and request a fresh one.'
+                : "You're verified via your reset link. Choose a new password to finish."}
           </p>
 
           {done ? (
             <button
               type="button"
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-              onClick={clearPasswordRecovery}
+              onClick={leave}
             >
               <Icon name="arrow-forward" size={17} /> Continue to Verafo
             </button>
+          ) : expired ? (
+            <button
+              type="button"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              onClick={leave}
+            >
+              <Icon name="arrow-back" size={17} /> Back to sign in
+            </button>
           ) : (
             <form className="auth-form" onSubmit={submit}>
-              <label className="field">
-                <span className="field-label">New password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Confirm password</span>
-                <input
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
+              <PasswordField
+                label="New password"
+                value={password}
+                onChange={setPassword}
+                autoComplete="new-password"
+                minLength={MIN_PASSWORD_LENGTH}
+                required
+              />
+              <PasswordField
+                label="Confirm password"
+                value={confirm}
+                onChange={setConfirm}
+                autoComplete="new-password"
+                minLength={MIN_PASSWORD_LENGTH}
+                required
+              />
 
               {error && <span className="field-error">{error}</span>}
 

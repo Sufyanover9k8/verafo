@@ -15,7 +15,12 @@ export function useAutoRefresh(
   enabled = true,
 ): void {
   const loadRef = useRef(load)
-  loadRef.current = load
+  // Update after commit, not during render: writing a ref while rendering is
+  // unsafe in concurrent React and would let the timer call a loader from a
+  // render that was thrown away.
+  useEffect(() => {
+    loadRef.current = load
+  }, [load])
   const running = useRef(false)
 
   useEffect(() => {

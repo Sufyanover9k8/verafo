@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { currency, dateOnly, dateTime, dayKey, monthKey, money, normalizePhone, phone, timeAgo } from './format'
+import { canonicalPhone, currency, dateOnly, dateTime, dayKey, monthKey, money, normalizePhone, phone, timeAgo } from './format'
 
 describe('currency', () => {
   it('renders PKR with thousands separators', () => {
@@ -43,9 +43,43 @@ describe('phone', () => {
   })
 })
 
+describe('canonicalPhone', () => {
+  it('collapses every Pakistani way of writing the same number', () => {
+    const expected = '+923012345678'
+    for (const input of [
+      '03012345678',
+      '0301-2345678',
+      '(0301) 234 5678',
+      '+92 301 234 5678',
+      '+923012345678',
+      '923012345678',
+      '00923012345678',
+      '3012345678',
+      '  0301 234 5678  ',
+    ]) {
+      expect(canonicalPhone(input), input).toBe(expected)
+    }
+  })
+
+  it('keeps international numbers but normalises the plus', () => {
+    expect(canonicalPhone('+1 (555) 123-4567')).toBe('+15551234567')
+    expect(canonicalPhone('+44 20 7946 0958')).toBe('+442079460958')
+  })
+
+  it('returns an empty string for empty input', () => {
+    expect(canonicalPhone('')).toBe('')
+    expect(canonicalPhone(null)).toBe('')
+    expect(canonicalPhone(undefined)).toBe('')
+  })
+
+  it('leaves numbers it cannot interpret alone', () => {
+    expect(canonicalPhone('0213456789')).toBe('0213456789')
+  })
+})
+
 describe('normalizePhone', () => {
-  it('strips punctuation and keeps digits/plus', () => {
-    expect(normalizePhone('(0301) 234-5678')).toBe('03012345678')
+  it('normalising means canonicalising', () => {
+    expect(normalizePhone('(0301) 234-5678')).toBe('+923012345678')
     expect(normalizePhone('+92 301 234 5678')).toBe('+923012345678')
   })
 })
