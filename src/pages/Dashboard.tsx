@@ -458,6 +458,22 @@ export function Dashboard() {
 
   return (
     <PageShell>
+      {/* App download prompt, above the title. Inverted on purpose: dark in
+          light mode, light in dark mode, so it reads as its own shelf. */}
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-[#0A0F10] px-5 py-4 text-white dark:bg-white dark:text-[#0A0F10]">
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold leading-tight">
+            Download the App to manage your workflow
+          </p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-10 flex-none items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-[#0A0F10] transition-colors hover:bg-white/90 dark:bg-[#0A0F10] dark:text-white dark:hover:bg-[#17211F]"
+        >
+          <Download size={15} /> Download
+        </button>
+      </section>
+
       <PageHeader
         title="Is my store safe today?"
         description={subtitle}
@@ -485,22 +501,6 @@ export function Dashboard() {
           </div>
         }
       />
-
-      {/* App download prompt. Inverted on purpose: dark in light mode, light in
-          dark mode, so it reads as a separate shelf above the dashboard. */}
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-[#0A0F10] px-5 py-4 text-white dark:bg-white dark:text-[#0A0F10]">
-        <div className="min-w-0">
-          <p className="text-[14px] font-semibold leading-tight">
-            Download the App to manage your workflow
-          </p>
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-10 flex-none items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-[#0A0F10] transition-colors hover:bg-white/90 dark:bg-[#0A0F10] dark:text-white dark:hover:bg-[#17211F]"
-        >
-          <Download size={15} /> Download
-        </button>
-      </section>
 
       {/* The answer, first: one briefing line, then the verdict card. */}
       {!loading && !ordersError && (
