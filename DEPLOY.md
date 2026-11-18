@@ -192,8 +192,33 @@ service; they then apply to every newly generated email.
 
 ## 6. Bulk import & Shopify history
 
-**CSV import** (`/import`) is idempotent: every row gets a stable `import_ref`
-and `orders (store_id, import_ref)` is unique, so re-uploading the same file
+Bulk Import has three purposes, in order of importance:
+
+1. **Courier history — the main import.** A courier's own report (CSV or Excel)
+   sets the delivery outcome of every dispatched order. Rows match to an order by
+   `order_reference`, then `courier_tracking_number`, then phone; only final
+   statuses are written (delivered → accepted, refused/RTO/returned → refused),
+   while in-transit and "undelivered – attempted" rows are held back. The
+   preview separates *will change* from *already matches*, so the button count
+   never overstates the work. Matching runs against the store's most recent
+   2,000 orders.
+2. **Courier integration (coming soon).** A merchant can record which courier
+   and which of its APIs they use. This is stored in `store_courier_settings`
+   (`supabase/courier-settings.sql`) and is **non-secret by design** — a provider
+   name, an API label and a docs link. Credentials must go in Supabase secrets
+   when the direct pulls ship, never in that table.
+3. **Order history CSV** — for platforms that are not Shopify. This one is
+   expected to retire once `read_all_orders` lands.
+
+**Import with AI.** Both importers can ask the `verafo-ai` edge function
+(`action: "map_columns"`) to map unknown vendor columns onto the fields the
+importer understands. The model receives only the header row and up to five
+sample rows, and returns a `field → header` mapping; it never sees the data
+being imported. Suggestions are validated against the real header list, so a
+hallucinated column cannot silently shift values. If the function is
+unavailable, the importer falls back to its built-in alias tables.
+
+**CSV import** (`/import`) is idempotent: every row gets a stable `import_ref`and `orders (store_id, import_ref)` is unique, so re-uploading the same file
 skips rows instead of duplicating them. The parser handles `;`/tab delimited
 files, UTF-8 BOMs, `Rs. 2,499` and `1.199,00` prices, `DD/MM/YYYY` dates (read as
 Pakistan time), and maps courier/Shopify status words (`Delivered`, `RTO`,

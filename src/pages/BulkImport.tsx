@@ -10,9 +10,14 @@ import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
+import { CourierImport } from '../components/app/courier-import'
+import { CourierSettings } from '../components/app/courier-settings'
+import { mapColumnsWithAi } from '../lib/ui/ai-column-map'
 import {
   failedRowsCsv,
+  parseCsv,
   parseImport,
+  sniffDelimiter,
   stripBom,
   TEMPLATE_COLUMNS,
   TEMPLATE_CSV,
@@ -52,6 +57,10 @@ export function BulkImport() {
   const [genOrders, setGenOrders] = useState(6)
   const [genMix, setGenMix] = useState<'safe' | 'balanced' | 'risky'>('balanced')
   const [genBusy, setGenBusy] = useState(false)
+  /** Columns the AI picked for the order CSV, when the merchant asked for it. */
+  const [aiColumns, setAiColumns] = useState<Partial<Record<string, string>>>({})
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiNote, setAiNote] = useState<string | null>(null)
   const [genResult, setGenResult] = useState<{
     stores: number
     buyers: number
@@ -83,7 +92,35 @@ export function BulkImport() {
     setStoreId(stores.length === 1 ? stores[0].id : '')
   }, [stores, storeId])
 
-  const parsed = useMemo(() => parseImport(text), [text])
+  const parsed = useMemo(() => parseImport(text, aiColumns), [text, aiColumns])
+
+  /** Headers + a few raw rows, used to let the AI inspect the actual values. */
+  const rawCells = useMemo(() => {
+    if (!text.trim()) return [] as string[][]
+    return parseCsv(text, sniffDelimiter(text)).slice(0, 6)
+  }, [text])
+
+  async function detectOrderColumns() {
+    const [headers = [], ...sample] = rawCells
+    if (headers.length === 0) return
+    setAiBusy(true)
+    setAiNote(null)
+    const result = await mapColumnsWithAi(headers, sample, 'orders')
+    setAiBusy(false)
+    if (!result) {
+      setAiNote('AI mapping is unavailable right now (the verafo-ai function did not answer).')
+      return
+    }
+    setAiColumns(result.mapping)
+    const mapped = Object.entries(result.mapping)
+      .map(([field, header]) => `${field} → ${header}`)
+      .join(', ')
+    setAiNote(
+      mapped
+        ? `AI mapped: ${mapped}${result.missing.length ? `. Not found: ${result.missing.join(', ')}` : '.'}`
+        : 'AI could not match any column — check the file has headers.',
+    )
+  }
 
   const storesByName = useMemo(() => {
     const map = new Map<string, Store[]>()
@@ -424,14 +461,19 @@ export function BulkImport() {
     <PageShell>
       <PageHeader
         title="Bulk Import"
-        description="Load past orders (and their outcomes) from a CSV. Re-importing the same file is safe — rows already in Verafo are skipped."
+        description="Courier reports are the main import: they set the delivery outcome of every dispatched order. Order history from other platforms is here too — re-importing is safe."
       />
 
       <Reveal stagger>
+        {/* The primary import: courier reports define the outcomes. */}
+        <CourierImport stores={stores} />
+
+        <CourierSettings stores={stores} storeId={storeId} />
+
         <div className="card import-card">
           <div className="import-head">
             <h3 className="card-title">
-              <Icon name="document-text-outline" size={16} /> CSV format
+              <Icon name="document-text-outline" size={16} /> Order history (CSV)
             </h3>
             <button
               className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
@@ -588,6 +630,23 @@ export function BulkImport() {
             placeholder="Paste CSV here — or pick a .csv file above."
             rows={6}
           />
+
+          <div className="import-actions">
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-border px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              onClick={() => void detectOrderColumns()}
+              disabled={aiBusy || !text.trim()}
+              title="Let the AI read your headers and sample rows and decide which column is which"
+            >
+              {aiBusy ? (
+                <Icon name="refresh" size={15} className="spin" />
+              ) : (
+                <Icon name="sparkles-outline" size={15} />
+              )}
+              {aiBusy ? 'Reading columns…' : 'Import with AI'}
+            </button>
+            {aiNote && <span className="import-note">{aiNote}</span>}
+          </div>
 
           {(parsed.fileErrors.length > 0 || (text && parsed.rows.length === 0)) && (
             <div className="line-errors">

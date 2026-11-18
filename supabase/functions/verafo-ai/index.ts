@@ -2605,6 +2605,128 @@ const supabase = createClient(
     }
     const openai = new OpenAI({ apiKey });
 
+    /**
+     * "Import with AI": map a vendor's spreadsheet headers onto the fields an
+     * importer understands. The model only ever sees headers plus a few sample
+     * cells and returns a field→header mapping; it never sees or writes data.
+     */
+    if (action === "map_columns") {
+      const kind = body.kind === "courier" ? "courier" : "orders";
+      const headers = (Array.isArray(body.headers) ? body.headers : [])
+        .map((h: unknown) => String(h ?? "").trim())
+        .filter((h: string) => h.length > 0)
+        .slice(0, 40);
+      if (headers.length === 0) return json({ error: "headers are required" }, 400);
+
+      const sample = (Array.isArray(body.sample) ? body.sample : [])
+        .slice(0, 5)
+        .map((row: unknown) =>
+          (Array.isArray(row) ? row : []).slice(0, 40).map((cell: unknown) => String(cell ?? "").slice(0, 120)),
+        );
+
+      const ORDER_FIELDS: Record<string, string> = {
+        phone: "customer phone number (Pakistani mobile, may look like 03xx... or +92...)",
+        store: "the vendor/store/brand the order belongs to",
+        product: "product or line item name",
+        category: "product category/type",
+        price: "price of ONE unit",
+        quantity: "number of units",
+        address: "delivery street address",
+        city: "delivery city",
+        ordered_at: "when the order was placed",
+        outcome: "delivery result for the order (delivered/returned/cancelled...)",
+        resolved_at: "when the delivery result was recorded",
+      };
+      const COURIER_FIELDS: Record<string, string> = {
+        reference: "merchant order id / order reference / shopify order name",
+        trackingNumber: "courier CN number, tracking or consignment number",
+        phone: "consignee/customer phone number",
+        store: "vendor/store name",
+        status: "current shipment/delivery status",
+        reason: "undelivered/return reason or remarks",
+        codAmount: "cash-on-delivery amount to collect",
+        resolvedAt: "date the status was last updated or delivered",
+      };
+      const fields = kind === "courier" ? COURIER_FIELDS : ORDER_FIELDS;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You map spreadsheet columns to a fixed set of fields. Reply with JSON only: " +
+              '{"mapping": {<field>: <header>}} where <header> is copied EXACTLY from the `headers` array. ' +
+              "Never return a cell value, and never invent a header that is not in `headers`. " +
+              "Use the sample rows to understand what each column holds. " +
+              "If a field has no plausible column, set it to null.",
+          },
+          {
+            role: "user",
+            content: JSON.stringify({ fields, headers, sample }),
+          },
+        ],
+      });
+
+      const rawText = response.choices[0]?.message?.content ?? "";
+      let parsed: { mapping?: Record<string, unknown>; columns?: Record<string, unknown> } = {};
+      try {
+        parsed = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+      } catch {
+        parsed = {};
+      }
+
+      // Models answer either {field: header} or the reverse {header: field}, and
+      // sometimes nest it. Accept all three rather than silently returning an
+      // empty map. Header names are matched case-insensitively.
+      const headerByLower = new Map(headers.map((h: string) => [h.trim().toLowerCase(), h.trim()]));
+      const norm = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      // The model sometimes answers with a sample cell instead of the header
+      // name. Resolve that back to its column rather than dropping the mapping.
+      const asHeader = (value: unknown): string | null => {
+        if (typeof value !== "string") return null;
+        const text = value.trim();
+        const byName = headerByLower.get(text.toLowerCase());
+        if (byName) return byName;
+        for (let i = 0; i < headers.length; i++) {
+          for (const row of sample) {
+            const cell = String(row[i] ?? "").trim();
+            if (cell && cell.toLowerCase() === text.toLowerCase()) return headers[i];
+          }
+        }
+        return null;
+      };
+
+      const raw: Record<string, unknown> =
+        parsed.mapping && typeof parsed.mapping === "object"
+          ? parsed.mapping
+          : parsed.columns && typeof parsed.columns === "object"
+            ? parsed.columns
+            : (parsed as Record<string, unknown>);
+
+      const mapping: Record<string, string> = {};
+      for (const field of Object.keys(fields)) {
+        const direct = asHeader(raw[field]);
+        if (direct) {
+          mapping[field] = direct;
+          continue;
+        }
+        // Reverse direction: { "Vendor": "store" }.
+        for (const [key, value] of Object.entries(raw)) {
+          if (typeof value === "string" && norm(value) === norm(field)) {
+            const header = asHeader(key);
+            if (header) {
+              mapping[field] = header;
+              break;
+            }
+          }
+        }
+      }
+      return json({ ok: true, mapping, parsed_fields: Object.keys(fields).length, ...(body.debug === true ? { debug: rawText.slice(0, 400) } : {}) });
+    }
+
     if (action === "embed") {
       const stats = await fetchStats(supabase, phone, storeIds);
       const fv = await buildFeatureVector(supabase, phone, storeIds);

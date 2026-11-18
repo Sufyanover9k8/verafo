@@ -431,7 +431,7 @@ function toQuantity(raw: string, warnings: string[]): number {
 }
 
 /** Parse a whole file. Rows with `errors` must not be imported. */
-export function parseImport(text: string): ParseResult {
+export function parseImport(text: string, aiColumns: Partial<Record<string, string>> = {}): ParseResult {
   const delimiter = sniffDelimiter(text)
   const cells = parseCsv(text, delimiter)
   const fileErrors: string[] = []
@@ -453,6 +453,15 @@ export function parseImport(text: string): ParseResult {
     const mapped = HEADER_ALIASES[h]
     if (mapped && !col.has(mapped)) col.set(mapped, i)
   })
+
+  // AI-chosen columns win: the model saw the sample values, so it can beat a
+  // header-name guess ("Vendor" meaning store, "Remarks" meaning outcome).
+  const byHeaderName = new Map(header.map((h, i) => [h, i]))
+  for (const [field, headerName] of Object.entries(aiColumns)) {
+    if (!headerName || !HEADER_ALIASES[field]) continue
+    const index = byHeaderName.get(String(headerName).trim().toLowerCase().replace(/\s+/g, ' '))
+    if (index !== undefined) col.set(field, index)
+  }
 
   if (!col.has('phone')) fileErrors.push('No phone column found. A column named phone, buyer, or "Shipping Phone" works.')
 
