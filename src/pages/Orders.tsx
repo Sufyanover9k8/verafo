@@ -43,8 +43,9 @@ function csv(rows: Record<string, unknown>[]): string {
 }
 
 /**
- * One order as a card: four facts while collapsed, everything on demand.
- * The header is the toggle, so the whole card is keyboard reachable.
+ * One order as a card. The four facts stay minimal; the decision controls sit
+ * in their own footer so they are visible and clickable without expanding.
+ * The summary is the toggle, so the card stays keyboard reachable.
  */
 function OrderCard({
   order,
@@ -66,13 +67,13 @@ function OrderCard({
 
   return (
     <article
-      className={`rounded-[16px] border bg-card transition-colors ${
+      className={`flex flex-col rounded-[16px] border bg-card transition-colors ${
         expanded ? 'border-[color-mix(in_srgb,var(--teal)_40%,var(--line))]' : 'border-border hover:border-line-2'
       }`}
     >
       <button
         type="button"
-        className="flex w-full items-start justify-between gap-3 rounded-[16px] bg-transparent p-4 text-left"
+        className="flex w-full items-start justify-between gap-3 rounded-t-[16px] bg-transparent p-4 text-left"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
       >
@@ -99,6 +100,18 @@ function OrderCard({
         </span>
       </button>
 
+      {status === 'pending' && (
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5">
+          <Link
+            className="text-[12.5px] font-semibold text-primary-text hover:underline"
+            to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
+          >
+            Open buyer
+          </Link>
+          {actions}
+        </div>
+      )}
+
       {expanded && (
         <div className="border-t border-border px-4 py-3">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -111,17 +124,6 @@ function OrderCard({
             {order.outcomes?.resolved_at && detail('Resolved', dateTime(order.outcomes.resolved_at))}
             {order.outcomes?.refusal_reason && detail('Reason', order.outcomes.refusal_reason, true)}
           </dl>
-          {status === 'pending' && (
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-              <Link
-                className="text-[12.5px] font-semibold text-primary-text hover:underline"
-                to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
-              >
-                Open buyer
-              </Link>
-              {actions}
-            </div>
-          )}
         </div>
       )}
     </article>
