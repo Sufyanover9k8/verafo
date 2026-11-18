@@ -16,3 +16,8 @@ dist
 dev-*.log
 dev-*.txt
 supabase/.temp/
+
+# Local data exports (never committed)
+.backups/
+.partnersapi
+.partnerid
