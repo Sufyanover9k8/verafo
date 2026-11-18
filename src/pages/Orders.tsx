@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Phone } from 'lucide-react'
+import { OrderCard } from '../components/app/order-card'
+import { ViewToggle, type ViewMode } from '../components/app/view-toggle'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
@@ -40,96 +42,7 @@ function csv(rows: Record<string, unknown>[]): string {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   return [keys.join(','), ...rows.map((r) => keys.map((k) => esc(r[k])).join(','))].join('\n')
-}
-
-/**
- * One order as a card. The four facts stay minimal; the decision controls sit
- * in their own footer so they are visible and clickable without expanding.
- * The summary is the toggle, so the card stays keyboard reachable.
- */
-function OrderCard({
-  order,
-  actions,
-  showStore,
-}: {
-  order: Row
-  actions: ReactNode
-  showStore: boolean
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const status = (order.outcomes?.status ?? 'pending') as OutcomeStatus
-  const detail = (label: string, value: ReactNode, wide = false) => (
-    <div className={wide ? 'col-span-2 min-w-0' : 'min-w-0'}>
-      <dt className="m-0 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
-      <dd className="m-0 mt-0.5 break-words text-[12.5px] text-foreground">{value}</dd>
-    </div>
-  )
-
-  return (
-    <article
-      className={`flex flex-col rounded-[16px] border bg-card transition-colors ${
-        expanded ? 'border-[color-mix(in_srgb,var(--teal)_40%,var(--line))]' : 'border-border hover:border-line-2'
-      }`}
-    >
-      <button
-        type="button"
-        className="flex w-full items-start justify-between gap-3 rounded-t-[16px] bg-transparent p-4 text-left"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className="min-w-0">
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[13px] font-semibold text-foreground">
-              {phone(order.buyer_phone)}
-            </span>
-            <VerdictBadge riskScore={order.buyers?.risk_score} totalOrders={order.buyers?.total_orders} />
-          </span>
-          <span className="mt-1 block truncate text-[12px] text-muted-foreground">
-            {dateTime(order.ordered_at)}
-            {order.city ? ` · ${order.city}` : ''}
-          </span>
-        </span>
-        <span className="flex flex-none flex-col items-end gap-1.5">
-          <span className="text-[15px] font-semibold tabular-nums text-foreground">
-            {money(order.price)}
-            {order.quantity && order.quantity > 1 ? (
-              <span className="ms-1 text-[12px] font-medium text-muted-foreground">× {order.quantity}</span>
-            ) : null}
-          </span>
-          <StatusBadge status={status} />
-        </span>
-      </button>
-
-      {status === 'pending' && (
-        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5">
-          <Link
-            className="text-[12.5px] font-semibold text-primary-text hover:underline"
-            to={`/lookup?phone=${encodeURIComponent(order.buyer_phone)}`}
-          >
-            Open buyer
-          </Link>
-          {actions}
-        </div>
-      )}
-
-      {expanded && (
-        <div className="border-t border-border px-4 py-3">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-            {detail('Product', order.product_name || order.product_category || 'Untitled product', true)}
-            {showStore && detail('Store', order.stores?.name ?? '—')}
-            {detail('Reference', order.order_reference || '—')}
-            {detail('Tracking', order.courier_tracking_number || '—')}
-            {detail('Quantity', String(order.quantity ?? 1))}
-            {detail('Ordered', dateTime(order.ordered_at))}
-            {order.outcomes?.resolved_at && detail('Resolved', dateTime(order.outcomes.resolved_at))}
-            {order.outcomes?.refusal_reason && detail('Reason', order.outcomes.refusal_reason, true)}
-          </dl>
-        </div>
-      )}
-    </article>
-  )
-}
-export function Orders() {
+}export function Orders() {
   const toast = useToast()
   const { role, store, stores: adminStores, scopeStoreIds } = useStoreScope()
   const isAdmin = role === 'admin'
@@ -149,10 +62,10 @@ export function Orders() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [sort, setSort] = useState<OrderSortKey>('date_desc')
   /** List or cards. Remembered per browser so the choice survives a reload. */
-  const [view, setView] = useState<'list' | 'cards'>(() =>
+  const [view, setView] = useState<ViewMode>(() =>
     localStorage.getItem('verafo.ordersView') === 'cards' ? 'cards' : 'list',
   )
-  const changeView = (next: 'list' | 'cards') => {
+  const changeView = (next: ViewMode) => {
     setView(next)
     localStorage.setItem('verafo.ordersView', next)
   }
@@ -635,29 +548,7 @@ export function Orders() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="inline-flex items-center rounded-[10px] border border-border bg-card p-0.5"
-            role="group"
-            aria-label="Order view"
-          >
-            {(['list', 'cards'] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={view === option}
-                onClick={() => changeView(option)}
-                title={option === 'list' ? 'List view' : 'Card view'}
-                aria-label={option === 'list' ? 'List view' : 'Card view'}
-                className={`inline-flex h-8 w-9 items-center justify-center rounded-[8px] transition-colors ${
-                  view === option
-                    ? 'bg-muted text-foreground'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Icon name={option} size={15} />
-              </button>
-            ))}
-          </div>
+          <ViewToggle view={view} onChange={changeView} label="Orders view" />
           <label className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-card px-3 py-1.5">
             <Icon name="git-compare" size={14} className="text-muted-foreground" />
             <select
