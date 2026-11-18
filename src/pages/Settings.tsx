@@ -540,7 +540,7 @@ export function Settings() {
         <section className="card settings-section">
           <button
             type="button"
-            className="settings-section-head w-full text-left"
+            className="settings-toggle"
             aria-expanded={dangerOpen}
             aria-controls="danger-zone"
             onClick={() => setDangerOpen((v) => !v)}
@@ -548,16 +548,12 @@ export function Settings() {
             <span className="kpi-icon amber">
               <Icon name="warning" size={16} />
             </span>
-            <span className="eyebrow">Danger zone</span>
-            <Icon
-              name="chevron-down"
-              size={16}
-              className={`ms-auto text-muted-foreground transition-transform ${dangerOpen ? 'rotate-180' : ''}`}
-            />
+            <span className="eyebrow eyebrow-danger">Danger zone</span>
+            <Icon name="chevron-down" size={16} className="toggle-chevron" />
           </button>
 
           {dangerOpen && (
-            <div id="danger-zone" className="settings-rows">
+            <div id="danger-zone" className="settings-rows settings-panel">
               <div className="setting-row">
                 <div className="setting-info">
                   <div className="setting-title">Clear lookup history</div>
