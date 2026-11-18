@@ -12,6 +12,7 @@ import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone } from '../lib/format'
 import { formatScore, riskLevel } from '../lib/risk'
 import { isPending, recommendedAcceptances } from '../lib/ui/recommended-outcomes'
+import { ORDER_SORTS, sortOrders, type OrderSortKey } from '../lib/ui/sort-orders'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -54,6 +55,9 @@ export function Orders() {
   const [product, setProduct] = useState('')
   const [filterStoreId, setFilterStoreId] = useState('')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
+  /** The whole filter panel starts hidden; the kebab toggles it. */
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [sort, setSort] = useState<OrderSortKey>('date_desc')
   const [working, setWorking] = useState<string | null>(null)
   /** The bulk "Do recommended" action writes many rows at once. */
   const [bulkWorking, setBulkWorking] = useState(false)
@@ -110,6 +114,9 @@ export function Orders() {
       return true
     })
   }, [rows, status, term, city, product])
+
+  /** What the table renders: the filtered rows in the chosen order. */
+  const sorted = useMemo(() => sortOrders(filtered, sort), [filtered, sort])
 
   const counts = useMemo(() => {
     const c = { all: rows.length, pending: 0, accepted: 0, refused: 0 }
@@ -200,7 +207,7 @@ export function Orders() {
   }
 
   function exportCsv() {
-    const out = filtered.map((o) => ({
+    const out = sorted.map((o) => ({
       buyer_phone: o.buyer_phone,
       store: o.stores?.name ?? '',
       product: o.product_name || o.product_category || '',
@@ -345,6 +352,17 @@ export function Orders() {
         actions={
           <>
             <button
+              type="button"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-muted disabled:opacity-50 md:h-9 md:w-9"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+              aria-controls="orders-filters"
+              aria-label={filtersOpen ? 'Hide filters' : 'Show filters'}
+              title={filtersOpen ? 'Hide filters' : 'Show filters'}
+            >
+              <Icon name="ellipsis-horizontal" size={16} />
+            </button>
+            <button
               className="inline-flex h-11 items-center gap-2 rounded-full bg-[var(--cta-accent-bg)] px-4 text-[13px] font-semibold text-[var(--cta-accent-fg)] shadow-sm transition-colors hover:bg-[var(--cta-accent-hover)] disabled:opacity-50 md:h-9"
               onClick={() => void doRecommended()}
               disabled={bulkWorking || loading || recommended.length === 0}
@@ -377,118 +395,125 @@ export function Orders() {
         }
       />
 
-      {/* Filters. */}
-      <div className="rounded-[16px] border border-border bg-card p-6">
-        <div className="flex flex-wrap items-end gap-4">
-          <label className="flex min-w-[150px] flex-col gap-2">
-            <span className="text-[13px] font-medium text-muted-foreground">Order date</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                className="h-11 w-full min-w-[130px] rounded-[10px] border border-input bg-card px-3 text-[15px] text-foreground md:h-10"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                aria-label="From date"
-              />
-              <span className="text-muted-foreground" aria-hidden="true">
-                →
-              </span>
-              <input
-                type="date"
-                className="h-11 w-full min-w-[130px] rounded-[10px] border border-input bg-card px-3 text-[15px] text-foreground md:h-10"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                aria-label="To date"
-              />
-            </div>
-          </label>
-
-          <label className="flex min-w-[150px] flex-1 flex-col gap-2">
-            <span className="text-[13px] font-medium text-muted-foreground">Phone</span>
-            <input
-              className="h-11 w-full rounded-[10px] border border-input bg-card px-3 font-mono text-[15px] text-foreground placeholder:text-muted-foreground md:h-10"
-              type="search"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              placeholder="03xx xxxxxxx"
-              aria-label="Filter by phone"
-            />
-          </label>
-
-          <label className="flex min-w-[150px] flex-1 flex-col gap-2">
-            <span className="text-[13px] font-medium text-muted-foreground">City</span>
-            <input
-              className="h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[15px] text-foreground placeholder:text-muted-foreground md:h-10"
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="e.g. Lahore"
-              aria-label="Filter by city"
-            />
-          </label>
-
-          {showMoreFilters && (
-            <>
-              <label className="flex min-w-[150px] flex-1 flex-col gap-2">
-                <span className="text-[13px] font-medium text-muted-foreground">Product</span>
+      {/* Filters. Hidden until the kebab in the header asks for them. */}
+      {filtersOpen && (
+        <div
+          id="orders-filters"
+          className="orders-filters rounded-[16px] border border-border bg-card p-5"
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12px] font-medium text-muted-foreground">Order date</span>
+              <span className="flex items-center gap-2">
                 <input
-                  className="h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[15px] text-foreground placeholder:text-muted-foreground md:h-10"
-                  type="text"
-                  value={product}
-                  onChange={(e) => setProduct(e.target.value)}
-                  placeholder="Product name or category"
-                  aria-label="Filter by product"
+                  type="date"
+                  className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-[14px] text-foreground"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  aria-label="From date"
                 />
-              </label>
-              {isAdmin && (
-                <label className="flex min-w-[150px] flex-col gap-2">
-                  <span className="text-[13px] font-medium text-muted-foreground">Store</span>
-                  <select
-                    className="h-11 w-full rounded-[10px] border border-input bg-card px-3 text-[15px] text-foreground md:h-10"
-                    value={filterStoreId}
-                    onChange={(e) => setFilterStoreId(e.target.value)}
-                    aria-label="Filter by store"
-                  >
-                    <option value="">All stores</option>
-                    {adminStores.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                <span className="text-muted-foreground" aria-hidden="true">
+                  –
+                </span>
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-[14px] text-foreground"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  aria-label="To date"
+                />
+              </span>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12px] font-medium text-muted-foreground">Phone</span>
+              <input
+                className="h-10 w-full rounded-[10px] border border-input bg-card px-3 font-mono text-[14px] text-foreground placeholder:text-muted-foreground"
+                type="search"
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder="03xx xxxxxxx"
+                aria-label="Filter by phone"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[12px] font-medium text-muted-foreground">City</span>
+              <input
+                className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-[14px] text-foreground placeholder:text-muted-foreground"
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="e.g. Lahore"
+                aria-label="Filter by city"
+              />
+            </label>
+
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                onClick={() => void load()}
+              >
+                <Icon name="search" size={14} /> Search
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted"
+                onClick={resetFilters}
+              >
+                <Icon name="refresh" size={14} /> Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-end gap-4">
+            <button
+              type="button"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border-0 bg-transparent px-1 text-[12.5px] font-semibold text-primary-text transition-colors hover:text-foreground"
+              onClick={() => setShowMoreFilters((v) => !v)}
+              aria-expanded={showMoreFilters}
+            >
+              <Icon name={showMoreFilters ? 'close' : 'add'} size={13} />
+              {showMoreFilters ? 'Hide extra filters' : 'More filters'}
+            </button>
+
+            {showMoreFilters && (
+              <>
+                <label className="flex min-w-[180px] flex-1 flex-col gap-1.5">
+                  <span className="text-[12px] font-medium text-muted-foreground">Product</span>
+                  <input
+                    className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-[14px] text-foreground placeholder:text-muted-foreground"
+                    type="text"
+                    value={product}
+                    onChange={(e) => setProduct(e.target.value)}
+                    placeholder="Product name or category"
+                    aria-label="Filter by product"
+                  />
                 </label>
-              )}
-            </>
-          )}
-
-          <button
-            type="button"
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dashed border-input px-4 text-[13px] font-semibold text-primary-text transition-colors hover:bg-muted md:h-10"
-            onClick={() => setShowMoreFilters((v) => !v)}
-          >
-            <Icon name={showMoreFilters ? 'close' : 'add'} size={14} />
-            {showMoreFilters ? 'Fewer filters' : 'Add more filters'}
-          </button>
-
-          <div className="ms-auto flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 md:h-10"
-              onClick={() => void load()}
-            >
-              <Icon name="search" size={14} /> Search
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-10"
-              onClick={resetFilters}
-            >
-              <Icon name="refresh" size={14} /> Reset
-            </button>
+                {isAdmin && (
+                  <label className="flex min-w-[160px] flex-col gap-1.5">
+                    <span className="text-[12px] font-medium text-muted-foreground">Store</span>
+                    <select
+                      className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-[14px] text-foreground"
+                      value={filterStoreId}
+                      onChange={(e) => setFilterStoreId(e.target.value)}
+                      aria-label="Filter by store"
+                    >
+                      <option value="">All stores</option>
+                      {adminStores.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
           </div>
         </div>
-      </div>
-
+      )}
       {/* Status filter and refresh. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex gap-1 rounded-[10px] border border-border bg-card p-1">
@@ -507,13 +532,30 @@ export function Orders() {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
-          onClick={() => void load()}
-        >
-          <Icon name="refresh" size={16} className={loading ? 'spin' : ''} /> Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-card px-3 py-1.5">
+            <Icon name="git-compare" size={14} className="text-muted-foreground" />
+            <select
+              className="h-6 border-0 bg-transparent pe-6 text-[13px] font-semibold text-foreground focus:outline-none"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as OrderSortKey)}
+              aria-label="Sort orders"
+            >
+              {ORDER_SORTS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
+            onClick={() => void load()}
+          >
+            <Icon name="refresh" size={16} className={loading ? 'spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* The table. Wide tables scroll inside this box, never the page. */}
@@ -544,7 +586,7 @@ export function Orders() {
         ) : (
           <Table
             columns={columns}
-            rows={filtered}
+            rows={sorted}
             rowKey={(o) => o.id}
             onRowKeyDown={(o, key) => {
               if ((o.outcomes?.status ?? 'pending') === 'pending') {

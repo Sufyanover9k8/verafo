@@ -2546,6 +2546,20 @@ code {
 
 .settings-layout { display: flex; flex-direction: column; gap: var(--s-6); }
 .settings-layout h2 { font-size: var(--t-h2); font-weight: 600; color: var(--v-ink-050); }
+/* Orders: the filter panel pops out from under the header kebab. */
+@keyframes orders-filters-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.orders-filters {
+  transform-origin: top center;
+  animation: orders-filters-in .18s ease-out;
+}
+[data-motion='off'] .orders-filters { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .orders-filters { animation: none; }
+}
+
 .settings-section { padding: var(--s-6); }
 .settings-section-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-4); }
 .settings-section-head .eyebrow { margin: 0; }
