@@ -6,7 +6,7 @@ import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
-import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
 import { useToast } from '../lib/toast'
@@ -39,9 +39,8 @@ export function Settings() {
   const { theme, reducedMotion, resolved, setTheme, setReducedMotion } = useTheme()
   const [exporting, setExporting] = useState<'buyers' | 'orders' | null>(null)
   const [clearing, setClearing] = useState(false)
-  const [conn, setConn] = useState<'checking' | 'ok' | 'fail'>('checking')
+  const [ready, setReady] = useState(false)
   const [buyerCount, setBuyerCount] = useState<number | null>(null)
-  const [orderCount, setOrderCount] = useState<number | null>(null)
   const [name, setName] = useState<string>(displayName)
   const [savingName, setSavingName] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -56,37 +55,19 @@ export function Settings() {
 
   useEffect(() => {
     if (!supabase) {
-      setConn('fail')
+      setReady(true)
       return
     }
-    const base = functionsBaseUrl()
     let cancelled = false
-    Promise.all([
-      supabase.from('buyers').select('id', { count: 'exact', head: true }),
-      supabase.from('orders').select('id', { count: 'exact', head: true }),
-    ]).then(([b, o]) => {
-      if (cancelled) return
-      if (b.error || o.error) setConn('fail')
-      else {
-        setBuyerCount(b.count)
-        setOrderCount(o.count)
-        setConn('ok')
-      }
-    })
-    if (base) {
-      fetch(`${base}/verafo-ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'suggest' }),
+    // Only the buyer count is shown; the page does not need to wait on a ping.
+    supabase
+      .from('buyers')
+      .select('id', { count: 'exact', head: true })
+      .then(({ count }) => {
+        if (cancelled) return
+        setBuyerCount(count)
+        setReady(true)
       })
-        .then((r) => r.json())
-        .then((j: { ok?: boolean }) => {
-          if (!cancelled && !j.ok) setConn('fail')
-        })
-        .catch(() => {
-          if (!cancelled) setConn('fail')
-        })
-    }
     return () => {
       cancelled = true
     }
@@ -274,14 +255,14 @@ export function Settings() {
 
   if (!isConfigured || !supabase) return <NeedsSetup />
 
-  // While the connection check is still running, show a skeleton instead of
-  // half-filled numbers. The real sections replace it once it settles.
-  if (conn === 'checking') {
+  // Hold the page until the buyer count lands, so the export buttons do not
+  // flash an empty number and then change.
+  if (!ready) {
     return (
       <div>
         <PageHeader
           title="Settings"
-          description="Appearance, data and connection — everything in one place."
+          description="Appearance, account and data."
         />
         <div className="settings-layout">
           <section className="card settings-section">
@@ -296,7 +277,7 @@ export function Settings() {
     <div>
       <PageHeader
         title="Settings"
-        description="Appearance, data and connection — everything in one place."
+        description="Appearance, account and data."
       />
 
       <div className="settings-layout">
@@ -504,74 +485,6 @@ export function Settings() {
             </div>
           </section>
         )}
-
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon blue">
-              <Icon name="server" size={16} />
-            </span>
-            <span className="eyebrow">Connection</span>
-          </div>
-          <div className="conn-card">
-            <div className="conn-avatar">
-              <Icon name="server-outline" size={20} />
-            </div>
-            <div className="conn-meta">
-              <strong>Supabase {conn === 'ok' ? 'connected' : 'unreachable'}</strong>
-              <span>{isConfigured ? new URL(functionsBaseUrl() ?? '').host : 'not configured'}</span>
-            </div>
-            <span className={`conn-pill${conn === 'ok' ? '' : ' warn'}`}>
-              <span className="conn-dot" />
-              {conn === 'ok' ? 'online' : 'offline'}
-            </span>
-          </div>
-          <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>
-            <div className="info-tile">
-              <div className="info-tile-label">Buyers</div>
-              <div className="info-tile-value mono">{buyerCount ?? '…'}</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">Orders</div>
-              <div className="info-tile-value mono">{orderCount ?? '…'}</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">Edge functions</div>
-              <div className="info-tile-value">{functionsBaseUrl() ? 'Deployed' : 'Not deployed'}</div>
-            </div>
-          </div>
-        </section>
-
-        <section className="card settings-section">
-          <div className="about-brand">
-            <span className="brand-mark">
-              <Icon name="shield-checkmark" size={20} />
-            </span>
-            <div>
-              <h3>Verafo</h3>
-              <p>COD risk intelligence</p>
-            </div>
-          </div>
-          <div className="info-grid" style={{ marginTop: 'var(--s-5)' }}>
-            <div className="info-tile">
-              <div className="info-tile-label">Version</div>
-              <div className="info-tile-value mono">v0.2</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">Backend</div>
-              <div className="info-tile-value">Supabase</div>
-            </div>
-            <div className="info-tile">
-              <div className="info-tile-label">AI functions</div>
-              <div className="info-tile-value">OpenAI edge functions</div>
-            </div>
-          </div>
-          {!functionsBaseUrl() && (
-            <div className="ai-hint" style={{ marginTop: 14 }}>
-              Deploy the <code>verafo-ai</code> edge function to unlock chat, analysis and AI
-              explanations.
-            </div>
-          )}
-        </section>
 
         <section className="card settings-section">
           <div className="settings-section-head">

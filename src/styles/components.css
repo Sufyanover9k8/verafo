@@ -240,21 +240,8 @@
 }
 .store-switcher select option { background: var(--v-ink-850); color: var(--v-ink-050); }
 
-.conn-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--v-ink-300);
-  background: color-mix(in srgb, var(--v-ink-800) 82%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-full);
-  padding: var(--s-1) var(--s-3);
-}
-.conn-pill .conn-dot {
+/* Live indicator dot (New Order verdict tag). */
+.conn-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -262,7 +249,6 @@
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--v-safe) 55%, transparent);
   animation: conn-pulse 2.4s var(--ease-in-out) infinite;
 }
-.conn-pill.warn .conn-dot { background: var(--v-watch); box-shadow: 0 0 0 0 color-mix(in srgb, var(--v-watch) 55%, transparent); }
 @keyframes conn-pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--v-safe) 55%, transparent); }
   70% { box-shadow: 0 0 0 6px transparent; }
@@ -1294,7 +1280,6 @@ code {
 .ai-title { display: inline-flex; align-items: center; gap: var(--s-1); font-weight: 700; font-size: 13.5px; color: var(--v-purple-300); }
 .ai-text { margin: var(--s-3) 0; color: var(--v-ink-300); font-size: var(--t-body-sm); line-height: 1.6; }
 .ai-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-.ai-hint { margin: var(--s-3) 0 0; color: var(--v-ink-400); font-size: var(--t-caption); }
 
 /* ────────────────────────────────────────────────────────────
    New Order / outcomes panel
@@ -2612,16 +2597,6 @@ code {
 }
 .switch.on { background: var(--v-purple-500); border-color: var(--v-purple-500); }
 .switch.on::after { transform: translateX(18px); background: #fff; }
-
-.conn-card { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; }
-.conn-avatar { width: 42px; height: 42px; border-radius: var(--r); display: grid; place-items: center; color: var(--v-purple-300); background: var(--accent-soft); flex: none; }
-.conn-meta { display: flex; flex-direction: column; }
-.conn-meta strong { font-size: 14px; color: var(--v-ink-050); }
-.conn-meta span { font-size: var(--t-caption); color: var(--v-ink-300); margin-top: 1px; }
-
-.about-brand { display: flex; align-items: center; gap: var(--s-3); }
-.about-brand h3 { font-size: var(--t-h2); font-weight: 600; color: var(--v-ink-050); }
-.about-brand p { color: var(--v-ink-300); font-size: var(--t-caption); margin-top: 2px; }
 
 /* ────────────────────────────────────────────────────────────
    Primitives
