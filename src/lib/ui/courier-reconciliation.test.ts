@@ -49,6 +49,17 @@ describe('courier reconciliation helpers', () => {
     expect(normalizeStoredOutcome('delivered')).toBeNull()
   })
 
+  it('tracks a resend across several courier reports', () => {
+    // Parcel refused, then re-sent and delivered: the stored outcome must be
+    // allowed to move in both directions. Only an identical result is a no-op.
+    expect(courierUpdateAction('refused', 'accepted')).toBe('update') // refused -> accepted
+    expect(courierUpdateAction('accepted', 'refused')).toBe('update') // accepted -> refused
+    expect(courierUpdateAction('refused', 'refused')).toBe('already') // second refusal: nothing to do
+    // While the re-sent parcel is travelling, nothing is written over the old
+    // outcome: a pending status never downgrades a resolved order.
+    expect(courierUpdateAction('pending', 'refused')).toBe('hold')
+  })
+
   it('only counts a row as an update when the database would actually change', () => {
     // The exact bug from the report: the preview promised three updates, then
     // applied nothing because the stored outcome already matched the report.

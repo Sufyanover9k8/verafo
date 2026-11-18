@@ -29,7 +29,7 @@ interface PreviewRow {
   source: CourierRow
   orderId: string | null
   orderLabel: string
-  action: 'change' | 'same' | 'hold' | 'create' | 'unmatched'
+  action: 'change' | 'same' | 'hold' | 'create' | 'ambiguous' | 'unmatched'
   next: 'accepted' | 'refused'
   stored: StoredOutcome
 }
@@ -68,7 +68,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
   const [createMissing, setCreateMissing] = useState(true)
 
   const counts = useMemo(() => {
-    const c = { change: 0, same: 0, hold: 0, create: 0, unmatched: 0 }
+    const c = { change: 0, same: 0, hold: 0, create: 0, ambiguous: 0, unmatched: 0 }
     for (const row of preview ?? []) c[row.action]++
     return c
   }, [preview])
@@ -180,7 +180,9 @@ export function CourierImport({ stores }: { stores: Store[] }) {
 
       const byReference = new Map<string, ExistingOrder>()
       const byTracking = new Map<string, ExistingOrder>()
-      const byPhone = new Map<string, ExistingOrder>()
+      // A buyer can have many orders, so phone is only usable when it points at
+      // exactly one of them. Guessing would attach a resend to the wrong parcel.
+      const byPhone = new Map<string, ExistingOrder[]>()
       for (const order of orders) {
         for (const candidate of [order.order_reference, order.shopify_order_id]) {
           const key = normalizeCourierReference(candidate)
@@ -189,14 +191,17 @@ export function CourierImport({ stores }: { stores: Store[] }) {
         const tracking = normalizeCourierReference(order.courier_tracking_number)
         if (tracking) byTracking.set(tracking, order)
         const phone = normalizeCourierPhone(order.buyer_phone)
-        if (phone) byPhone.set(phone, order)
+        if (phone) byPhone.set(phone, [...(byPhone.get(phone) ?? []), order])
       }
 
       const rows: PreviewRow[] = parsed.map((source) => {
+        const phoneMatches = source.phone
+          ? (byPhone.get(normalizeCourierPhone(source.phone)) ?? [])
+          : []
         const order =
           (source.reference && byReference.get(normalizeCourierReference(source.reference))) ||
           (source.trackingNumber && byTracking.get(normalizeCourierReference(source.trackingNumber))) ||
-          (source.phone && byPhone.get(normalizeCourierPhone(source.phone))) ||
+          (phoneMatches.length === 1 ? phoneMatches[0] : null) ||
           null
 
         // AI's reading wins when it has one; the rules are the fallback.
@@ -204,6 +209,19 @@ export function CourierImport({ stores }: { stores: Store[] }) {
         const outcome =
           verdicts[verdictKey(source.status, source.reason)] ??
           courierOutcome(source.status, source.reason)
+        if (!order && phoneMatches.length > 1 && outcome && outcome !== 'pending') {
+          // Several of this buyer's orders could be the one in the report, and
+          // no reference or tracking narrowed it down. Writing, or creating a
+          // new order, would both be wrong.
+          return {
+            source,
+            orderId: null,
+            orderLabel: `${phoneMatches.length} orders`,
+            action: 'ambiguous',
+            next: outcome === 'refused' ? 'refused' : 'accepted',
+            stored: null,
+          }
+        }
         if (!order) {
           // An order the merchant shipped but never logged in Verafo still has
           // value: its outcome tells the network this buyer accepted or refused.
@@ -390,6 +408,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
     same: 'text-muted-foreground',
     hold: 'text-muted-foreground',
     create: 'text-primary-text',
+    ambiguous: 'text-risk-watch-strong',
     unmatched: 'text-risk-watch-strong',
   }
 
@@ -471,7 +490,8 @@ export function CourierImport({ stores }: { stores: Store[] }) {
         <div className="import-result">
           <div className="result-banner ok">
             <CheckCircle2 size={16} /> {counts.change} will change · {counts.same} already match ·{' '}
-            {counts.hold} not final · {counts.create} new · {counts.unmatched} without a phone
+            {counts.hold} not final · {counts.create} new · {counts.ambiguous} unclear ·{' '}
+            {counts.unmatched} without a phone
             {imported != null ? ` · last run wrote ${imported}` : ''}
           </div>
 
@@ -508,7 +528,9 @@ export function CourierImport({ stores }: { stores: Store[] }) {
                               ? createMissing
                                 ? `add as ${row.next}`
                                 : 'skipped'
-                              : 'no phone, skipped'}
+                              : row.action === 'ambiguous'
+                                ? `matches ${row.orderLabel}`
+                                : 'no phone, skipped'}
                     </td>
                   </tr>
                 ))}
