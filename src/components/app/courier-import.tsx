@@ -13,6 +13,7 @@ import {
   type CourierRow,
   type StoredOutcome,
 } from '@/lib/ui/courier-reconciliation'
+import { canonicalPhone } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
 import type { Store } from '@/lib/types'
@@ -22,7 +23,7 @@ interface PreviewRow {
   source: CourierRow
   orderId: string | null
   orderLabel: string
-  action: 'change' | 'same' | 'hold' | 'unmatched'
+  action: 'change' | 'same' | 'hold' | 'create' | 'unmatched'
   next: 'accepted' | 'refused'
   stored: StoredOutcome
 }
@@ -55,9 +56,11 @@ export function CourierImport({ stores }: { stores: Store[] }) {
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [imported, setImported] = useState<number | null>(null)
+  /** Create orders for rows that match nothing, so their outcome still counts. */
+  const [createMissing, setCreateMissing] = useState(true)
 
   const counts = useMemo(() => {
-    const c = { change: 0, same: 0, hold: 0, unmatched: 0 }
+    const c = { change: 0, same: 0, hold: 0, create: 0, unmatched: 0 }
     for (const row of preview ?? []) c[row.action]++
     return c
   }, [preview])
@@ -174,11 +177,15 @@ export function CourierImport({ stores }: { stores: Store[] }) {
 
         const outcome = courierOutcome(source.status, source.reason)
         if (!order) {
+          // An order the merchant shipped but never logged in Verafo still has
+          // value: its outcome tells the network this buyer accepted or refused.
+          // It can be created, provided we have a phone to anchor the buyer on.
+          const canCreate = Boolean(source.phone) && outcome !== null && outcome !== 'pending'
           return {
             source,
             orderId: null,
             orderLabel: '-',
-            action: 'unmatched',
+            action: canCreate ? 'create' : 'unmatched',
             next: outcome === 'refused' ? 'refused' : 'accepted',
             stored: null,
           }
@@ -210,38 +217,61 @@ export function CourierImport({ stores }: { stores: Store[] }) {
   async function confirm() {
     if (!supabase || !preview) return
     const changes = preview.filter((row) => row.action === 'change' && row.orderId)
-    if (changes.length === 0) {
-      toast.push({ kind: 'info', title: 'Nothing to update', detail: 'Every matched order already has that outcome.' })
+    // Orders the merchant shipped but never logged still carry a real outcome.
+    // They are created so the buyer's history (and score) includes them.
+    const creates = createMissing
+      ? preview.filter((row) => row.action === 'create' && row.source.phone)
+      : []
+
+    if (changes.length === 0 && creates.length === 0) {
+      toast.push({
+        kind: 'info',
+        title: 'Nothing to update',
+        detail: 'Every matched order already has that outcome.',
+      })
       return
     }
+
     setBusy(true)
     try {
       const resolvedAt = new Date().toISOString()
-      const { error } = await supabase.from('outcomes').upsert(
-        changes.map((row) => ({
-          order_id: row.orderId,
-          status: row.next,
-          resolved_at: row.source.resolvedAt ?? resolvedAt,
-        })),
-        { onConflict: 'order_id' },
-      )
-      if (error) throw error
 
-      // Remember the courier's CN on the order, so the next report matches by
-      // tracking number even when the reference column changes.
-      const tracked = changes.filter((row) => row.source.trackingNumber && row.orderId)
-      for (const row of tracked) {
-        await supabase
-          .from('orders')
-          .update({ courier_tracking_number: row.source.trackingNumber })
-          .eq('id', row.orderId)
-          .is('courier_tracking_number', null)
+      if (changes.length > 0) {
+        const { error } = await supabase.from('outcomes').upsert(
+          changes.map((row) => ({
+            order_id: row.orderId,
+            status: row.next,
+            resolved_at: row.source.resolvedAt ?? resolvedAt,
+          })),
+          { onConflict: 'order_id' },
+        )
+        if (error) throw error
+
+        // Remember the courier's CN on the order, so the next report matches by
+        // tracking number even when the reference column changes.
+        const tracked = changes.filter((row) => row.source.trackingNumber && row.orderId)
+        for (const row of tracked) {
+          await supabase
+            .from('orders')
+            .update({ courier_tracking_number: row.source.trackingNumber })
+            .eq('id', row.orderId)
+            .is('courier_tracking_number', null)
+        }
       }
 
-      setImported(changes.length)
+      let created = 0
+      if (creates.length > 0) {
+        created = await createOrdersFromCourier(creates, resolvedAt)
+      }
+
+      setImported(changes.length + created)
+      const parts = [
+        changes.length > 0 ? `updated ${changes.length}` : null,
+        created > 0 ? `added ${created}` : null,
+      ].filter(Boolean)
       toast.push({
         kind: 'success',
-        title: `Updated ${changes.length} order${changes.length === 1 ? '' : 's'}`,
+        title: `Courier report applied: ${parts.join(', ')}`,
         detail: 'Buyer risk scores recomputed automatically.',
       })
       await buildPreview()
@@ -256,10 +286,82 @@ export function CourierImport({ stores }: { stores: Store[] }) {
     }
   }
 
+  /**
+   * Turn unmatched courier rows into orders, so an order the merchant shipped
+   * outside Verafo still contributes the buyer's outcome to the network.
+   *
+   * Idempotent: `import_ref` is derived from the courier's tracking/reference,
+   * and `(store_id, import_ref)` is unique, so re-importing the same report
+   * never duplicates the order.
+   */
+  async function createOrdersFromCourier(rows: PreviewRow[], fallbackDate: string): Promise<number> {
+    if (!supabase || !storeId) return 0
+
+    const byRef = new Map<string, PreviewRow>()
+    for (const row of rows) {
+      const key =
+        normalizeCourierReference(row.source.trackingNumber) ||
+        normalizeCourierReference(row.source.reference) ||
+        `${normalizeCourierPhone(row.source.phone)}-${(row.source.resolvedAt ?? fallbackDate).slice(0, 10)}`
+      if (!key) continue
+      if (!byRef.has(key)) byRef.set(key, row)
+    }
+    const unique = [...byRef.entries()]
+    if (unique.length === 0) return 0
+
+    const phones = [...new Set(unique.map(([, row]) => canonicalPhone(row.source.phone)))]
+    const { error: buyerErr } = await supabase
+      .from('buyers')
+      .upsert(
+        phones.map((phone) => ({ phone })),
+        { onConflict: 'phone', ignoreDuplicates: true },
+      )
+    if (buyerErr) throw buyerErr
+
+    const payload = unique.map(([key, row]) => ({
+      buyer_phone: canonicalPhone(row.source.phone),
+      store_id: storeId,
+      product_name: null,
+      product_category: null,
+      price: row.source.codAmount,
+      quantity: 1,
+      ordered_at: row.source.resolvedAt ?? fallbackDate,
+      order_reference: row.source.reference || null,
+      courier_tracking_number: row.source.trackingNumber || null,
+      import_ref: `courier:${key}`,
+    }))
+
+    const { data: inserted, error: orderErr } = await supabase
+      .from('orders')
+      .upsert(payload, { onConflict: 'store_id,import_ref', ignoreDuplicates: true })
+      .select('id, import_ref')
+    if (orderErr) throw orderErr
+
+    const created = (inserted ?? []) as { id: string; import_ref: string }[]
+    if (created.length === 0) return 0
+
+    const refToRow = new Map(unique.map(([key, row]) => [`courier:${key}`, row]))
+    const { error: outcomeErr } = await supabase.from('outcomes').upsert(
+      created.map((order) => {
+        const row = refToRow.get(order.import_ref)
+        return {
+          order_id: order.id,
+          status: row?.next ?? 'accepted',
+          resolved_at: row?.source.resolvedAt ?? fallbackDate,
+        }
+      }),
+      { onConflict: 'order_id' },
+    )
+    if (outcomeErr) throw outcomeErr
+
+    return created.length
+  }
+
   const tone: Record<PreviewRow['action'], string> = {
     change: 'text-foreground',
     same: 'text-muted-foreground',
     hold: 'text-muted-foreground',
+    create: 'text-primary-text',
     unmatched: 'text-risk-watch-strong',
   }
 
@@ -341,7 +443,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
         <div className="import-result">
           <div className="result-banner ok">
             <CheckCircle2 size={16} /> {counts.change} will change · {counts.same} already match ·{' '}
-            {counts.hold} not final · {counts.unmatched} unmatched
+            {counts.hold} not final · {counts.create} new · {counts.unmatched} without a phone
             {imported != null ? ` · last run wrote ${imported}` : ''}
           </div>
 
@@ -374,7 +476,11 @@ export function CourierImport({ stores }: { stores: Store[] }) {
                           ? 'already ' + row.stored
                           : row.action === 'hold'
                             ? 'not final'
-                            : 'no matching order'}
+                            : row.action === 'create'
+                              ? createMissing
+                                ? `add as ${row.next}`
+                                : 'skipped'
+                              : 'no phone, skipped'}
                     </td>
                   </tr>
                 ))}
@@ -382,14 +488,34 @@ export function CourierImport({ stores }: { stores: Store[] }) {
             </table>
           </div>
 
+          {counts.create > 0 && (
+            <label className="flex items-start gap-2 text-[13px] text-foreground">
+              <input
+                type="checkbox"
+                checked={createMissing}
+                onChange={(e) => setCreateMissing(e.target.checked)}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                Add {counts.create} order{counts.create === 1 ? '' : 's'} with no match.
+                <span className="block text-muted-foreground">
+                  You shipped these outside Verafo. Adding them counts the buyer&apos;s outcome, so
+                  their risk score is based on everything they did.
+                </span>
+              </span>
+            </label>
+          )}
+
           <div className="import-actions">
             <button
               className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[var(--cta-accent-bg)] px-5 text-[13px] font-semibold text-[var(--cta-accent-fg)] hover:bg-[var(--cta-accent-hover)] disabled:opacity-50"
               onClick={() => void confirm()}
-              disabled={busy || counts.change === 0}
+              disabled={busy || counts.change + (createMissing ? counts.create : 0) === 0}
             >
               {busy ? <Loader2 size={15} className="spin" /> : <CheckCircle2 size={15} />}
-              Apply {counts.change} outcome{counts.change === 1 ? '' : 's'}
+              {createMissing && counts.create > 0
+                ? `Apply ${counts.change} + add ${counts.create}`
+                : `Apply ${counts.change} outcome${counts.change === 1 ? '' : 's'}`}
             </button>
             <button
               className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground hover:bg-muted"
@@ -407,7 +533,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
 
           <p className="import-note">
             Matched against the most recent {MATCH_LIMIT.toLocaleString()} orders in that store.
-            Unmatched rows usually mean the order was never logged in Verafo.
+            Rows with no phone cannot be tied to a buyer, so they are skipped.
           </p>
         </div>
       )}
