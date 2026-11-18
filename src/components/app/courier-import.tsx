@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { CheckCircle2, FileSpreadsheet, Loader2, Sparkles, UploadCloud, XCircle } from 'lucide-react'
 import { parseCsv, sniffDelimiter, stripBom } from '@/lib/ui/import'
-import { mapColumnsWithAi } from '@/lib/ui/ai-column-map'
+import { mapCourierColumnsWithAi, type CourierField } from '@/lib/ui/ai-column-map'
 import {
   courierOutcome,
   courierUpdateAction,
@@ -50,7 +50,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
   const [headers, setHeaders] = useState<string[]>([])
   const [cells, setCells] = useState<string[][]>([])
   const [fileName, setFileName] = useState('')
-  const [aiMapping, setAiMapping] = useState<Partial<Record<string, string>>>({})
+  const [aiMapping, setAiMapping] = useState<Partial<Record<CourierField, string>>>({})
   const [aiBusy, setAiBusy] = useState(false)
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -93,7 +93,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
   async function detectWithAi() {
     if (headers.length === 0) return
     setAiBusy(true)
-    const result = await mapColumnsWithAi(headers, cells.slice(0, 5), 'courier')
+    const result = await mapCourierColumnsWithAi(headers, cells.slice(0, 5))
     setAiBusy(false)
     if (!result) {
       toast.push({

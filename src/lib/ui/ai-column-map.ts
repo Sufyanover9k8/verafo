@@ -1,44 +1,30 @@
 /* ============================================================
-   ui/ai-column-map.ts — "Import with AI": let the model pick the
-   columns.
+   ui/ai-column-map.ts — "Import with AI" for COURIER reports.
 
-   Vendors export wildly different sheets ("Vendor" vs "Store",
-   "CN Number" vs "Tracking", "Remarks" vs "Outcome"). The local
-   alias tables in import.ts / courier-reconciliation.ts cover the
-   common ones; this asks the verafo-ai edge function to map
-   whatever is left, using the header row *and* a few sample rows
-   so it can see the values, not just the names.
+   Courier companies each ship a different workbook ("Vendor" vs
+   "Store", "CN Number" vs "Tracking", "Remarks" vs "Outcome"). The
+   local alias table in courier-reconciliation.ts covers the common
+   ones; this asks the verafo-ai edge function to map whatever is
+   left, using the header row *and* a few sample rows so the model
+   can see the values, not just the names.
 
-   The result is only ever a mapping{canonicalField -> headerName};
-   the model never sees or writes the actual import.
+   The result is only ever a mapping{field -> headerName}; the model
+   never sees or writes the import itself.
    ============================================================ */
 
 import { functionsBaseUrl } from '../supabase'
+import type { CourierRow } from './courier-reconciliation'
 
-export type ColumnKind = 'orders' | 'courier'
+export type CourierField = keyof Omit<CourierRow, 'line'>
 
 export interface AiColumnMap {
-  mapping: Partial<Record<string, string>>
+  mapping: Partial<Record<CourierField, string>>
   /** Fields the model could not find a column for. */
   missing: string[]
 }
 
-/** Canonical fields each importer can use. */
-export const ORDER_FIELDS = [
-  'phone',
-  'store',
-  'product',
-  'category',
-  'price',
-  'quantity',
-  'address',
-  'city',
-  'ordered_at',
-  'outcome',
-  'resolved_at',
-] as const
-
-export const COURIER_FIELDS = [
+/** Canonical fields a courier report can provide. */
+export const COURIER_FIELDS: readonly CourierField[] = [
   'reference',
   'trackingNumber',
   'phone',
@@ -47,21 +33,16 @@ export const COURIER_FIELDS = [
   'reason',
   'codAmount',
   'resolvedAt',
-] as const
-
-export function fieldsFor(kind: ColumnKind): readonly string[] {
-  return kind === 'courier' ? COURIER_FIELDS : ORDER_FIELDS
-}
+]
 
 /**
- * Ask the edge function to map headers onto canonical fields.
- * Returns null when AI is unavailable (no function deployed, no OpenAI key,
- * offline) so the caller can fall back to manual mapping without breaking.
+ * Ask the edge function to map courier headers onto the fields the importer
+ * understands. Returns null when AI is unavailable (function not deployed, no
+ * OpenAI key, offline) so the caller can fall back to alias matching.
  */
-export async function mapColumnsWithAi(
+export async function mapCourierColumnsWithAi(
   headers: string[],
   sample: string[][],
-  kind: ColumnKind,
 ): Promise<AiColumnMap | null> {
   const base = functionsBaseUrl()
   if (!base || headers.length === 0) return null
@@ -72,30 +53,26 @@ export async function mapColumnsWithAi(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'map_columns',
-        kind,
+        kind: 'courier',
         headers: headers.slice(0, 40),
         sample: sample.slice(0, 5).map((row) => row.slice(0, 40)),
       }),
     })
     if (!res.ok) return null
 
-    const json = (await res.json()) as {
-      ok?: boolean
-      mapping?: Record<string, unknown>
-      missing?: unknown
-    }
+    const json = (await res.json()) as { ok?: boolean; mapping?: Record<string, unknown> }
     if (!json.ok || !json.mapping) return null
 
-    // Only accept header names that actually exist in this file — a model
-    // that hallucinates a column must not silently shift every value by one.
+    // Only accept header names that actually exist in this file — a model that
+    // hallucinates a column must not silently shift every value by one.
     const headerSet = new Set(headers)
-    const mapping: Record<string, string> = {}
-    for (const field of fieldsFor(kind)) {
+    const mapping: Partial<Record<CourierField, string>> = {}
+    for (const field of COURIER_FIELDS) {
       const header = json.mapping[field]
       if (typeof header === 'string' && headerSet.has(header)) mapping[field] = header
     }
 
-    const missing = fieldsFor(kind).filter((f) => !mapping[f])
+    const missing = COURIER_FIELDS.filter((f) => !mapping[f])
     return { mapping, missing }
   } catch {
     return null

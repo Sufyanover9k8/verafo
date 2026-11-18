@@ -210,13 +210,17 @@ Bulk Import has three purposes, in order of importance:
 3. **Order history CSV** — for platforms that are not Shopify. This one is
    expected to retire once `read_all_orders` lands.
 
-**Import with AI.** Both importers can ask the `verafo-ai` edge function
-(`action: "map_columns"`) to map unknown vendor columns onto the fields the
-importer understands. The model receives only the header row and up to five
-sample rows, and returns a `field → header` mapping; it never sees the data
-being imported. Suggestions are validated against the real header list, so a
-hallucinated column cannot silently shift values. If the function is
-unavailable, the importer falls back to its built-in alias tables.
+**Import with AI — courier reports only.** Courier workbooks differ from
+company to company, so the courier importer can ask the `verafo-ai` edge
+function (`action: "map_columns"`) to map unknown columns onto
+reference / tracking / phone / status / reason / amount / date. The model
+receives only the header row and up to five sample rows and returns a
+`field → header` mapping; it never sees the data being imported. Suggestions are
+validated against the real header list, so a hallucinated column cannot silently
+shift values. If the function is unavailable, the importer falls back to its
+built-in alias tables. The order-history CSV deliberately has no AI step: it uses
+the fixed template columns and is expected to retire once `read_all_orders`
+lands.
 
 **CSV import** (`/import`) is idempotent: every row gets a stable `import_ref`and `orders (store_id, import_ref)` is unique, so re-uploading the same file
 skips rows instead of duplicating them. The parser handles `;`/tab delimited
