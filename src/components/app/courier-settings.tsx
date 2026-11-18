@@ -26,7 +26,7 @@ interface Props {
  * Which courier and which of its APIs the merchant uses.
  *
  * This is deliberately a NON-SECRET record: a provider name and an API label.
- * Credentials never live here — when the direct API integration ships, keys go
+ * Credentials never live here. When the direct API integration ships, keys go
  * into Supabase secrets, not into a row the browser can read.
  */
 export function CourierSettings({ stores, storeId }: Props) {
@@ -94,7 +94,7 @@ export function CourierSettings({ stores, storeId }: Props) {
     toast.push({
       kind: 'success',
       title: 'Courier saved',
-      detail: 'No credentials are stored — only which courier and API you use.',
+      detail: 'No credentials are stored, just which courier and API you use.',
     })
   }
 
@@ -107,9 +107,9 @@ export function CourierSettings({ stores, storeId }: Props) {
         <span className="prompt-hint">coming soon</span>
       </div>
       <p className="import-note">
-        Tell us which courier you use and which of its APIs we should call. We are building direct
-        courier pulls — once they ship, Verafo will fetch delivery status on its own instead of you
-        uploading reports. You can record the choice now; <strong>no API key or secret is stored here</strong>.
+        Tell us which courier you use and which of its APIs we should call. Soon Verafo will fetch
+        delivery status on its own, so you no longer upload reports. You can save the choice now.
+        <strong> No API key or secret is stored here.</strong>
       </p>
 
       <div className="gen-grid">

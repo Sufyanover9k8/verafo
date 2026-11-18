@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { CheckCircle2, FileSpreadsheet, Loader2, Sparkles, UploadCloud, XCircle } from 'lucide-react'
 import { parseCsv, sniffDelimiter, stripBom } from '@/lib/ui/import'
@@ -61,6 +61,12 @@ export function CourierImport({ stores }: { stores: Store[] }) {
     for (const row of preview ?? []) c[row.action]++
     return c
   }, [preview])
+
+  // The store list can arrive after mount, and with the picker hidden on a
+  // single-store account there would be no way to fill an empty store id.
+  useEffect(() => {
+    if (!storeId && stores.length === 1) setStoreId(stores[0].id)
+  }, [stores, storeId])
 
   async function readFile(file: File) {
     setImported(null)
@@ -171,7 +177,7 @@ export function CourierImport({ stores }: { stores: Store[] }) {
           return {
             source,
             orderId: null,
-            orderLabel: '—',
+            orderLabel: '-',
             action: 'unmatched',
             next: outcome === 'refused' ? 'refused' : 'accepted',
             stored: null,
@@ -266,23 +272,11 @@ export function CourierImport({ stores }: { stores: Store[] }) {
         <span className="prompt-hint">sets outcomes for dispatched orders</span>
       </div>
       <p className="import-note">
-        Upload the report your courier gives you (CSV or Excel). Verafo matches each row to an
-        existing order by reference, then tracking number, then phone — and writes the delivery
-        outcome. Rows without a final status (in transit, undelivered, attempted) are never written.
+        Upload the report from your courier. Verafo finds each order and saves what happened to it.
+        Orders still in transit are skipped.
       </p>
 
       <div className="gen-grid">
-        <label className="field">
-          <span className="field-label">Store</span>
-          <select value={storeId} onChange={(e) => setStoreId(e.target.value)}>
-            <option value="">{stores.length === 0 ? 'No stores yet' : 'Select a store…'}</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
         <label className="field">
           <span className="field-label">Courier report</span>
           <input
@@ -296,7 +290,24 @@ export function CourierImport({ stores }: { stores: Store[] }) {
             }}
           />
         </label>
+        {/* A merchant has one store, so there is nothing to choose. Only an
+            admin, who can see several, gets the picker. */}
+        {stores.length > 1 && (
+          <label className="field">
+            <span className="field-label">Store</span>
+            <select value={storeId} onChange={(e) => setStoreId(e.target.value)}>
+              <option value="">Select a store…</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+
+      {stores.length === 0 && <p className="import-note">Add a store first.</p>}
 
       {headers.length > 0 && (
         <>
@@ -351,10 +362,10 @@ export function CourierImport({ stores }: { stores: Store[] }) {
                 {preview.slice(0, 12).map((row) => (
                   <tr key={row.source.line} className={row.action === 'unmatched' ? 'row-bad' : ''}>
                     <td>{row.source.line}</td>
-                    <td>{row.source.reference || '—'}</td>
-                    <td>{row.source.trackingNumber || '—'}</td>
-                    <td>{row.source.phone || '—'}</td>
-                    <td>{row.source.status || '—'}</td>
+                    <td>{row.source.reference || '-'}</td>
+                    <td>{row.source.trackingNumber || '-'}</td>
+                    <td>{row.source.phone || '-'}</td>
+                    <td>{row.source.status || '-'}</td>
                     <td>{row.stored ?? 'none'}</td>
                     <td className={tone[row.action]}>
                       {row.action === 'change'
