@@ -336,3 +336,22 @@ Supabase's per-address rate limits are the only brake. Before advertising the
 sign-up page widely, enable Captcha in Supabase (Authentication → Attack
 Protection) and pass `options.captchaToken` from the sign-up form.
 
+
+
+## 7. Account deletion
+
+Settings → Danger zone → **Delete account** calls the `delete_my_account()`
+function (`supabase/account-deletion.sql`) after the merchant types their store
+name. It runs with `security definer` and only ever touches rows matching the
+caller's JWT email, so it cannot be pointed at another tenant.
+
+Deleted: stores, orders, outcomes, order-scoped side tables, courier and call
+settings, Shopify sync state, `shop_rules` / `cod_events` for the shop domain,
+lookups, chats, notifications, the admin allow-list row, and finally the
+`auth.users` row (which cascades to identities and sessions).
+
+**Kept on purpose: `public.buyers`.** Buyer rows are the system-wide risk layer
+(aggregates, feature vector, embedding). There is no DELETE trigger on `orders`,
+so removing a merchant's history does not recompute or erase anyone else's
+buyer scores. A departing merchant must not degrade every other store's
+intelligence.

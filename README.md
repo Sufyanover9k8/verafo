@@ -74,6 +74,7 @@ Display and analytics logic that is pure, tested, and has no database access:
    - `supabase/import-hardening.sql` — idempotent imports, canonical phone
      numbers, buyer write lockdown, Shopify backfill state
    - `supabase/courier-settings.sql` — which courier/API a store uses (no secrets)
+   - `supabase/account-deletion.sql` — self-service account deletion (`delete_my_account()`)
    - `supabase/rls-production.sql` — **edit the admin email list at the top first**
    - `supabase/store-plans-migration.sql` (optional; only if you use the plan badge)
    - `supabase/shopify-migration.sql` (only if you use the Shopify integration)

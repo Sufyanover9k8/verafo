@@ -1,12 +1,14 @@
 import type { CSSProperties, ComponentType, SVGProps } from 'react'
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   AtSign,
   BarChart3,
   Building2,
   Calendar,
   Check,
+  ChevronDown,
   CheckCheck,
   CheckCircle2,
   ClipboardList,
@@ -69,6 +71,8 @@ interface IconEntry {
 const CANONICAL: Record<string, IconEntry> = {
   add: { cmp: Plus },
   'alert-circle': { cmp: AlertCircle, aliases: ['information-circle', 'information-circle-outline'] },
+  warning: { cmp: AlertTriangle, aliases: ['alert-triangle'] },
+  'chevron-down': { cmp: ChevronDown },
   'arrow-forward': { cmp: ArrowRight },
   at: { cmp: AtSign },
   'bag-handle': { cmp: ShoppingBag },

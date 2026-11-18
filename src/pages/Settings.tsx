@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { CardState } from '../components/app/card-state'
 import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
@@ -7,6 +8,7 @@ import { NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
 import { isConfigured, supabase } from '../lib/supabase'
+import { LOGIN_PATH } from '../lib/ui/auth-redirect'
 import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
 import { useToast } from '../lib/toast'
@@ -33,6 +35,7 @@ function csv(rows: Record<string, unknown>[]): string {
 
 export function Settings() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { admin } = useIsAdmin()
   const { store } = useStoreScope()
   const { displayName, user } = useSession()
@@ -41,6 +44,9 @@ export function Settings() {
   const [clearing, setClearing] = useState(false)
   const [ready, setReady] = useState(false)
   const [buyerCount, setBuyerCount] = useState<number | null>(null)
+  const [dangerOpen, setDangerOpen] = useState(false)
+  const [confirmName, setConfirmName] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [name, setName] = useState<string>(displayName)
   const [savingName, setSavingName] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -177,6 +183,37 @@ export function Settings() {
       setClearing(false)
     }
   }, [toast])
+
+  /**
+   * What the merchant must type to confirm. Their store name is the most
+   * meaningful thing to get right; if they have no store (network admin), the
+   * account email stands in.
+   */
+  const confirmWord = store?.name?.trim() || user?.email || ''
+
+  const deleteAccount = useCallback(async () => {
+    if (!supabase) return
+    setDeleting(true)
+    try {
+      const { error } = await supabase.rpc('delete_my_account')
+      if (error) throw error
+      toast.push({
+        kind: 'success',
+        title: 'Account deleted',
+        detail: 'Your stores and data were removed. Buyer risk history was kept.',
+      })
+      // The auth user no longer exists, so the session is already invalid.
+      await supabase.auth.signOut().catch(() => undefined)
+      navigate(LOGIN_PATH, { replace: true })
+    } catch (err) {
+      setDeleting(false)
+      toast.push({
+        kind: 'error',
+        title: 'Could not delete the account',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }, [navigate, toast])
 
   const saveName = async (e: FormEvent) => {
     e.preventDefault()
@@ -424,29 +461,43 @@ export function Settings() {
           </div>
         </section>
 
-        <section className="card settings-section">
-          <div className="settings-section-head">
-            <span className="kpi-icon orange">
-              <Icon name="trash" size={16} />
-            </span>
-            <span className="eyebrow">Activity</span>
-          </div>
-          <div className="settings-rows">
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Clear your lookup history</div>
-                <div className="setting-desc">
-                  Remove your recent searches from the Buyer Lookup page. This only clears
-                  your own history — it doesn't affect other people on your team.
-                </div>
-              </div>
-              <button className="btn btn-refuse btn-sm" disabled={clearing} onClick={() => void clearLookups()}>
-                {clearing ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="trash-outline" size={14} />}
-                Clear history
-              </button>
+        {admin && (
+          <section className="card settings-section">
+            <div className="settings-section-head">
+              <span className="kpi-icon safe">
+                <Icon name="cloud-upload" size={16} />
+              </span>
+              <span className="eyebrow">Data</span>
             </div>
-          </div>
-        </section>
+            <div className="settings-rows">
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Export buyers</div>
+                  <div className="setting-desc">
+                    Download all {buyerCount ?? '…'} buyer profiles as a CSV.
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportBuyers()}>
+                  {exporting === 'buyers' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
+                  Export CSV
+                </button>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Export orders</div>
+                  <div className="setting-desc">
+                    Download up to 2000 orders (with store and outcome) as a CSV.
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" disabled={exporting !== null} onClick={() => void exportOrders()}>
+                  {exporting === 'orders' ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="download-outline" size={14} />}
+                  Export CSV
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {admin && (
           <section className="card settings-section">
@@ -487,26 +538,72 @@ export function Settings() {
         )}
 
         <section className="card settings-section">
-          <div className="settings-section-head">
+          <button
+            type="button"
+            className="settings-section-head w-full text-left"
+            aria-expanded={dangerOpen}
+            aria-controls="danger-zone"
+            onClick={() => setDangerOpen((v) => !v)}
+          >
             <span className="kpi-icon amber">
-              <Icon name="log-out" size={16} />
+              <Icon name="warning" size={16} />
             </span>
-            <span className="eyebrow">Account</span>
-          </div>
-          <div className="settings-rows">
-            <div className="setting-row">
-              <div className="setting-info">
-                <div className="setting-title">Sign out</div>
-                <div className="setting-desc">Log out of your Verafo account on this device.</div>
+            <span className="eyebrow">Danger zone</span>
+            <Icon
+              name="chevron-down"
+              size={16}
+              className={`ms-auto text-muted-foreground transition-transform ${dangerOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {dangerOpen && (
+            <div id="danger-zone" className="settings-rows">
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Clear lookup history</div>
+                  <div className="setting-desc">
+                    Remove your recent searches from the Buyer Lookup page. Only your own history
+                    is cleared; buyers and their risk scores are untouched.
+                  </div>
+                </div>
+                <button className="btn btn-refuse btn-sm" disabled={clearing} onClick={() => void clearLookups()}>
+                  {clearing ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="trash-outline" size={14} />}
+                  Clear history
+                </button>
               </div>
-              <button
-                className="btn btn-refuse btn-sm"
-                onClick={() => void supabase?.auth.signOut()}
-              >
-                <Icon name="log-out-outline" size={14} /> Sign out
-              </button>
+
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Delete account</div>
+                  <div className="setting-desc">
+                    Permanently removes your stores, orders and outcomes, courier and call
+                    settings, Shopify sync state, lookup history, chats and notifications. Buyer
+                    risk history stays in Verafo, because it protects every other store too.
+                    This cannot be undone.
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={confirmName}
+                      onChange={(e) => setConfirmName(e.target.value)}
+                      placeholder={`Type ${confirmWord} to confirm`}
+                      aria-label={`Type ${confirmWord} to confirm account deletion`}
+                      className="h-9 w-64 rounded-[10px] border border-border bg-card px-3 text-[13px]"
+                      autoComplete="off"
+                    />
+                    <button
+                      className="btn btn-refuse btn-sm"
+                      disabled={deleting || !confirmWord || confirmName.trim().toLowerCase() !== confirmWord.trim().toLowerCase()}
+                      onClick={() => void deleteAccount()}
+                    >
+                      {deleting ? <Icon name="refresh-outline" size={14} className="spin" /> : <Icon name="trash-outline" size={14} />}
+                      Delete account
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </section>
       </div>
     </div>
