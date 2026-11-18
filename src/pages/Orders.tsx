@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Phone } from 'lucide-react'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
@@ -285,23 +286,46 @@ export function Orders() {
       render: (o) => {
         const s = (o.outcomes?.status ?? 'pending') as OutcomeStatus
         if (s !== 'pending') return <span className="text-[13px] text-muted-foreground">—</span>
+        const busy = working === o.id
         return (
-          <span className="flex flex-wrap justify-end gap-2">
+          <span className="flex items-center justify-end gap-2 whitespace-nowrap">
+            {/* The decision. Deliberately the biggest target in the row. */}
             <button
               type="button"
-              className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-border px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"
-              disabled={working === o.id}
+              className="inline-flex h-10 min-w-[104px] items-center justify-center gap-1.5 rounded-full bg-[var(--cta-bg)] px-4 text-[13px] font-semibold text-[var(--cta-fg)] transition-colors hover:bg-[var(--cta-bg-hover)] disabled:opacity-60"
+              disabled={busy}
               onClick={() => void mark(o, 'accepted')}
+              aria-label={`Mark ${phone(o.buyer_phone)} as accepted`}
             >
-              {working === o.id ? <Icon name="refresh" size={14} className="spin" /> : <Icon name="check" size={14} />} Accept
+              {busy ? (
+                <Icon name="refresh" size={15} className="spin" />
+              ) : (
+                <Icon name="check" size={15} />
+              )}
+              Accept
             </button>
+
+            {/* Placeholder: calling is not wired up yet, so it does nothing. */}
             <button
               type="button"
-              className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-risk-high/40 px-3 text-[13px] font-semibold text-risk-high-strong transition-colors hover:bg-risk-high-soft md:h-9"
-              disabled={working === o.id}
-              onClick={() => void mark(o, 'refused')}
+              className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+              disabled={busy}
+              title="Call buyer — not available yet"
+              aria-label={`Call ${phone(o.buyer_phone)} (not available yet)`}
             >
-              {working === o.id ? <Icon name="refresh" size={14} className="spin" /> : <Icon name="close" size={14} />} Refuse
+              <Phone size={15} strokeWidth={2} />
+            </button>
+
+            {/* Refuse is just an X — the tooltip and aria-label carry the word. */}
+            <button
+              type="button"
+              className="inline-flex size-10 items-center justify-center rounded-full border border-risk-high/40 bg-card text-risk-high-strong transition-colors hover:bg-risk-high-soft disabled:opacity-60"
+              disabled={busy}
+              onClick={() => void mark(o, 'refused')}
+              title="Refuse this order"
+              aria-label={`Mark ${phone(o.buyer_phone)} as refused`}
+            >
+              <Icon name="close" size={16} />
             </button>
           </span>
         )
