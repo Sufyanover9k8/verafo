@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { CheckCircle2, FileSpreadsheet, Loader2, Sparkles, UploadCloud, XCircle } from 'lucide-react'
 import { parseCsv, sniffDelimiter, stripBom } from '@/lib/ui/import'
-import { mapCourierColumnsWithAi, type CourierField } from '@/lib/ui/ai-column-map'
+import {
+  classifyCourierOutcomes,
+  mapCourierColumnsWithAi,
+  verdictKey,
+  type CourierField,
+  type CourierVerdict,
+} from '@/lib/ui/ai-column-map'
 import {
   courierOutcome,
   courierUpdateAction,
@@ -52,6 +58,8 @@ export function CourierImport({ stores }: { stores: Store[] }) {
   const [cells, setCells] = useState<string[][]>([])
   const [fileName, setFileName] = useState('')
   const [aiMapping, setAiMapping] = useState<Partial<Record<CourierField, string>>>({})
+  /** Outcome the AI read for each distinct status/reason pair. */
+  const [aiOutcomes, setAiOutcomes] = useState<Record<string, CourierVerdict>>({})
   const [aiBusy, setAiBusy] = useState(false)
   const [preview, setPreview] = useState<PreviewRow[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -103,8 +111,8 @@ export function CourierImport({ stores }: { stores: Store[] }) {
     if (headers.length === 0) return
     setAiBusy(true)
     const result = await mapCourierColumnsWithAi(headers, cells.slice(0, 5))
-    setAiBusy(false)
     if (!result) {
+      setAiBusy(false)
       toast.push({
         kind: 'error',
         title: 'AI mapping unavailable',
@@ -113,16 +121,29 @@ export function CourierImport({ stores }: { stores: Store[] }) {
       return
     }
     setAiMapping(result.mapping)
+
+    // Once the columns are known, ask what the statuses actually mean. Couriers
+    // word the same event differently, so this is where "UnDelivered" stops
+    // depending on a hard-coded guess.
+    const parsed = parseCourierRows(headers, cells, result.mapping)
+    const verdicts = await classifyCourierOutcomes(
+      parsed.map((row) => ({ status: row.status, reason: row.reason })),
+    )
+    setAiBusy(false)
+    if (verdicts) setAiOutcomes(verdicts)
+
     toast.push({
       kind: 'success',
       title: 'Columns detected',
-      detail: `${Object.keys(result.mapping).length} of ${Object.keys(result.mapping).length + result.missing.length} fields mapped by AI.`,
+      detail: verdicts
+        ? `${Object.keys(result.mapping).length} fields mapped, ${Object.keys(verdicts).length} courier statuses classified by AI.`
+        : `${Object.keys(result.mapping).length} fields mapped. Statuses will use the built-in rules.`,
     })
     // Detection only exists to feed the preview, so continue straight into it
-    // instead of asking for a second click. The mapping is passed explicitly
-    // because the state update above has not re-rendered yet.
+    // instead of asking for a second click. Both results are passed explicitly
+    // because the state updates above have not re-rendered yet.
     if (storeId) {
-      await buildPreview(result.mapping)
+      await buildPreview(result.mapping, verdicts ?? undefined)
     } else {
       toast.push({
         kind: 'info',
@@ -132,7 +153,10 @@ export function CourierImport({ stores }: { stores: Store[] }) {
     }
   }
 
-  async function buildPreview(mappingOverride?: Partial<Record<CourierField, string>>) {
+  async function buildPreview(
+    mappingOverride?: Partial<Record<CourierField, string>>,
+    outcomesOverride?: Record<string, CourierVerdict>,
+  ) {
     if (!supabase) return
     if (!storeId) {
       toast.push({ kind: 'error', title: 'Pick a store', detail: 'Courier rows are matched against one store.' })
@@ -175,7 +199,11 @@ export function CourierImport({ stores }: { stores: Store[] }) {
           (source.phone && byPhone.get(normalizeCourierPhone(source.phone))) ||
           null
 
-        const outcome = courierOutcome(source.status, source.reason)
+        // AI's reading wins when it has one; the rules are the fallback.
+        const verdicts = outcomesOverride ?? aiOutcomes
+        const outcome =
+          verdicts[verdictKey(source.status, source.reason)] ??
+          courierOutcome(source.status, source.reason)
         if (!order) {
           // An order the merchant shipped but never logged in Verafo still has
           // value: its outcome tells the network this buyer accepted or refused.
@@ -535,6 +563,12 @@ export function CourierImport({ stores }: { stores: Store[] }) {
             Matched against the most recent {MATCH_LIMIT.toLocaleString()} orders in that store.
             Rows with no phone cannot be tied to a buyer, so they are skipped.
           </p>
+          {Object.keys(aiOutcomes).length > 0 && (
+            <p className="import-note">
+              Outcomes read by AI for {Object.keys(aiOutcomes).length} courier status
+              {Object.keys(aiOutcomes).length === 1 ? '' : 'es'}. Parcels still moving stay pending.
+            </p>
+          )}
         </div>
       )}
     </div>

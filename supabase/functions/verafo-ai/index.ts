@@ -2727,6 +2727,69 @@ const supabase = createClient(
       return json({ ok: true, mapping, parsed_fields: Object.keys(fields).length, ...(body.debug === true ? { debug: rawText.slice(0, 400) } : {}) });
     }
 
+    /**
+     * Decide what a courier's status text means. Couriers word the same event
+     * differently ("UnDelivered", "CN Return", "RTO"), and a status alone is
+     * often ambiguous without the reason column. The model classifies each
+     * distinct pair as accepted / refused / pending; pending means "keep
+     * moving, no outcome yet" and is never written.
+     */
+    if (action === "classify_courier_status") {
+      const input = (Array.isArray(body.items) ? body.items : [])
+        .slice(0, 60)
+        .map((item: unknown) => {
+          const row = (item ?? {}) as Record<string, unknown>;
+          return {
+            status: String(row.status ?? "").slice(0, 120),
+            reason: String(row.reason ?? "").slice(0, 160),
+          };
+        })
+        .filter((item: { status: string; reason: string }) => item.status || item.reason);
+
+      if (input.length === 0) return json({ error: "items are required" }, 400);
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You classify courier delivery statuses for Pakistani cash-on-delivery e-commerce. " +
+              "Reply with JSON only: {\"results\": [{\"index\": <number>, \"outcome\": \"accepted\"|\"refused\"|\"pending\"}]}. " +
+              "accepted = the parcel reached the customer and was taken. " +
+              "refused = the sale is over without payment: customer refused, returned, RTO, CN return, " +
+              "'UnDelivered', not delivered, or address/contact failures that end in return. " +
+              "pending = still moving with no outcome yet: booked, picked up, in transit, out for delivery, " +
+              "delivery attempted today, moved to a branch or hub. " +
+              "Judge from the status and the reason together. One entry per input index.",
+          },
+          { role: "user", content: JSON.stringify({ items: input }) },
+        ],
+      });
+
+      let parsed: { results?: unknown } = {};
+      try {
+        parsed = JSON.parse(response.choices[0]?.message?.content ?? "{}");
+      } catch {
+        parsed = {};
+      }
+
+      const allowed = new Set(["accepted", "refused", "pending"]);
+      const results: { status: string; reason: string; outcome: string }[] = [];
+      const list = Array.isArray(parsed.results) ? parsed.results : [];
+      for (const entry of list) {
+        const row = (entry ?? {}) as Record<string, unknown>;
+        const index = Number(row.index);
+        const outcome = String(row.outcome ?? "").toLowerCase();
+        if (!Number.isInteger(index) || index < 0 || index >= input.length) continue;
+        if (!allowed.has(outcome)) continue;
+        results.push({ ...input[index], outcome });
+      }
+      return json({ ok: true, results });
+    }
+
     if (action === "embed") {
       const stats = await fetchStats(supabase, phone, storeIds);
       const fv = await buildFeatureVector(supabase, phone, storeIds);

@@ -55,6 +55,7 @@ function key(value: unknown): string {
 
 const ALIASES: Record<string, keyof Omit<CourierRow, 'line'>> = {
   orderid: 'reference', orderreference: 'reference', orderref: 'reference', merchantorderid: 'reference',
+  ref: 'reference', bookingref: 'reference', customerref: 'reference',
   shopifyordernumber: 'reference', ordernumber: 'reference',
   cn: 'trackingNumber', cnno: 'trackingNumber', cnnumber: 'trackingNumber', tracking: 'trackingNumber',
   trackingid: 'trackingNumber', trackingnumber: 'trackingNumber', consignmentno: 'trackingNumber',
@@ -119,12 +120,25 @@ export function normalizeCourierReference(value: unknown): string {
   return String(value ?? '').trim().toLowerCase().replace(/^#\s*/, '').replace(/[^a-z0-9]/g, '')
 }
 
-/** Only final, confident delivery states are applied automatically. */
+/**
+ * Fallback rules, used when the AI has not classified a status.
+ *
+ * In Pakistan "UnDelivered" is the courier's word for a shipment that came
+ * back, not one still moving, so it counts as refused. Genuinely in-flight
+ * states (out for delivery, in transit, moved to branch, delivery attempted)
+ * stay pending and are never written.
+ */
 export function courierOutcome(status: string, reason = ''): CourierOutcome {
   const s = `${status} ${reason}`.trim().toLowerCase().replace(/[_-]+/g, ' ')
   if (!s) return null
   if (/\b(delivered|successfully delivered|delivered to consignee|received by customer)\b/.test(s)) return 'accepted'
-  if (/\b(customer refused|refused to receive|refused|rto|returned to shipper|returned to origin|return to origin|returned to sender|undeliverable)\b/.test(s)) return 'refused'
-  // Generic UnDelivered, attempted, moved to branch, and in-transit states are not final.
+  if (
+    /\b(customer refused|refused to receive|refused|rto|return|returned|returning|returned to shipper|returned to origin|return to origin|returned to sender|undeliverable|undelivered|not delivered)\b/.test(
+      s,
+    )
+  ) {
+    return 'refused'
+  }
+  // Out for delivery, in transit, moved to branch, delivery attempted: no outcome yet.
   return 'pending'
 }

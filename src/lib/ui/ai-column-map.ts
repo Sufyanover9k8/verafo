@@ -78,3 +78,63 @@ export async function mapCourierColumnsWithAi(
     return null
   }
 }
+
+export type CourierVerdict = 'accepted' | 'refused' | 'pending'
+
+/** Stable key for one status/reason pair. */
+export function verdictKey(status: string, reason = ''): string {
+  return `${status}`.trim().toLowerCase() + '|' + `${reason}`.trim().toLowerCase()
+}
+
+/**
+ * Ask the model what each distinct courier status means.
+ *
+ * Couriers use their own vocabulary for the same event, and a status like
+ * "UnDelivered" is ambiguous without the reason. The answer is only ever
+ * accepted / refused / pending; `pending` means "keep moving, write nothing".
+ * Returns null when the function is unavailable, so the caller keeps the
+ * built-in rules.
+ */
+export async function classifyCourierOutcomes(
+  items: { status: string; reason: string }[],
+): Promise<Record<string, CourierVerdict> | null> {
+  const base = functionsBaseUrl()
+  if (!base || items.length === 0) return null
+
+  // Only distinct pairs matter: a 5,000-row report usually has a dozen.
+  const unique = new Map<string, { status: string; reason: string }>()
+  for (const item of items) {
+    if (!item.status && !item.reason) continue
+    const key = verdictKey(item.status, item.reason)
+    if (!unique.has(key)) unique.set(key, item)
+  }
+  if (unique.size === 0) return null
+
+  try {
+    const res = await fetch(`${base}/verafo-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'classify_courier_status',
+        items: [...unique.values()].slice(0, 60),
+      }),
+    })
+    if (!res.ok) return null
+
+    const json = (await res.json()) as {
+      ok?: boolean
+      results?: { status?: string; reason?: string; outcome?: string }[]
+    }
+    if (!json.ok || !Array.isArray(json.results)) return null
+
+    const out: Record<string, CourierVerdict> = {}
+    for (const row of json.results) {
+      const outcome = String(row.outcome ?? '').toLowerCase()
+      if (outcome !== 'accepted' && outcome !== 'refused' && outcome !== 'pending') continue
+      out[verdictKey(row.status ?? '', row.reason ?? '')] = outcome
+    }
+    return Object.keys(out).length > 0 ? out : null
+  } catch {
+    return null
+  }
+}

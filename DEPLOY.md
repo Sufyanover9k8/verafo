@@ -212,15 +212,23 @@ Bulk Import has three purposes, in order of importance:
 
 **Import with AI — courier reports only.** Courier workbooks differ from
 company to company, so the courier importer can ask the `verafo-ai` edge
-function (`action: "map_columns"`) to map unknown columns onto
-reference / tracking / phone / status / reason / amount / date. The model
-receives only the header row and up to five sample rows and returns a
-`field → header` mapping; it never sees the data being imported. Suggestions are
-validated against the real header list, so a hallucinated column cannot silently
-shift values. If the function is unavailable, the importer falls back to its
-built-in alias tables. The order-history CSV deliberately has no AI step: it uses
-the fixed template columns and is expected to retire once `read_all_orders`
-lands.
+function to do two things in one pass:
+
+- `action: "map_columns"` maps unknown columns onto
+  reference / tracking / phone / status / reason / amount / date. The model
+  receives only the header row and up to five sample rows and returns a
+  `field → header` mapping; suggestions are validated against the real header
+  list, so a hallucinated column cannot silently shift values.
+- `action: "classify_courier_status"` reads each distinct status/reason pair and
+  returns `accepted`, `refused` or `pending`. This matters because couriers use
+  their own vocabulary for the same event, and because in Pakistan
+  "UnDelivered" means the parcel came back (refused) rather than still moving.
+  Statuses that are still in the network (in transit, out for delivery, moved to
+  a branch, attempted today) come back as `pending` and are never written.
+
+Both fall back to the built-in alias table and rules when the function is
+unavailable. The order-history CSV deliberately has no AI step: it uses the
+fixed template columns and is expected to retire once `read_all_orders` lands.
 
 **CSV import** (`/import`) is idempotent: every row gets a stable `import_ref`and `orders (store_id, import_ref)` is unique, so re-uploading the same file
 skips rows instead of duplicating them. The parser handles `;`/tab delimited

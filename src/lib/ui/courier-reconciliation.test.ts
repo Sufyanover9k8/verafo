@@ -32,8 +32,13 @@ describe('courier reconciliation helpers', () => {
   it('maps only clear final outcomes automatically', () => {
     expect(courierOutcome('Delivered')).toBe('accepted')
     expect(courierOutcome('Returned to shipper')).toBe('refused')
-    expect(courierOutcome('UnDelivered', 'CUSTOMER NOT AVAILABLE')).toBe('pending')
+    // Pakistani couriers use "UnDelivered" for a shipment that came back.
+    expect(courierOutcome('UnDelivered', 'CUSTOMER NOT AVAILABLE')).toBe('refused')
+    expect(courierOutcome('Undelivered - Attempted')).toBe('refused')
+    // Still on the road or in a branch: no outcome yet.
     expect(courierOutcome('MOVED to ORIGIN BRANCH')).toBe('pending')
+    expect(courierOutcome('Out for Delivery')).toBe('pending')
+    expect(courierOutcome('In Transit')).toBe('pending')
   })
 
   it('reads a stored outcome defensively', () => {
@@ -76,8 +81,8 @@ describe('courier reconciliation helpers', () => {
     const actions = parsed.map((row) =>
       courierUpdateAction(courierOutcome(row.status, row.reason), null),
     )
-    // Only the two final outcomes are written; transit and "undelivered" hold.
-    expect(actions).toEqual(['update', 'update', 'hold', 'hold'])
+    // Delivered → accepted, refused → refused, in transit → hold, UnDelivered → refused.
+    expect(actions).toEqual(['update', 'update', 'hold', 'update'])
   })
 
   it('maps a courier report through AI-chosen columns', () => {
