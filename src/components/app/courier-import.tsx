@@ -260,6 +260,28 @@ export function CourierImport({ stores }: { stores: Store[] }) {
     }
   }
 
+  /** Upsert phone -> name for the rows that actually carry a name. */
+  async function saveBuyerNames(rows: PreviewRow[]) {
+    if (!supabase) return
+    const byPhone = new Map<string, string>()
+    for (const row of rows) {
+      const name = row.source.name?.trim().replace(/\s+/g, ' ')
+      if (!name || name.length < 2 || !row.source.phone) continue
+      byPhone.set(canonicalPhone(row.source.phone), name.slice(0, 80))
+    }
+    if (byPhone.size === 0) return
+    const { error } = await supabase
+      .from('buyers')
+      .upsert(
+        [...byPhone.entries()].map(([phone, name]) => ({ phone, name })),
+        { onConflict: 'phone' },
+      )
+    if (error) {
+      // A failed name write must not fail the outcome write that just succeeded.
+      toast.push({ kind: 'error', title: 'Names were not saved', detail: error.message })
+    }
+  }
+
   async function confirm() {
     if (!supabase || !preview) return
     const changes = preview.filter((row) => row.action === 'change' && row.orderId)
@@ -304,6 +326,10 @@ export function CourierImport({ stores }: { stores: Store[] }) {
             .is('courier_tracking_number', null)
         }
       }
+
+      // Courier reports carry the consignee's name. Store it on the buyer so
+      // every screen can show a person instead of a phone number.
+      await saveBuyerNames(preview)
 
       let created = 0
       if (creates.length > 0) {

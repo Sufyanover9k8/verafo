@@ -355,3 +355,16 @@ lookups, chats, notifications, the admin allow-list row, and finally the
 so removing a merchant's history does not recompute or erase anyone else's
 buyer scores. A departing merchant must not degrade every other store's
 intelligence.
+
+
+## 8. Buyer names
+
+`buyers` is keyed by phone and originally had no name. Names now come from the
+courier report itself: the importer reads the consignee column (aliases include
+`Name`, `Consignee Name`, `Customer Name`) and upserts `buyers.name`, which the
+Outcomes queue displays instead of the number. The number stays one hover away
+(`title`), and rows whose buyer has no name still show the phone.
+
+`supabase/buyer-names.sql` adds the column and backfills it from the one place a
+name was ever recorded, `order_fulfillment.customer_name` (Shopify fulfilment).
+If you change the name source later, keep the fallback: `name ?? phone`.

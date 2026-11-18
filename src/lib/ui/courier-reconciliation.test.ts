@@ -96,6 +96,17 @@ describe('courier reconciliation helpers', () => {
     expect(actions).toEqual(['update', 'update', 'hold', 'update'])
   })
 
+  it('reads the consignee name when the report carries one', () => {
+    const parsed = parseCourierRows(
+      ['CN Number', 'Consignee Name', 'Consignee Phone', 'Status'],
+      [['TCS0001', 'Faisal Mehmood', '0300 1112222', 'Delivered']],
+    )
+    expect(parsed[0].name).toBe('Faisal Mehmood')
+    // A plain "Name" column is the consignee too, not the merchant.
+    const plain = parseCourierRows(['Name', 'Contact', 'Status'], [['Ammara Khan', '0321 7778888', 'Delivered']])
+    expect(plain[0].name).toBe('Ammara Khan')
+  })
+
   it('maps a courier report through AI-chosen columns', () => {
     // Headers a vendor actually shipped: no aliases match, so only the AI map
     // can rescue them.

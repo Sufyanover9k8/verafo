@@ -22,7 +22,7 @@ type Tab = 'pending' | 'resolved'
 interface Row extends OrderRow {
   order_reference?: string | null
   courier_tracking_number?: string | null
-  buyers?: { risk_score?: number | null; total_orders?: number | null } | null
+  buyers?: { name?: string | null; risk_score?: number | null; total_orders?: number | null } | null
 }
 
 const EXIT_MS = 260
@@ -55,7 +55,7 @@ export function Outcomes() {
     setLoadError(false)
     let query = supabase
       .from('orders')
-      .select('*, stores(name), buyers(risk_score, total_orders), outcomes(status, resolved_at, refusal_reason)')
+      .select('*, stores(name), buyers(name, risk_score, total_orders), outcomes(status, resolved_at, refusal_reason)')
     if (store) query = query.eq('store_id', store.id)
     const { data, error } = await query.order('ordered_at', { ascending: false }).limit(200)
     if (error) {
@@ -144,14 +144,19 @@ export function Outcomes() {
     )
   }
 
-  const columns: Column<OrderRow>[] = [
+  const columns: Column<Row>[] = [
     {
       key: 'buyer',
       label: 'Buyer',
       id: true,
       render: (o) => (
-        <Link className="font-mono text-[13px] font-medium text-primary-text hover:underline" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-          {phone(o.buyer_phone)}
+        <Link
+          className="text-[13px] font-medium text-primary-text hover:underline"
+          to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+          // The name is the label; the number is still one hover away.
+          title={phone(o.buyer_phone)}
+        >
+          {o.buyers?.name?.trim() || phone(o.buyer_phone)}
         </Link>
       ),
     },

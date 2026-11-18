@@ -2641,6 +2641,7 @@ const supabase = createClient(
         reference: "merchant order id / order reference / shopify order name",
         trackingNumber: "courier CN number, tracking or consignment number",
         phone: "consignee/customer phone number",
+        name: "consignee/customer full name",
         store: "vendor/store name",
         status: "current shipment/delivery status",
         reason: "undelivered/return reason or remarks",

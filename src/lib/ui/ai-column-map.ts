@@ -28,6 +28,7 @@ export const COURIER_FIELDS: readonly CourierField[] = [
   'reference',
   'trackingNumber',
   'phone',
+  'name',
   'store',
   'status',
   'reason',

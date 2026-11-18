@@ -42,6 +42,8 @@ export interface CourierRow {
   reference: string
   trackingNumber: string
   phone: string
+  /** Consignee name, when the courier report carries one. */
+  name: string
   store: string
   status: string
   reason: string
@@ -63,6 +65,8 @@ const ALIASES: Record<string, keyof Omit<CourierRow, 'line'>> = {
   phone: 'phone', buyerphone: 'phone', customerphone: 'phone', contact: 'phone', consigneephone: 'phone',
   consigneemobile: 'phone', mobileno: 'phone', mobilenumber: 'phone', receiverphone: 'phone',
   store: 'store', storename: 'store', shippername: 'store', merchant: 'store', vendor: 'store',
+  name: 'name', consigneename: 'name', customername: 'name', receivername: 'name', buyername: 'name',
+  recipientname: 'name', consignee: 'name', customernameurdu: 'name',
   status: 'status', currentstatus: 'status', shipmentstatus: 'status', deliverystatus: 'status',
   deliveryresult: 'status', orderstatus: 'status', outcome: 'status',
   reason: 'reason', undeliveredreason: 'reason', comments: 'reason', remarks: 'reason', returnreason: 'reason',
@@ -97,6 +101,7 @@ export function parseCourierRows(headers: string[], rows: unknown[][], mappedCol
     return {
       line: index + 2,
       reference: get(row, 'reference').replace(/^#\s*/, ''),
+      name: get(row, 'name'),
       trackingNumber: get(row, 'trackingNumber'),
       phone: get(row, 'phone'),
       store: get(row, 'store'),

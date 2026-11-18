@@ -21,7 +21,7 @@ export interface CardOrder {
   order_reference?: string | null
   courier_tracking_number?: string | null
   stores?: { name: string | null } | null
-  buyers?: { risk_score?: number | null; total_orders?: number | null } | null
+  buyers?: { name?: string | null; risk_score?: number | null; total_orders?: number | null } | null
   outcomes?: {
     status?: OutcomeStatus | null
     resolved_at?: string | null
@@ -74,8 +74,11 @@ export function OrderCard<T extends CardOrder>({
       >
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[13px] font-semibold text-foreground">
-              {phone(order.buyer_phone)}
+            <span
+              className="truncate text-[13px] font-semibold text-foreground"
+              title={order.buyers?.name ? phone(order.buyer_phone) : undefined}
+            >
+              {order.buyers?.name?.trim() || phone(order.buyer_phone)}
             </span>
             <VerdictBadge riskScore={order.buyers?.risk_score} totalOrders={order.buyers?.total_orders} />
           </span>
