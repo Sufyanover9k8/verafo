@@ -29,9 +29,10 @@ function isActivePath(pathname: string, item: NavItem): boolean {
 }
 
 const ITEM_CLASS =
-  'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-[inset_2px_0_0_var(--sidebar-primary)]'
+  'rounded-xl data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:font-semibold'
 
-const GROUP_LABEL_CLASS = 'text-[11px] font-semibold tracking-wider text-sidebar-foreground/50 uppercase'
+const GROUP_LABEL_CLASS =
+  'text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/45'
 
 function NavRow({ item }: { item: NavItem }) {
   const { pathname } = useLocation()
@@ -60,22 +61,20 @@ export function AppSidebar() {
   )
 
   return (
-    <Sidebar collapsible="icon" variant="sidebar">
+    <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="gap-3 pb-1">
         <NavLink to="/" className="flex h-11 items-center gap-2 px-2 group-data-[collapsible=icon]:px-0">
-          {/* Both logos ship as fixed-colour art: the mark is dark strokes on
-              transparent, the wordmark is near-white (built for a dark
-              background, invisible on the white sidebar). One filter per
-              theme fixes the contrast of each without touching the images. */}
+          {/* Both logos ship as fixed-colour art and the rail is always dark,
+              so both are inverted to white regardless of theme. */}
           <img
             src="/verafo-logo.png"
             alt="Verafo"
-            className="size-7 shrink-0 object-contain dark:brightness-0 dark:invert"
+            className="size-7 shrink-0 object-contain brightness-0 invert"
           />
           <img
             src="/verafo-text-logo.png"
             alt="Verafo"
-            className="h-4 object-contain brightness-0 dark:brightness-100 group-data-[collapsible=icon]:hidden"
+            className="h-4 object-contain group-data-[collapsible=icon]:hidden"
           />
         </NavLink>
         <StoreSwitcher />

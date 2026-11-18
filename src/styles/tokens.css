@@ -19,13 +19,14 @@
 /* ── LIGHT (default) ─────────────────────────────────────── */
 :root {
   /* ── 1 · Colour — raw site palette, copied verbatim ───── */
-  --bg: #FFFFFF;
-  --bg-2: #F6F8F8;
-  --bg-3: #EDF3F3;
+  /* Canvas is a tinted sheet; panels are pure white and float on it. */
+  --bg: #EDF2F2;
+  --bg-2: #F5F9F9;
+  --bg-3: #E3ECEC;
   --panel: #FFFFFF;
-  --panel-2: #F5F8F8;
-  --line: rgba(10, 15, 16, .09);
-  --line-2: rgba(10, 15, 16, .16);
+  --panel-2: #F6FAFA;
+  --line: rgba(10, 15, 16, .08);
+  --line-2: rgba(10, 15, 16, .14);
 
   --teal: #14B8A6;
   --teal-bright: #2DD4BF;
@@ -124,9 +125,9 @@
   --v-risk-strong: #BE123C;
   --v-risk-bg: var(--err-bg);
 
-  --v-unknown: #3B82F6;
-  --v-unknown-strong: #1D4ED8;
-  --v-unknown-bg: rgba(59, 130, 246, .10);
+  --v-unknown: #6B7F81;
+  --v-unknown-strong: #47585A;
+  --v-unknown-bg: rgba(107, 127, 129, .10);
 
   /* Legacy semantic aliases */
   --accent: var(--teal);
@@ -165,11 +166,11 @@
   --s-16: 64px; --s-20: 80px;  --s-24: 96px;
 
   /* ── 4 · Radius ────────────────────────────────────────── */
-  --r-sm: 10px;   /* inputs, chips, non-primary buttons */
-  --r: 16px;      /* cards, panels */
-  --r-card: 16px; /* the dashboard's card radius, named so it is explicit */
-  --r-lg: 16px;   /* cards */
-  --r-xl: 22px;   /* the main hero only */
+  --r-sm: 12px;   /* inputs, chips, non-primary buttons */
+  --r: 18px;      /* cards, panels */
+  --r-card: 18px; /* the dashboard's card radius, named so it is explicit */
+  --r-lg: 20px;   /* cards */
+  --r-xl: 26px;   /* the main hero only */
   --r-pill: 100px;/* primary buttons only */
   --r-full: 999px;
 
@@ -200,10 +201,19 @@
   --v-focus-offset: 3px;
 
   /* ── 7 · Shadow (site values) ──────────────────────────── */
-  --sh-1: 0 1px 2px rgba(10, 15, 16, .06);
-  --sh-2: 0 2px 4px rgba(10, 15, 16, .04), 0 10px 24px -10px rgba(10, 15, 16, .12);
-  --sh-3: 0 4px 8px rgba(10, 15, 16, .04), 0 24px 48px -20px rgba(10, 15, 16, .18);
+  --sh-1: 0 1px 2px rgba(10, 15, 16, .04);
+  --sh-2: 0 2px 6px rgba(10, 15, 16, .05), 0 16px 32px -18px rgba(10, 15, 16, .16);
+  --sh-3: 0 8px 16px rgba(10, 15, 16, .05), 0 32px 64px -30px rgba(10, 15, 16, .24);
   --sh-teal: 0 4px 12px -3px rgba(20, 184, 166, .35), 0 12px 32px -12px rgba(20, 184, 166, .4);
+
+  /* ── 7b · Call to action ───────────────────────────────────
+        The reference dashboard leads with near-black buttons and keeps the
+        accent colour for state (active nav, selected pill, focus). Cyan on
+        near-black in light mode, cyan on ink in dark mode. ── */
+  --cta-bg: #0A0F10;
+  --cta-bg-hover: #17211F;
+  --cta-fg: #FFFFFF;
+  --cta-ring: rgba(20, 184, 166, .30);
 
   /* Legacy shadow names */
   --shadow: var(--sh-1);
@@ -224,6 +234,10 @@
   --v-hairline: linear-gradient(90deg, transparent 5%, var(--teal) 40%, var(--teal-deep) 60%, transparent 95%);
   --v-aurora: radial-gradient(52% 46% at 82% -6%, rgba(20, 184, 166, .10), transparent 62%),
               radial-gradient(42% 42% at -8% 104%, rgba(20, 184, 166, .06), transparent 58%);
+  /* The sheet everything floats on. Shared by every page shell. */
+  --v-canvas: radial-gradient(58% 42% at 6% -10%, rgba(45, 212, 191, .20), transparent 62%),
+              radial-gradient(50% 38% at 102% 0%, rgba(20, 184, 166, .12), transparent 60%),
+              var(--bg);
   --v-aurora-auth: radial-gradient(80% 55% at 0% 0%, rgba(45, 212, 191, .22), transparent 60%),
                    radial-gradient(60% 50% at 100% 100%, rgba(20, 184, 166, .12), transparent 55%),
                    var(--bg);
@@ -246,13 +260,24 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #0A0F10;
-  --bg-2: #0E1517;
-  --bg-3: #141D1F;
-  --panel: #0E1517;
-  --panel-2: #141D1F;
-  --line: rgba(255, 255, 255, .09);
-  --line-2: rgba(255, 255, 255, .17);
+  --bg: #070C0D;
+  --bg-2: #0B1113;
+  --bg-3: #111A1C;
+  --panel: #0E1618;
+  --panel-2: #131E20;
+  --line: rgba(255, 255, 255, .08);
+  --line-2: rgba(255, 255, 255, .16);
+
+  /* Dark mode flips the CTA: cyan fill with ink text reads far better than a
+     black button on a near-black panel. */
+  --cta-bg: #2DD4BF;
+  --cta-bg-hover: #5EEAD4;
+  --cta-fg: #04201C;
+  --cta-ring: rgba(45, 212, 191, .35);
+
+  --v-canvas: radial-gradient(58% 42% at 6% -10%, rgba(45, 212, 191, .10), transparent 62%),
+              radial-gradient(50% 38% at 102% 0%, rgba(20, 184, 166, .07), transparent 60%),
+              var(--bg);
 
   --teal: #2DD4BF;
   --teal-deep: #5EEAD4;
@@ -298,9 +323,9 @@
   --v-risk-strong: #FDA4AF;
   --v-risk-bg: var(--err-bg);
 
-  --v-unknown: #93C5FD;
-  --v-unknown-strong: #93C5FD;
-  --v-unknown-bg: rgba(147, 197, 253, .12);
+  --v-unknown: #A9BABB;
+  --v-unknown-strong: #CFDBDC;
+  --v-unknown-bg: rgba(169, 186, 187, .14);
 
   --v-teal-900: #F2F6F6;
   --v-purple-900: var(--v-teal-900);
@@ -374,9 +399,9 @@
   --v-risk: var(--coral);
   --v-risk-strong: #BE123C;
   --v-risk-bg: var(--err-bg);
-  --v-unknown: #3B82F6;
-  --v-unknown-strong: #1D4ED8;
-  --v-unknown-bg: rgba(59, 130, 246, .10);
+  --v-unknown: #6B7F81;
+  --v-unknown-strong: #47585A;
+  --v-unknown-bg: rgba(107, 127, 129, .10);
   --v-teal-900: var(--ink);
   --v-purple-900: var(--v-teal-900);
   --v-teal-600: var(--btn-teal-2);

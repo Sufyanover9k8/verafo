@@ -18,21 +18,20 @@
   --radius-hero: var(--r-xl);
   --radius-pill: var(--r-pill);
 
-  /* Surfaces */
-  --background: var(--bg);
+  /* Surfaces. The canvas is --bg; panels (the app inset, cards) are --panel. */
+  --background: var(--panel);
   --foreground: var(--ink);
   --card: var(--panel);
   --card-foreground: var(--ink);
   --popover: var(--panel);
   --popover-foreground: var(--ink);
-  --panel-2: #F5F8F8;
+  --panel-2: #F6FAFA;
 
-  /* Brand — the website's teal, not #1a7d96.
-     --primary is the fill shade: black-on-teal reads on a button.
-     Text and links use --primary-text, the deeper variant, because
-     #14B8A6 as text on white measures only 2.49:1. */
-  --primary: var(--teal);
-  --primary-foreground: #FFFFFF;
+  /* Brand. --primary is the call-to-action fill (near-black in light mode,
+     cyan in dark), matching the reference dashboard's hierarchy: accent
+     colour for state, ink for the primary action. Links keep the deep teal. */
+  --primary: var(--cta-bg);
+  --primary-foreground: var(--cta-fg);
   --primary-text: var(--teal-deep);
   --primary-text-foreground: #FFFFFF;
 
@@ -79,29 +78,30 @@
   --chart-4: var(--coral);
   --chart-5: var(--v-unknown);
 
-  /* The sidebar follows the site's surfaces: white in light mode and
-     the panel ramp in dark mode. It is NOT a fixed navy panel. */
-  --sidebar: var(--panel);
-  --sidebar-foreground: var(--ink-2);
-  --sidebar-primary: var(--teal);
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: var(--tint);
-  --sidebar-accent-foreground: var(--teal-deep);
-  --sidebar-border: var(--line);
-  --sidebar-ring: var(--teal);
+  /* The sidebar is a dark panel in BOTH themes — the reference dashboard's
+     signature: a near-black rail with pill nav floating on the light canvas.
+     It never follows the theme's surfaces, so contrast on it is fixed. */
+  --sidebar: #0B1113;
+  --sidebar-foreground: rgba(255, 255, 255, .62);
+  --sidebar-primary: var(--teal-bright);
+  --sidebar-primary-foreground: #04201C;
+  --sidebar-accent: rgba(255, 255, 255, .09);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, .08);
+  --sidebar-ring: var(--teal-bright);
 }
 
 [data-theme='dark'] {
-  --background: var(--bg);
+  --background: var(--panel);
   --foreground: var(--ink);
   --card: var(--panel);
   --card-foreground: var(--ink);
   --popover: var(--panel);
   --popover-foreground: var(--ink);
-  --panel-2: #141D1F;
+  --panel-2: #131E20;
 
-  --primary: var(--teal);
-  --primary-foreground: #04201C;
+  --primary: var(--cta-bg);
+  --primary-foreground: var(--cta-fg);
   --primary-text: var(--teal-deep);
   --primary-text-foreground: #04201C;
 
@@ -123,12 +123,12 @@
   --input: var(--line-2);
   --ring: var(--teal);
 
-  /* Sidebar surfaces in dark mode — the site's panel ramp. */
-  --sidebar: var(--panel);
-  --sidebar-foreground: var(--ink-2);
-  --sidebar-accent: var(--tint);
-  --sidebar-accent-foreground: var(--teal-deep);
-  --sidebar-border: var(--line);
+  /* Sidebar stays the fixed dark rail in dark mode too. */
+  --sidebar: #0B1113;
+  --sidebar-foreground: rgba(255, 255, 255, .62);
+  --sidebar-accent: rgba(255, 255, 255, .09);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, .08);
 }
 
 @theme inline {
