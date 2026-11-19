@@ -345,6 +345,72 @@ function buildSummaryText(s: SummaryInput): string {
 }
 
 /**
+ * The text that becomes the buyer's `embedding`.
+ *
+ * Deliberately different from `buildSummaryText`, which is written for a human
+ * (and for the agent) and therefore quotes the risk score. An embedding is only
+ * useful if it describes what was OBSERVABLE, never the verdict derived from it:
+ * put `risk_score` in the vector and every neighbour is just the person with the
+ * nearest label, buyers with no history cannot be placed at all, and whatever
+ * the rule engine already believes gets counted twice.
+ *
+ * For the same reason the city NAME is not listed here — it is a coarse proxy
+ * that carves the space into ten blobs. What replaces it is the city's learned
+ * refusal rate, which is a prior rather than a label.
+ */
+function buildEmbedText(s: SummaryInput, cityRate: number | null = null): string {
+  const parts: string[] = [];
+
+  parts.push(
+    s.total_orders <= 1
+      ? "First order on the network."
+      : `Buyer with ${s.total_orders} orders across ${s.stores} store(s).`,
+  );
+
+  if (s.categories.length > 0) {
+    const sum = s.categories.reduce((n, [, c]) => n + c, 0) || 1;
+    parts.push(
+      `Category mix: ${
+        s.categories.map(([c, n]) => `${c} ${Math.round((n / sum) * 100)}%`).join(", ")
+      }.`,
+    );
+  }
+
+  if (s.avg_order_value != null) {
+    parts.push(`Average order value ${Math.round(s.avg_order_value)} PKR.`);
+  }
+  if (s.avg_item_count > 1) {
+    parts.push(`Average basket ${Math.round(s.avg_item_count * 10) / 10} item(s) per order.`);
+  }
+  if (s.night_ratio > 0) {
+    parts.push(`${Math.round(s.night_ratio * 100)}% of orders placed late at night (18:00-02:59).`);
+  }
+  if (s.weekend_ratio > 0) {
+    parts.push(`${Math.round(s.weekend_ratio * 100)}% placed on weekends.`);
+  }
+
+  if (cityRate != null) {
+    parts.push(
+      `Deliveries to this buyer's city are refused or returned ${Math.round(cityRate * 100)}% of the time.`,
+    );
+  }
+
+  if (s.total_orders >= 3 && s.stores >= 2) {
+    parts.push(`Repeat buyer who shops across ${s.stores} different stores.`);
+  } else if (s.total_orders >= 3) {
+    parts.push("Repeat buyer within a single store.");
+  } else {
+    parts.push("Limited history in the network.");
+  }
+
+  if (s.phone_age_days > 0) {
+    parts.push(`Known to the network for about ${Math.round(s.phone_age_days)} days.`);
+  }
+
+  return parts.join(" ");
+}
+
+/**
  * Row shapes for the tables this function reads.
  *
  * The Supabase client is created without a generated schema, so a `.select()`
@@ -600,22 +666,24 @@ const FEATURE_CATEGORIES = [
   "haircare",
 ];
 
-const FEATURE_CITIES = [
-  "Lahore",
-  "Karachi",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Sialkot",
-  "Gujranwala",
-  "Quetta",
-];
-
 interface FeatureVector {
   vector: number[];
   labels: string[];
+  /** Learned refusal rate for the buyer's latest city, when the prior exists. */
+  cityRate: number | null;
+}
+
+/**
+ * Refusal rate for a city, learned across the network and refreshed monthly by
+ * `supabase/city-base-rates.sql`. Returns null when the prior has not been built
+ * yet or the RPC is not deployed, so callers fall back to a neutral value.
+ */
+async function fetchCityRate(supabase: Db, city: string): Promise<number | null> {
+  if (!city) return null;
+  const { data, error } = await supabase.rpc("verafo_city_rate", { p_city: city });
+  if (error || data == null) return null;
+  const rate = Number(data);
+  return Number.isFinite(rate) ? rate : null;
 }
 
 function normalize(v: number, lo: number, hi: number): number {
@@ -662,7 +730,6 @@ async function buildFeatureVector(
 
   const rows = asRows<OrderRow>(orders);
   const resolved = rows.filter((o) => embedOne(o.outcomes)?.status === "accepted");
-  const refused = rows.filter((o) => embedOne(o.outcomes)?.status === "refused");
   const last = rows[rows.length - 1];
 
   const categoryCount = new Map<string, number>();
@@ -685,7 +752,6 @@ async function buildFeatureVector(
   }
 
   const total = rows.length;
-  const dominant = [...categoryCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown";
   const latestCity = last?.city ?? "";
   const avgQty = total > 0 ? qtySum / total : 1;
   const avgValue = priceCount > 0 ? priceSum / priceCount : 0;
@@ -693,6 +759,12 @@ async function buildFeatureVector(
     ? Math.max(0, (Date.now() - new Date(buyerIdentity.first_seen).getTime()) / 86400000)
     : 0;
   const distinctStores = new Set(rows.map((o) => o.store_id)).size;
+  const distinctAddresses = new Set(
+    rows.map((o) => (o.address ?? "").trim().toLowerCase()).filter(Boolean),
+  ).size;
+
+  // A learned prior, not a label: how often deliveries to this city come back.
+  const cityRate = latestCity ? await fetchCityRate(supabase, latestCity) : null;
 
   // Known-good address: the buyer's most recent address has been accepted before
   const lastAddress = last?.address ?? null;
@@ -706,45 +778,40 @@ async function buildFeatureVector(
     vector.push(value);
   };
 
-  // GROUP A — order timing (cyclical sin/cos, weekend flag, sequence)
+  // GROUP A — order timing (cyclical sin/cos + the weekend SHARE, not a flag:
+  // a majority bit throws away a real distribution and flips on one order)
   const [hSin, hCos] = sinCos(last?.ordered_at ? new Date(last.ordered_at).getHours() : 12, 24);
   const [dSin, dCos] = sinCos(last?.ordered_at ? new Date(last.ordered_at).getDay() : 0, 7);
   push("order_hour_sin", hSin);
   push("order_hour_cos", hCos);
   push("order_dow_sin", dSin);
   push("order_dow_cos", dCos);
-  push("is_weekend", total > 0 ? (weekend / total > 0.5 ? 1 : 0) : 0);
+  push("weekend_ratio", total > 0 ? weekend / total : 0);
   push("order_sequence", normalize(total, 1, 30));
 
   // GROUP B — order value & basket
   push("avg_order_value", normalize(Math.log1p(avgValue), Math.log1p(500), Math.log1p(15000)));
   push("avg_item_count", normalize(avgQty, 1, 5));
 
-  // GROUP C — dominant category (one-hot MVP)
+  // GROUP C — category mix as shares, not the winner takes all: a buyer who is
+  // 40% skincare and 35% haircare is not the same person as a 100% skincare one.
   for (const c of FEATURE_CATEGORIES) {
-    push(`category_${c}`, dominant === c ? 1 : 0);
+    push(`category_${c}`, total > 0 ? (categoryCount.get(c) ?? 0) / total : 0);
   }
 
-  // GROUP D — messaging metadata (WhatsApp not wired yet: safe defaults)
-  push("replied_to_automsg", 0);
-  push("time_to_reply_min_norm", 0);
-
-  // GROUP E — outcomes
-  push("refusal_rate", total > 0 ? refused.length / total : 0.5);
-  push("acceptance_count_norm", normalize(Number(buyerIdentity.total_accepted ?? 0), 0, 20));
-
-  // GROUP F — location
-  for (const c of FEATURE_CITIES) {
-    push(`city_${c}`, latestCity === c ? 1 : 0);
-  }
+  // GROUP D — address behaviour (structural, and it is what address fraud shows
+  // up as: many destinations, few repeats)
   push("address_seen_before", addressSeen ? 1 : 0);
+  push("distinct_addresses_norm", normalize(distinctAddresses, 1, 5));
+  push("address_churn", total > 0 ? Math.max(0, 1 - distinctAddresses / total) : 0);
+  push("city_rate", cityRate ?? 0.5);
 
-  // GROUP G — identity
+  // GROUP E — identity
   push("phone_age_days_norm", normalize(phoneAgeDays, 0, 180));
   push("distinct_stores_norm", normalize(distinctStores, 1, 10));
   push("total_orders_norm", normalize(total, 0, 30));
 
-  return { vector, labels };
+  return { vector, labels, cityRate };
 }
 
 async function listChatHistory(
@@ -2498,7 +2565,7 @@ async function embedBuyerVector(
 ): Promise<number[]> {
   const stats = await fetchStats(supabase, phone, storeIds);
   const fv = await buildFeatureVector(supabase, phone, storeIds);
-  const text = buildSummaryText(stats);
+  const text = buildEmbedText(stats, fv.cityRate);
   const res = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,
@@ -2682,7 +2749,9 @@ const supabase = createClient(
       // Models answer either {field: header} or the reverse {header: field}, and
       // sometimes nest it. Accept all three rather than silently returning an
       // empty map. Header names are matched case-insensitively.
-      const headerByLower = new Map(headers.map((h: string) => [h.trim().toLowerCase(), h.trim()]));
+      const headerByLower = new Map<string, string>(
+        headers.map((h: unknown): [string, string] => [String(h).trim().toLowerCase(), String(h).trim()]),
+      );
       const norm = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       // The model sometimes answers with a sample cell instead of the header
       // name. Resolve that back to its column rather than dropping the mapping.
@@ -2794,7 +2863,7 @@ const supabase = createClient(
     if (action === "embed") {
       const stats = await fetchStats(supabase, phone, storeIds);
       const fv = await buildFeatureVector(supabase, phone, storeIds);
-      const text = buildSummaryText(stats);
+      const text = buildEmbedText(stats, fv.cityRate);
       const res = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: text,
