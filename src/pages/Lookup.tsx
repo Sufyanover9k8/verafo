@@ -12,7 +12,7 @@ import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
 import { computeVerdict, riskFactors, type VerdictTone } from '../lib/risk'
-import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
@@ -201,17 +201,10 @@ export function Lookup() {
     if (!supabase) return
     setExplaining(true)
     try {
-      const base = functionsBaseUrl()
-      if (!base) throw new Error('Edge functions are not deployed.')
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ mode: 'explain', buyer }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'explain', phone: buyer.phone }),
       })
       if (!res.ok) throw new Error(`Request failed (${res.status})`)
       const json = (await res.json()) as { text?: string }
@@ -231,17 +224,10 @@ export function Lookup() {
     if (!supabase) return
     setEmbeddingBusy(true)
     try {
-      const base = functionsBaseUrl()
-      if (!base) throw new Error('Edge functions are not deployed.')
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ mode: 'embed', phone: buyer.phone }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'embed', phone: buyer.phone }),
       })
       if (!res.ok) throw new Error(`Request failed (${res.status})`)
       toast.push({ kind: 'success', title: 'Fingerprint refreshed' })

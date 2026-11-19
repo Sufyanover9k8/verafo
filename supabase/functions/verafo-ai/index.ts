@@ -2666,6 +2666,16 @@ const supabase = createClient(
     // PRIVACY: the service role bypasses RLS, so identify the caller here and
     // hand the owned store ids to every tool that returns private data.
     const { storeIds } = await authorizeCaller(req);
+    // Every action below this point reads the caller's own stores. With no
+    // store ids there is nothing to read, and letting the request continue
+    // produces db errors that read like bugs ("db orders: 400") instead of
+    // what actually happened: the browser did not send a session token.
+    // map_columns and classify_courier_status are pure text helpers and are
+    // allowed to run without a session.
+    const SESSIONLESS_ACTIONS = new Set(["map_columns", "classify_courier_status"]);
+    if (storeIds.length === 0 && !SESSIONLESS_ACTIONS.has(String(action))) {
+      return json({ error: "not signed in: no session token on this request" }, 401);
+    }
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) {
       return json({ error: "OPENAI_API_KEY is not set on this function" }, 500);
@@ -3239,7 +3249,7 @@ const supabase = createClient(
                   args: summarizeArgs(args),
                   label: TOOL_LABELS[tc.function.name] ?? tc.function.name,
                 });
-                result = await runAgentTool(tc.function.name, args, supabase, openai);
+                result = await runAgentTool(tc.function.name, args, supabase, openai, storeIds);
                 emit("tool_result", {
                   name: tc.function.name,
                   summary: summarizeTool(tc.function.name, result),

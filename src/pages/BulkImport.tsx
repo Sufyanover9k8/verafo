@@ -5,7 +5,7 @@ import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { Reveal } from '../components/Reveal'
 import { NeedsSetup } from '../components/States'
-import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import type { Store } from '../lib/types'
@@ -55,12 +55,11 @@ export function BulkImport() {
   }, [stores, storeId])
 
   async function generateDummy() {
-    const base = functionsBaseUrl()
-    if (!supabase || !base) return
+    if (!supabase || !functionsBaseUrl()) return
     setGenBusy(true)
     setGenResult(null)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

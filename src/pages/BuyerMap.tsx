@@ -17,7 +17,7 @@ import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { money } from '../lib/format'
 import { RISK, formatScore, riskLevel } from '../lib/score'
-import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 
@@ -173,14 +173,13 @@ export function BuyerMap() {
   }, [load])
 
   const loadSim = useCallback(async () => {
-    const base = functionsBaseUrl()
-    if (!base) {
+    if (!functionsBaseUrl()) {
       toast.push({ kind: 'error', title: 'Vectors unavailable', detail: 'Edge functions are not configured.' })
       return
     }
     setSimLoading(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'embed_map' }),
