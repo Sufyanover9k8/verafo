@@ -54,9 +54,18 @@ export interface ShopifyOrderLike {
   financial_status?: string;
   /** "fulfilled" / "partial" / "null" (REST) or "FULFILLED" (GraphQL, mapped). */
   fulfillment_status?: string | null;
-  customer?: { phone?: string | null } | null;
+  customer?: {
+    phone?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    /** GraphQL casing, after graphqlNodeToPayload() re-maps the node. */
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null;
   phone?: string | null;
   shipping_address?: {
+    /** The name the courier prints on the label. Present on both REST and GraphQL. */
+    name?: string | null;
     address1?: string | null;
     city?: string | null;
     province?: string | null;
@@ -73,6 +82,7 @@ export interface ShopifyOrderLike {
 export interface VerafoOrderInput {
   shopifyOrderId: string;
   buyerPhone: string;
+  customerName: string | null;
   productCategory: string;
   productName: string;
   price: number | null;
@@ -80,6 +90,31 @@ export interface VerafoOrderInput {
   address: string | null;
   city: string | null;
   orderedAt: string | null;
+}
+
+/**
+ * The name to show for an order. The shipping address name is what the courier
+ * prints on the label, so it wins over the customer record (which is the
+ * account holder and may be someone else entirely, e.g. a shop owner ordering
+ * for a relative). REST sends snake_case, GraphQL camelCase.
+ */
+export function customerNameOf(payload: ShopifyOrderLike): string | null {
+  const parts = (a?: string | null, b?: string | null) =>
+    [a, b].filter(Boolean).join(" ");
+
+  const candidates = [
+    payload.shipping_address?.name,
+    parts(payload.customer?.first_name, payload.customer?.last_name),
+    parts(payload.customer?.firstName, payload.customer?.lastName),
+  ];
+
+  for (const candidate of candidates) {
+    const clean = String(candidate ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (clean) return clean.slice(0, 120);
+  }
+  return null;
 }
 
 export function mapOrder(
@@ -123,6 +158,7 @@ export function mapOrder(
   return {
     shopifyOrderId,
     buyerPhone,
+    customerName: customerNameOf(payload),
     productCategory: category,
     productName,
     price,
@@ -165,6 +201,128 @@ export async function ensureStoreLink(
 }
 
 /**
+ * Remember the customer name for an order.
+ *
+ * The name lives on `order_fulfillment.customer_name` (the column the orders
+ * view and the call-correction path already use) and never overwrites an
+ * existing value: a name confirmed on a call is stronger evidence than a
+ * checkout field, so this only fills blanks. `buyers.name` is the last-seen
+ * label for the phone, used as a fallback on surfaces that have no single
+ * order (Buyer Lookup), and it is only filled when it is still empty.
+ */
+async function fillCustomerName(
+  supabase: ReturnType<typeof getSupabase>,
+  orderId: string,
+  customerName: string | null,
+  buyerPhone: string,
+): Promise<void> {
+  if (!customerName) return;
+
+  const { data: existing, error: readErr } = await supabase
+    .from("order_fulfillment")
+    .select("order_id, customer_name")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (readErr) throw new Error(`customer name read failed: ${readErr.message}`);
+
+  if (!existing) {
+    const { error } = await supabase
+      .from("order_fulfillment")
+      .insert({ order_id: orderId, status: "pending_review", customer_name: customerName });
+    // A concurrent webhook may have created the row between read and insert.
+    if (error && !/duplicate key|23505/i.test(error.message)) {
+      throw new Error(`customer name insert failed: ${error.message}`);
+    }
+  } else if (!existing.customer_name) {
+    const { error } = await supabase
+      .from("order_fulfillment")
+      .update({ customer_name: customerName })
+      .eq("order_id", orderId);
+    if (error) throw new Error(`customer name update failed: ${error.message}`);
+  }
+
+  await supabase
+    .from("buyers")
+    .update({ name: customerName })
+    .eq("phone", buyerPhone)
+    .is("name", null);
+}
+
+/**
+ * Page-level version of fillCustomerName() for the history import: one read per
+ * page instead of one per order, same fill-only rule.
+ */
+async function fillCustomerNamesBatch(
+  supabase: ReturnType<typeof getSupabase>,
+  rows: { id: string; shopify_order_id: string }[],
+  usable: { mapped: VerafoOrderInput; payload: ShopifyOrderLike }[],
+): Promise<void> {
+  const nameByShopifyId = new Map(
+    usable
+      .filter(({ mapped }) => mapped.customerName)
+      .map(({ mapped }) => [mapped.shopifyOrderId, mapped.customerName as string]),
+  );
+  if (rows.length === 0 || nameByShopifyId.size === 0) return;
+
+  const { data: existing, error } = await supabase
+    .from("order_fulfillment")
+    .select("order_id, customer_name")
+    .in(
+      "order_id",
+      rows.map((r) => r.id),
+    );
+  if (error) throw new Error(`customer name read failed: ${error.message}`);
+
+  const stored = new Map((existing ?? []).map((r) => [r.order_id, r.customer_name]));
+  const toInsert: Record<string, unknown>[] = [];
+  const toUpdate: { orderId: string; name: string }[] = [];
+
+  for (const row of rows) {
+    const name = nameByShopifyId.get(String(row.shopify_order_id));
+    if (!name) continue;
+    if (!stored.has(row.id)) {
+      toInsert.push({ order_id: row.id, status: "pending_review", customer_name: name });
+    } else if (!stored.get(row.id)) {
+      toUpdate.push({ orderId: row.id, name });
+    }
+  }
+
+  if (toInsert.length > 0) {
+    const { error: insertErr } = await supabase
+      .from("order_fulfillment")
+      .upsert(toInsert, { onConflict: "order_id", ignoreDuplicates: true });
+    if (insertErr) throw new Error(`customer name insert failed: ${insertErr.message}`);
+  }
+
+  for (const patch of toUpdate) {
+    const { error: updateErr } = await supabase
+      .from("order_fulfillment")
+      .update({ customer_name: patch.name })
+      .eq("order_id", patch.orderId);
+    if (updateErr) throw new Error(`customer name update failed: ${updateErr.message}`);
+  }
+
+  // buyers.name is only a fallback label, so fill it where it is still empty.
+  const namedPhones = new Map<string, string>();
+  for (const { mapped } of usable) {
+    if (mapped.customerName) namedPhones.set(mapped.buyerPhone, mapped.customerName);
+  }
+  if (namedPhones.size > 0) {
+    const { data: blanks } = await supabase
+      .from("buyers")
+      .select("phone")
+      .in("phone", [...namedPhones.keys()])
+      .is("name", null);
+    for (const blank of blanks ?? []) {
+      await supabase
+        .from("buyers")
+        .update({ name: namedPhones.get(blank.phone) })
+        .eq("phone", blank.phone);
+    }
+  }
+}
+
+/**
  * Ingest a Shopify order webhook (or synced order) into Verafo. Idempotent —
  * Shopify retries webhooks, so upserts are keyed on the Shopify order id.
  */
@@ -202,6 +360,8 @@ export async function recordShopifyOrder(
     .select("id")
     .single();
   if (orderErr) throw new Error(`order upsert failed: ${orderErr.message}`);
+
+  await fillCustomerName(supabase, order.id, mapped.customerName, mapped.buyerPhone);
 
   // A new order is "pending"; a backfilled cancelled order is already "refused"
   // and a backfilled fulfilled order is already "accepted".
@@ -380,6 +540,8 @@ export async function recordShopifyOrdersBatch(
 
   const rows = (upserted ?? []) as { id: string; shopify_order_id: string }[];
 
+  await fillCustomerNamesBatch(supabase, rows, usable);
+
   // One extra query per page, so a replayed history never overwrites an outcome
   // a merchant has already corrected by hand.
   const currentStatus = new Map<string, string | null>();
@@ -517,13 +679,16 @@ export function graphqlNodeToPayload(
   });
 
   const shipping = node.shippingAddress as
-    | { address1?: unknown; city?: unknown }
+    | { name?: unknown; address1?: unknown; city?: unknown }
     | null
     | undefined;
   const totalSet = node.currentTotalPriceSet as
     | { shopMoney?: { amount?: unknown } }
     | undefined;
-  const customer = node.customer as { phone?: unknown } | null | undefined;
+  const customer = node.customer as
+    | { phone?: unknown; firstName?: unknown; lastName?: unknown }
+    | null
+    | undefined;
   const fulfillment =
     typeof node.displayFulfillmentStatus === "string"
       ? node.displayFulfillmentStatus
@@ -540,10 +705,15 @@ export function graphqlNodeToPayload(
     customer: {
       phone:
         typeof customer?.phone === "string" ? customer.phone : null,
+      firstName:
+        typeof customer?.firstName === "string" ? customer.firstName : null,
+      lastName:
+        typeof customer?.lastName === "string" ? customer.lastName : null,
     },
     phone: typeof node.phone === "string" ? node.phone : null,
     shipping_address: shipping
       ? {
+          name: typeof shipping.name === "string" ? shipping.name : null,
           address1: typeof shipping.address1 === "string" ? shipping.address1 : null,
           city: typeof shipping.city === "string" ? shipping.city : null,
         }

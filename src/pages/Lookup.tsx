@@ -11,6 +11,7 @@ import { Avatar } from '../components/Avatar'
 import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, normalizePhone, phone, timeAgo } from '../lib/format'
+import { customerNameOfOrder } from '../lib/buyer-name'
 import { computeVerdict, riskFactors, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
@@ -108,7 +109,7 @@ export function Lookup() {
       // buyer_network_lookup returns an aggregate risk assessment only: no
       // identity, no store identity, no order detail, no vector. The merchant
       // still gets the answer for any number they already know.
-      let ordersQuery = supabase.from('orders').select('*, stores(name), outcomes(status, resolved_at, refusal_reason)').eq('buyer_phone', normalized)
+      let ordersQuery = supabase.from('orders').select('*, stores(name), order_fulfillment(customer_name), outcomes(status, resolved_at, refusal_reason)').eq('buyer_phone', normalized)
       if (store) ordersQuery = ordersQuery.eq('store_id', store.id)
 
       const [lookupRes, ordersRes] = await Promise.all([
@@ -247,6 +248,12 @@ export function Lookup() {
 
   const buyer = state.kind === 'found' ? state.buyer : null
   const orders = state.kind === 'found' ? state.orders : []
+  /**
+   * A name is only printed when the caller already has an order for the number.
+   * Otherwise the lookup stays a number, so it cannot become a way to read
+   * another store's customer names.
+   */
+  const knownName = orders.length > 0 ? customerNameOfOrder(orders[0]) : null
   const aiEnabled = Boolean(functionsBaseUrl())
 
   const verdict = buyer
@@ -357,8 +364,16 @@ export function Lookup() {
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`size-3 rounded-full ${VERDICT_DOT[verdict.tone]}`} aria-hidden="true" />
                 <h2 className={`text-3xl font-bold tracking-tight ${VERDICT_TEXT[verdict.tone]}`}>{verdict.label}</h2>
-                <span className="ms-auto font-mono text-[15px] text-muted-foreground">
-                  {phone(buyer.phone)} · {verdict.confidenceLabel}
+                <span className="ms-auto text-end">
+                  {/* PRIVACY: a name is only shown when this merchant has an
+                      order for the number. A network-wide lookup stays a
+                      number, so it cannot deanonymise other stores' buyers. */}
+                  {knownName ? (
+                    <span className="block text-[15px] font-semibold text-foreground">{knownName}</span>
+                  ) : null}
+                  <span className="block font-mono text-[15px] text-muted-foreground">
+                    {phone(buyer.phone)} · {verdict.confidenceLabel}
+                  </span>
                 </span>
               </div>
 

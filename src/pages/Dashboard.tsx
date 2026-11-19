@@ -14,6 +14,7 @@ import { VerdictBadge } from '@/components/app/verdict-badge'
 import { CardState } from '@/components/app/card-state'
 import { VerdictCard } from '@/components/app/verdict-card'
 import { RowActions } from '@/components/app/row-actions'
+import { BuyerName } from '@/components/app/buyer-name'
 import { CountUp } from '@/components/app/count-up'
 import { briefingLine } from '@/components/app/briefing-line'
 import { FirstRunChecklist, MoneyRiskCards } from '@/components/app/dashboard-extras'
@@ -21,7 +22,7 @@ import { InsightCards } from '@/components/app/insight-cards'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { money, phone, timeAgo } from '@/lib/format'
+import { money, timeAgo } from '@/lib/format'
 import { hasEnoughData, toneFromScore, type VerdictTone } from '@/lib/risk'
 import { confirmOrderMessage } from '@/lib/ui'
 import { useAutoRefresh, useNowTicker } from '@/lib/ui/use-auto-refresh'
@@ -36,6 +37,8 @@ interface BuyerLight {
   phone: string
   risk_score: number
   total_orders: number
+  /** Last name seen for this phone, used when the order has none. */
+  name?: string | null
 }
 
 /**
@@ -138,7 +141,7 @@ export function Dashboard() {
 
     let ordersQuery = supabase
       .from('orders')
-      .select('*, stores(name), outcomes(status, resolved_at)')
+      .select('*, stores(name), order_fulfillment(customer_name), outcomes(status, resolved_at)')
       .order('ordered_at', { ascending: false })
       .limit(500)
     if (store) ordersQuery = ordersQuery.eq('store_id', store.id)
@@ -159,7 +162,7 @@ export function Dashboard() {
     // Buyers for the risk distribution. Admin → whole network. Merchant → only
     // buyers who have ordered from their store(s).
     if (isAdmin) {
-      const { data, error: buyersErr } = await supabase.from('buyers').select('phone, risk_score, total_orders').limit(5000)
+      const { data, error: buyersErr } = await supabase.from('buyers').select('phone, risk_score, total_orders, name').limit(5000)
       if (buyersErr) {
         setBuyersError(true)
         if (!silent) {
@@ -173,7 +176,7 @@ export function Dashboard() {
       } else {
         const { data, error: buyersErr } = await supabase
           .from('buyers')
-          .select('phone, risk_score, total_orders')
+          .select('phone, risk_score, total_orders, name')
           .in('phone', phones.slice(0, 1000))
         if (buyersErr) {
           setBuyersError(true)
@@ -605,7 +608,11 @@ export function Dashboard() {
                         className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-[10px] px-2 transition-colors hover:bg-muted/60"
                       >
                         <div className="min-w-0">
-                          <div className="font-mono text-[13px] font-medium">{phone(order.buyer_phone)}</div>
+                          <BuyerName
+                            order={{ ...order, buyers: { name: buyer?.name ?? null } }}
+                            primaryClassName="text-[13px] font-medium text-foreground"
+                            secondaryClassName="font-mono text-[11px] text-muted-foreground"
+                          />
                           <div className="truncate text-[13px] text-muted-foreground">
                             {order.product_name || order.product_category || 'Order'}
                           </div>
@@ -832,10 +839,14 @@ export function Dashboard() {
                   <TableRow key={o.id}>
                     <TableCell className="ps-6">
                       <Link
+                        className="block min-w-0 hover:underline"
                         to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
-                        className="font-mono text-[13px] text-primary-text hover:underline"
                       >
-                        {phone(o.buyer_phone)}
+                        <BuyerName
+                          order={o}
+                          primaryClassName="text-[13px] text-primary-text"
+                          secondaryClassName="font-mono text-[11px] text-muted-foreground"
+                        />
                       </Link>
                     </TableCell>
                     <TableCell className="max-w-56 truncate">{o.product_name || o.product_category || 'Untitled product'}</TableCell>

@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { VerdictBadge } from './verdict-badge'
 import { StatusBadge } from './status-badge'
-import { dateTime, money, phone } from '@/lib/format'
+import { dateTime, money } from '@/lib/format'
+import { buyerLabel } from '@/lib/buyer-name'
 import type { OutcomeStatus } from '@/lib/types'
 
 /**
@@ -21,6 +22,8 @@ export interface CardOrder {
   order_reference?: string | null
   courier_tracking_number?: string | null
   stores?: { name: string | null } | null
+  /** Per-order name from Shopify's label or a call correction. */
+  order_fulfillment?: { customer_name?: string | null } | null
   buyers?: { name?: string | null; risk_score?: number | null; total_orders?: number | null } | null
   outcomes?: {
     status?: OutcomeStatus | null
@@ -53,6 +56,7 @@ export function OrderCard<T extends CardOrder>({
 }: Props<T>) {
   const [expanded, setExpanded] = useState(false)
   const status = (order.outcomes?.status ?? 'pending') as OutcomeStatus
+  const label = buyerLabel(order)
   const detail = (label: string, value: ReactNode, wide = false) => (
     <div className={wide ? 'col-span-2 min-w-0' : 'min-w-0'}>
       <dt className="m-0 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
@@ -74,14 +78,16 @@ export function OrderCard<T extends CardOrder>({
       >
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
-            <span
-              className="truncate text-[13px] font-semibold text-foreground"
-              title={order.buyers?.name ? phone(order.buyer_phone) : undefined}
-            >
-              {order.buyers?.name?.trim() || phone(order.buyer_phone)}
+            <span className="truncate text-[13px] font-semibold text-foreground" title={label.primary}>
+              {label.primary}
             </span>
             <VerdictBadge riskScore={order.buyers?.risk_score} totalOrders={order.buyers?.total_orders} />
           </span>
+          {label.secondary ? (
+            <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
+              {label.secondary}
+            </span>
+          ) : null}
           <span className="mt-1 block truncate text-[12px] text-muted-foreground">
             {dateTime(order.ordered_at)}
             {order.city ? ` · ${order.city}` : ''}

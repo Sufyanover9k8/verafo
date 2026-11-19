@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { AutomateCalls } from '../components/app/automate-calls'
+import { BuyerName } from '../components/app/buyer-name'
 import { StatusBadge } from '../components/app/status-badge'
 import { OrderCard } from '../components/app/order-card'
 import { ViewToggle, type ViewMode } from '../components/app/view-toggle'
@@ -11,6 +12,7 @@ import { Skeleton } from '../components/primitives/Skeleton'
 import { Table, type Column } from '../components/primitives/Table'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { dateTime, money, phone } from '../lib/format'
+import { customerNameOfOrder } from '../lib/buyer-name'
 import { formatScore, riskLevel } from '../lib/risk'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
@@ -56,7 +58,9 @@ export function Outcomes() {
     setLoadError(false)
     let query = supabase
       .from('orders')
-      .select('*, stores(name), buyers(name, risk_score, total_orders), outcomes(status, resolved_at, refusal_reason)')
+      .select(
+          '*, stores(name), order_fulfillment(customer_name), buyers(name, risk_score, total_orders), outcomes(status, resolved_at, refusal_reason)',
+        )
     if (store) query = query.eq('store_id', store.id)
     const { data, error } = await query.order('ordered_at', { ascending: false }).limit(200)
     if (error) {
@@ -100,7 +104,7 @@ export function Outcomes() {
       toast.push({
         kind: 'success',
         title: status === 'accepted' ? 'Marked as accepted' : 'Marked as refused',
-        detail: `${phone(order.buyer_phone)} — new risk score ${formatScore(score)} (${riskLevel(score)})`,
+        detail: `${customerNameOfOrder(order) ?? phone(order.buyer_phone)} — new risk score ${formatScore(score)} (${riskLevel(score)})`,
       })
       timers.current.push(window.setTimeout(() => void load(), EXIT_MS))
     } catch (err) {
@@ -152,12 +156,15 @@ export function Outcomes() {
       id: true,
       render: (o) => (
         <Link
-          className="text-[13px] font-medium text-primary-text hover:underline"
+          className="block min-w-0 hover:underline"
           to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
-          // The name is the label; the number is still one hover away.
-          title={phone(o.buyer_phone)}
+          aria-label={`Look up ${customerNameOfOrder(o) ?? phone(o.buyer_phone)}`}
         >
-          {o.buyers?.name?.trim() || phone(o.buyer_phone)}
+          <BuyerName
+            order={o}
+            primaryClassName="text-[13px] font-medium text-primary-text"
+            secondaryClassName="font-mono text-[11px] text-muted-foreground"
+          />
         </Link>
       ),
     },

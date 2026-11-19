@@ -43,8 +43,11 @@ export const BACKFILL_QUERY = `#graphql
           displayFulfillmentStatus
           customer {
             phone
+            firstName
+            lastName
           }
           shippingAddress {
+            name
             address1
             city
           }
