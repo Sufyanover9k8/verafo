@@ -247,7 +247,7 @@ function summarizeTool(name: string, result: unknown): string {
     case "refusal_reasons":
       return `${r?.total_refused ?? 0} refusals analysed`;
     case "buyer_orders":
-      return `${Array.isArray(r) ? r.length : 0} orders`;
+      return `${Array.isArray(r?.orders) ? r.orders.length : Array.isArray(r) ? r.length : 0} orders`;
     case "weekly_trend":
       return `${Array.isArray(r) ? r.length : 0} weeks`;
     case "similar_buyers":
@@ -1349,6 +1349,34 @@ async function toolSearchOrders(supabase: Db, args: Record<string, unknown>, sto
   return { count: orders.length, orders };
 }
 
+/**
+ * Phones the caller has ordered from, grouped by their last four digits - the
+ * only handle `verafo_buyer_ranking` gives back. Used to un-mask a ranked row
+ * only when the digits identify exactly one of the caller's own buyers.
+ */
+async function ownPhonesByLast4(storeIds: string[]): Promise<Map<string, string[]>> {
+  const byLast4 = new Map<string, string[]>();
+  if (!storeIds || storeIds.length === 0) return byLast4;
+  let rows: { buyer_phone?: string | null }[];
+  try {
+    rows = await fetchRows("orders",
+      `select=buyer_phone&order=ordered_at.desc&limit=5000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    return byLast4;
+  }
+  for (const row of rows) {
+    const phone = String(row.buyer_phone ?? "").trim();
+    if (!phone) continue;
+    const last4 = digitsOnly(phone).slice(-4);
+    if (last4.length < 4) continue;
+    const list = byLast4.get(last4) ?? [];
+    if (!list.includes(phone)) list.push(phone);
+    byLast4.set(last4, list);
+  }
+  return byLast4;
+}
+
 async function toolTopBuyers(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
   // PRIVACY: this used to read the whole `buyers` table and return every
   // buyer's PHONE NUMBER across the entire network. It now calls
@@ -1377,9 +1405,22 @@ async function toolTopBuyers(supabase: Db, args: Record<string, unknown>, storeI
   });
   if (error) return { error: error.message };
 
-  return asRows<BuyerRankingRow>(data).map((r) => ({
+  const rows = asRows<BuyerRankingRow>(data);
+  // The ranking is masked by design. When a masked label matches exactly one
+  // phone the caller has an order for, that row IS their own customer, so the
+  // full number and the saved name may be shown; an ambiguous label stays masked.
+  const own = await ownPhonesByLast4(storeIds);
+  const resolved = rows.map((r) => {
+    const last4 = digitsOnly(r.buyer_label).slice(-4);
+    const matches = own.get(last4) ?? [];
+    return { row: r, phone: matches.length === 1 ? matches[0] : null };
+  });
+  const names = await loadBuyerNames(resolved.map((x) => x.phone).filter(Boolean) as string[], storeIds);
+
+  return resolved.map(({ row: r, phone }) => ({
     rank: Number(r.rank),
     buyer: String(r.buyer_label ?? "····"),
+    ...(phone ? { phone, buyer_name: names.get(phone) ?? null } : {}),
     orders: Number(r.orders ?? 0),
     accepted: Number(r.accepted ?? 0),
     refused: Number(r.refused ?? 0),
@@ -1421,6 +1462,10 @@ async function toolBuyersByCity(supabase: Db, args: Record<string, unknown>, sto
   const floor =
     minPrice != null && Number.isFinite(minPrice) && minPrice > 0 ? minPrice : 0;
   const above = floor > 0 ? list.filter((b) => b.max_order >= floor) : null;
+  const sample = list.slice(0, 20);
+  // These are the caller's own buyers (the rows are scoped to their stores), so
+  // showing the name they saved is safe; phones without one stay phone-only.
+  const names = await loadBuyerNames(sample.map((b) => b.phone), storeIds);
   return {
     city,
     ...(category ? { category: args.category } : {}),
@@ -1428,8 +1473,25 @@ async function toolBuyersByCity(supabase: Db, args: Record<string, unknown>, sto
     ...(above
       ? { buyers_with_order_above: above.length, above_phones: above.map((b) => b.phone).slice(0, 20) }
       : {}),
-    sample_buyers: list.slice(0, 20),
+    sample_buyers: sample.map((b) => ({ ...b, buyer_name: names.get(b.phone) ?? null })),
   };
+}
+
+/**
+ * The stored spelling of a phone number. Buyers are keyed by the canonical form
+ * (e.g. +923001234567), so "0300 1234567" and "+92 300 1234567" must resolve to
+ * the same row before we can look anything up.
+ */
+async function resolveBuyerPhone(supabase: Db, phone: string): Promise<string | null> {
+  const candidates = phoneLookupCandidates(phone);
+  if (candidates.length === 0) return null;
+  const { data, error } = await supabase
+    .from("buyers")
+    .select("phone")
+    .in("phone", candidates)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return asOne<{ phone: string }>(data)?.phone ?? null;
 }
 
 async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
@@ -1437,11 +1499,15 @@ async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, sto
   if (denied) return denied;
   const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone, storeIds);
+  // Resolve first: the caller may type the local format, and a wrong-looking
+  // phone must never be reported back as "not in the network".
+  const canonical = (await resolveBuyerPhone(supabase, phone)) ?? phone;
+  const stats = await fetchStats(supabase, canonical, storeIds);
   const rows = await fetchRows<OrderRow>(
     "orders",
-    `${buildOrderParams({ phone, limit: 50 })}${storeIdFilter(storeIds)}`,
+    `${buildOrderParams({ phone: canonical, limit: 50 })}${storeIdFilter(storeIds)}`,
   );
+  const names = await loadBuyerNames(phoneLookupCandidates(canonical), storeIds);
   const orders = rows.map((o) => ({
     product: o.product_name ?? o.product_category ?? "?",
     category: o.product_category ?? "?",
@@ -1450,7 +1516,12 @@ async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, sto
     status: orderOutcome(o),
     date: (o.ordered_at ?? "").slice(0, 10),
   }));
-  return { summary: buildSummaryText(stats), orders };
+  return {
+    phone: canonical,
+    buyer_name: [...names.values()][0] ?? null,
+    summary: buildSummaryText(stats),
+    orders,
+  };
 }
 
 async function toolCityOverview(supabase: Db, _args: unknown, _storeIds: string[] = []) {
@@ -1691,6 +1762,39 @@ function storeIdFilter(storeIds: string[]): string {
   return `&store_id=in.(${encodeURIComponent(list)})`;
 }
 
+/**
+ * Names for buyers the caller actually has on file.
+ *
+ * The identity rule matches the dashboard: a name is shown only when it came
+ * from an order in one of the caller's own stores. `buyers.name` is a
+ * network-wide label, so it is deliberately not used here - it would leak the
+ * name of somebody else's customer.
+ */
+async function loadBuyerNames(phones: unknown[], storeIds: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const wanted = [...new Set(phones.map((p) => String(p ?? "").trim()).filter(Boolean))];
+  if (wanted.length === 0 || !storeIds || storeIds.length === 0) return names;
+  const list = wanted.map((p) => `"${p.replace(/"/g, "")}"`).join(",");
+  let rows: { buyer_phone?: string | null; order_fulfillment?: unknown }[];
+  try {
+    rows = await fetchRows("orders",
+      `select=buyer_phone,order_fulfillment(customer_name)&buyer_phone=in.(${encodeURIComponent(list)})&limit=2000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    // A name is a nicety: never fail a tool call because the lookup broke.
+    return names;
+  }
+  for (const row of rows) {
+    const phone = String(row.buyer_phone ?? "").trim();
+    if (!phone || names.has(phone)) continue;
+    const name = embedOne<{ customer_name?: string | null }>(row.order_fulfillment as never)
+      ?.customer_name;
+    const clean = String(name ?? "").trim();
+    if (clean) names.set(phone, clean);
+  }
+  return names;
+}
+
 async function toolBuyerOrders(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
   const denied = requireOwnStores(storeIds);
   if (denied) return denied;
@@ -1704,15 +1808,19 @@ async function toolBuyerOrders(supabase: Db, args: Record<string, unknown>, stor
     "orders",
     `${buildOrderParams({ phone, limit })}${storeIdFilter(storeIds)}`,
   );
-  return rows.map((o) => ({
-    product: o.product_name ?? o.product_category ?? "?",
-    category: o.product_category ?? "?",
-    price: o.price ?? 0,
-    quantity: o.quantity ?? 1,
-    city: o.city ?? "?",
-    status: orderOutcome(o),
-    date: (o.ordered_at ?? "").slice(0, 10),
-  }));
+  const names = await loadBuyerNames(phoneLookupCandidates(phone), storeIds);
+  return {
+    buyer_name: [...names.values()][0] ?? null,
+    orders: rows.map((o) => ({
+      product: o.product_name ?? o.product_category ?? "?",
+      category: o.product_category ?? "?",
+      price: o.price ?? 0,
+      quantity: o.quantity ?? 1,
+      city: o.city ?? "?",
+      status: orderOutcome(o),
+      date: (o.ordered_at ?? "").slice(0, 10),
+    })),
+  };
 }
 
 async function toolWeeklyTrend(supabase: Db, _args: unknown, _storeIds: string[] = []) {
@@ -1774,11 +1882,14 @@ async function toolBuyerVerdict(
   if (denied) return denied;
   const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone, storeIds);
+  const canonical = (await resolveBuyerPhone(supabase, phone)) ?? phone;
+  const stats = await fetchStats(supabase, canonical, storeIds);
+  const names = await loadBuyerNames(phoneLookupCandidates(canonical), storeIds);
+  const buyerName = [...names.values()][0] ?? null;
   const { data: recent, error: rErr } = await supabase
     .from("orders")
     .select("product_name, product_category, price, city, ordered_at, outcomes(status, refusal_reason)")
-    .eq("buyer_phone", phone)
+    .eq("buyer_phone", canonical)
     .in("store_id", storeIds)
     .order("ordered_at", { ascending: false })
     .limit(10);
@@ -1789,6 +1900,9 @@ async function toolBuyerVerdict(
         `${o.product_name ?? o.product_category} - ${o.price ?? "?"} PKR - ${o.city ?? "?"} - ${embedOne(o.outcomes)?.status ?? "pending"}`,
     )
     .join("\n");
+  const identify = buyerName
+    ? `Buyer ${canonical} (${buyerName}).`
+    : `Buyer ${canonical}. No name on file - never invent one.`;
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     response_format: { type: "json_object" },
@@ -1802,14 +1916,14 @@ async function toolBuyerVerdict(
           "\"verdict\": string (one sentence), \"confidence\": \"low\" | \"medium\" | \"high\"}. " +
           "Base every claim on the provided data.",
       },
-      { role: "user", content: `Buyer ${phone}.\n${buildSummaryText(stats)}\n\nRecent orders:\n${detail}` },
+      { role: "user", content: `${identify}\n${buildSummaryText(stats)}\n\nRecent orders:\n${detail}` },
     ],
     temperature: 0.3,
   });
   try {
-    return { phone, ...JSON.parse(res.choices[0].message.content ?? "{}") };
+    return { phone: canonical, buyer_name: buyerName, ...JSON.parse(res.choices[0].message.content ?? "{}") };
   } catch {
-    return { phone, error: "invalid verdict JSON" };
+    return { phone: canonical, buyer_name: buyerName, error: "invalid verdict JSON" };
   }
 }
 
@@ -1941,9 +2055,13 @@ async function toolSearchBuyers(supabase: Db, args: Record<string, unknown>, sto
   if (rows.length === 0) {
     return { buyers: [], note: "No buyer with that phone number exists in the network yet." };
   }
+  // A name is attached only when the caller has an order for the number (their
+  // own customer); otherwise the lookup stays phone-only, like Buyer Lookup.
+  const names = await loadBuyerNames(rows.map((r) => String(r.phone)), storeIds);
   return {
     buyers: rows.map((b) => ({
       phone: String(b.phone),
+      buyer_name: names.get(String(b.phone)) ?? null,
       risk_score: Number(b.risk_score),
       total_orders: Number(b.total_orders),
       total_accepted: Number(b.total_accepted),
@@ -3154,9 +3272,26 @@ const supabase = createClient(
           /\b(?:file|pdf|csv|excel|xlsx|spreadsheet|download|export|report)\b/i.test(rawPrompt)
             ? "\n\n(If the user asked for a downloadable file, call create_file - it is attached automatically.)"
             : "";
+        // A follow-up like "what's his name" carries no phone number of its own.
+        // Hand the model the buyer the conversation was already about instead of
+        // letting it ask again (or, worse, answer as if the buyer vanished).
+        const lastMentionedPhone = (() => {
+          if (/\d{9,}/.test(rawPrompt)) return null;
+          for (let i = history.length - 1; i >= 0; i--) {
+            const hit = String((history[i] as { content?: unknown })?.content ?? "").match(
+              /\+?\d{11,13}/,
+            );
+            if (hit) return hit[0];
+          }
+          return null;
+        })();
+        const followUpNote = lastMentionedPhone
+          ? `\n\n(Follow-up question: the buyer already under discussion is ${lastMentionedPhone}. ` +
+            "Use that number for any buyer tool call - do not ask the user to repeat it.)"
+          : "";
         const userContent = context
-          ? `Context:\n${context}\n\nQuestion:\n${rawPrompt}${chartUserNote}${fileUserNote}`
-          : `${rawPrompt}${chartUserNote}${fileUserNote}`;
+          ? `Context:\n${context}\n\nQuestion:\n${rawPrompt}${chartUserNote}${fileUserNote}${followUpNote}`
+          : `${rawPrompt}${chartUserNote}${fileUserNote}${followUpNote}`;
 
         const detectedCity = detectCity(rawPrompt);
         const cityScopeNote = detectedCity
@@ -3200,6 +3335,21 @@ const supabase = createClient(
               "to get exact matches before estimating.\n" +
               "- Buyer phone numbers returned by tools are this seller's own customers - include them " +
               "verbatim in your answer (e.g. +923001112222). Never mask or anonymize them.\n" +
+              "- BUYER NAMES: tools return `buyer_name` (or `name`) only when the seller has an order " +
+              "from that person in their own store. If it is null, say \"no name on file for that " +
+              "number\" and give the number - NEVER invent a name, and never explain the missing " +
+              "name with a theory (\"they may not have a complete profile\").\n" +
+              "- When you talk about a specific buyer, name them AND repeat their phone number in the " +
+              "same answer (e.g. \"Ayesha Siddiqui, +923001234501\"). Follow-up questions like \"what is " +
+              "his name\" refer back to that number, so it must already be in the conversation.\n" +
+              "- NEVER say a buyer \"does not exist\" or \"is not in the network\" if a tool returned a " +
+              "profile, orders or stats for them: they exist, the field is just missing. Use only the " +
+              "phrases \"no name on file\" / \"not in the data\".\n" +
+              "- When you report a buyer's figures, copy the exact fields a tool returned " +
+              "(orders, accepted, refused, spend, risk_score). Do not restate them from memory, and do " +
+              "not add a value that no tool returned - that is how wrong order counts get told.\n" +
+              "- top_buyers returns masked labels like \"••••4009\" on purpose. Quote the label as " +
+              "given, and tell the seller they can ask about a full number for the named profile.\n" +
               "- When the user asks whether to ship to a buyer, prefer calling buyer_verdict to get a " +
               "recommendation, and quote its verdict.\n" +
               "- When the user asks who is similar to a buyer, call similar_buyers.\n\n" +
