@@ -139,6 +139,8 @@ interface CallButtonProps {
   who?: string | null
   className?: string
   size?: 'sm' | 'md'
+  /** Round icon-only button, for dense rows that already have a target. */
+  iconOnly?: boolean
   onSettled?: (verification: Verification) => void
 }
 
@@ -146,11 +148,19 @@ interface CallButtonProps {
  * "Call" in the table rows: places a real Uplift call to this order's buyer
  * instead of opening the device dialer.
  */
-export function CallButton({ orderId, who, className, size = 'sm', onSettled }: CallButtonProps) {
+export function CallButton({
+  orderId,
+  who,
+  className,
+  size = 'sm',
+  iconOnly = false,
+  onSettled,
+}: CallButtonProps) {
   const { call, pending } = useCallAction({ onSettled })
   const busy = pending.includes(orderId)
-  const btn =
-    size === 'sm'
+  const btn = iconOnly
+    ? 'inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-muted disabled:opacity-60'
+    : size === 'sm'
       ? 'inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-border bg-card px-2.5 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60 md:h-8'
       : 'inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-4 text-[13.5px] font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60'
 
@@ -161,10 +171,14 @@ export function CallButton({ orderId, who, className, size = 'sm', onSettled }: 
       disabled={busy || pending.length > 0}
       onClick={() => void call(orderId, who)}
       aria-label={busy ? 'Calling the buyer' : 'Call the buyer with Verafo'}
-      title="Verafo calls the buyer and records what they say"
+      title={busy ? 'Calling…' : 'Verafo calls the buyer and records what they say'}
     >
-      {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Phone className="size-3.5" />}
-      {busy ? 'Calling…' : 'Call'}
+      {busy ? (
+        <Loader2 className={iconOnly ? 'size-4 animate-spin' : 'size-3.5 animate-spin'} />
+      ) : (
+        <Phone className={iconOnly ? 'size-4' : 'size-3.5'} strokeWidth={2} />
+      )}
+      {!iconOnly && (busy ? 'Calling…' : 'Call')}
     </button>
   )
 }

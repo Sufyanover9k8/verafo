@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Phone } from 'lucide-react'
 import { OrderCard } from '../components/app/order-card'
 import { ViewToggle, type ViewMode } from '../components/app/view-toggle'
 import { Icon } from '../components/Icon'
+import { CallButton } from '../components/app/call-button'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { Skeleton } from '../components/primitives/Skeleton'
@@ -261,16 +261,8 @@ function csv(rows: Record<string, unknown>[]): string {
           Accept
         </button>
 
-        {/* Placeholder: calling is not wired up yet, so it does nothing. */}
-        <button
-          type="button"
-          className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
-          disabled={busy}
-          title="Call buyer — not available yet"
-          aria-label={`Call ${phone(o.buyer_phone)} (not available yet)`}
-        >
-          <Phone size={15} strokeWidth={2} />
-        </button>
+        {/* Calls through Verafo's AI agent, one at a time. */}
+        <CallButton orderId={o.id} iconOnly onSettled={() => void load()} />
 
         {/* Refuse is just an X — the tooltip and aria-label carry the word. */}
         <button

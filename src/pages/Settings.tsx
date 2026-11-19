@@ -128,9 +128,10 @@ export function Settings() {
     }
     let cancelled = false
     // Only the buyer count is shown; the page does not need to wait on a ping.
+    // `buyers` is keyed by phone — asking for `id` is a 400 on every visit.
     supabase
       .from('buyers')
-      .select('id', { count: 'exact', head: true })
+      .select('phone', { count: 'exact', head: true })
       .then(({ count }) => {
         if (cancelled) return
         setBuyerCount(count)
