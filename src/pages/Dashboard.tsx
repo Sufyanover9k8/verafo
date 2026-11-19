@@ -613,7 +613,9 @@ export function Dashboard() {
                         <VerdictBadge riskScore={buyer?.risk_score} totalOrders={buyer?.total_orders} />
                       </Link>
                       <RowActions
+                        orderId={order.id}
                         phone={order.buyer_phone}
+                        onCallSettled={() => void load(true)}
                         message={confirmOrderMessage({
                           storeName: order.stores?.name ?? store?.name ?? null,
                           amount:
@@ -626,7 +628,8 @@ export function Dashboard() {
                 ))}
               </ul>
               <p className="mt-3 text-[11.5px] text-muted-foreground">
-                These open your phone or WhatsApp. Verafo does not send messages for you.
+                Call dials through Verafo's AI agent and records the verdict. WhatsApp and Copy
+                open your own apps.
               </p>
             </CardState>
           </CardContent>

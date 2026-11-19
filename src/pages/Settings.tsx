@@ -7,11 +7,15 @@ import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
+import { readCallSettings, saveCallSettings, thresholdLabel, type CallSettings } from '../lib/calls'
 import { isConfigured, supabase } from '../lib/supabase'
 import { LOGIN_PATH } from '../lib/ui/auth-redirect'
 import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
 import { useToast } from '../lib/toast'
+
+/** Risk thresholds offered for automated calls — matches the mobile app. */
+const CALL_THRESHOLDS = [0.35, 0.5, 0.65, 0.8]
 
 function download(name: string, content: string) {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
@@ -54,10 +58,68 @@ export function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
+  /** Calling: the threshold + budget the automated call queue reads. */
+  const [calls, setCalls] = useState<CallSettings | null>(null)
+  const [callsLoading, setCallsLoading] = useState(true)
+  const [savingCalls, setSavingCalls] = useState<'auto' | 'threshold' | 'budget' | null>(null)
+  const [budget, setBudget] = useState('1000')
 
   useEffect(() => {
     setName(displayName)
   }, [displayName])
+
+  useEffect(() => {
+    let alive = true
+    readCallSettings()
+      .then(({ settings, stores }) => {
+        if (!alive) return
+        const row =
+          (store ? settings?.find((s) => s.store_id === store.id) : undefined) ??
+          settings?.find((s) => s.store_id === stores?.[0]?.id) ??
+          null
+        setCalls(row)
+        setBudget(String(row?.monthly_budget_pkr ?? 1000))
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setCallsLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [store])
+
+  async function saveCalls(
+    patch: Partial<Pick<CallSettings, 'auto_call' | 'risk_threshold' | 'monthly_budget_pkr'>>,
+    which: 'auto' | 'threshold' | 'budget',
+  ) {
+    if (!calls) return
+    setSavingCalls(which)
+    try {
+      const res = await saveCallSettings(calls.store_id, patch)
+      setCalls(res.settings ?? { ...calls, ...patch })
+      const threshold = thresholdLabel(Number(res.settings?.risk_threshold ?? calls.risk_threshold))
+      toast.push({
+        kind: 'success',
+        title:
+          which === 'auto'
+            ? calls.auto_call
+              ? 'Automated calls are off'
+              : `Automated calls are on — ${threshold} risk and above`
+            : which === 'threshold'
+              ? `Calls now start at ${threshold} risk`
+              : 'Call budget saved',
+      })
+    } catch (error) {
+      toast.push({
+        kind: 'error',
+        title: 'Could not save calling settings',
+        detail: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSavingCalls(null)
+    }
+  }
 
   useEffect(() => {
     if (!supabase) {
@@ -416,6 +478,107 @@ export function Settings() {
                 </button>
               </form>
             </div>
+          </div>
+        </section>
+
+        <section className="card settings-section">
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
+              <Icon name="sparkles" size={16} />
+            </span>
+            <span className="eyebrow">Calling</span>
+          </div>
+          <div className="settings-rows">
+            {!calls && !callsLoading ? (
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Not set up yet</div>
+                  <div className="setting-desc">
+                    Open Verafo on your phone once for this store and calling settings appear here.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-title">Automate calls</div>
+                    <div className="setting-desc">
+                      Verafo calls every order at or above the threshold, one at a time, and records
+                      what the buyer says. Orders below it are accepted without a call.
+                    </div>
+                  </div>
+                  <button
+                    className={`switch${calls?.auto_call ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={Boolean(calls?.auto_call)}
+                    aria-label="Automate calls"
+                    disabled={!calls || savingCalls === 'auto'}
+                    onClick={() => void saveCalls({ auto_call: !calls?.auto_call }, 'auto')}
+                  />
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-title">Call at this risk or higher</div>
+                    <div className="setting-desc">
+                      The line between calling and accepting silently. Applies to automation and to
+                      the “Automate calls” switch on Outcomes.
+                    </div>
+                  </div>
+                  <div className="seg" role="group" aria-label="Call risk threshold">
+                    {CALL_THRESHOLDS.map((t) => (
+                      <button
+                        key={t}
+                        className={
+                          calls && Math.abs(calls.risk_threshold - t) < 0.001 ? 'active' : undefined
+                        }
+                        disabled={!calls || savingCalls === 'threshold'}
+                        onClick={() => void saveCalls({ risk_threshold: t }, 'threshold')}
+                        aria-pressed={Boolean(calls && Math.abs(calls.risk_threshold - t) < 0.001)}
+                      >
+                        {thresholdLabel(t)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-title">Monthly call budget</div>
+                    <div className="setting-desc">
+                      One token is one second of talk time — 12 PKR per minute. Calls stop when the
+                      allowance runs out and reset at the start of each month.
+                    </div>
+                  </div>
+                  <form
+                    className="setting-control"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const value = Number(budget)
+                      if (!Number.isFinite(value) || value < 0) return
+                      void saveCalls({ monthly_budget_pkr: value }, 'budget')
+                    }}
+                  >
+                    <input
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                      aria-label="Monthly call budget in PKR"
+                    />
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      type="submit"
+                      disabled={!calls || savingCalls === 'budget'}
+                    >
+                      {savingCalls === 'budget' ? <Icon name="refresh" size={14} className="spin" /> : 'Save'}
+                    </button>
+                  </form>
+                </div>
+              </>
+            )}
           </div>
         </section>
 

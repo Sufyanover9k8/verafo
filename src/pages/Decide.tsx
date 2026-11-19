@@ -7,6 +7,8 @@ import { PageShell } from '@/components/app/page-shell'
 import { CardState } from '@/components/app/card-state'
 import { VerdictBadge } from '@/components/app/verdict-badge'
 import { RowActions } from '@/components/app/row-actions'
+import { useCallAction } from '@/components/app/call-button'
+import { AutomateCalls } from '@/components/app/automate-calls'
 import { EmptyHint } from '@/components/app/empty-hint'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -107,6 +109,9 @@ export function Decide() {
     void load()
   }, [load])
 
+  /** Recording "Call buyer" places a real Uplift call, the same as the app. */
+  const { call: placeCall } = useCallAction({ onSettled: () => void load() })
+
   async function record(order: QueueOrder, decision: Decision) {
     if (!supabase || saving) return
 
@@ -139,7 +144,8 @@ export function Decide() {
       })
 
       // "Call" and "Confirm on WhatsApp" also open the channel, so the
-      // merchant does not have to tap twice.
+      // merchant does not have to tap twice. The call is placed by Verafo's
+      // own agent (Uplift) rather than opening the device dialer.
       if (decision === 'confirm_whatsapp') {
         const msg = confirmOrderMessage({
           storeName: order.stores?.name ?? store?.name ?? null,
@@ -151,9 +157,7 @@ export function Decide() {
         if (href) window.open(href, '_blank', 'noreferrer')
       }
       if (decision === 'call') {
-        const { telLink } = await import('@/lib/ui')
-        const href = telLink(order.buyer_phone)
-        if (href) window.location.href = href
+        void placeCall(order.id)
       }
 
       toast.push({ kind: 'success', title: `${DECISION_META[decision].label} recorded` })
@@ -193,6 +197,7 @@ export function Decide() {
         description="Work through the orders that still need a call. Different from recording an outcome — this is what you decided before shipping."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <AutomateCalls onChange={() => void load()} />
             <button
               type="button"
               className={btn}
@@ -346,6 +351,7 @@ export function Decide() {
                       ))}
                       <RowActions
                         phone={order.buyer_phone}
+                        orderId={order.id}
                         message={confirmOrderMessage({
                           storeName: order.stores?.name ?? store?.name ?? null,
                           amount: order.price == null ? null : order.price * (order.quantity ?? 1),

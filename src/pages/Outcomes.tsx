@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
+import { AutomateCalls } from '../components/app/automate-calls'
 import { StatusBadge } from '../components/app/status-badge'
 import { OrderCard } from '../components/app/order-card'
 import { ViewToggle, type ViewMode } from '../components/app/view-toggle'
@@ -229,6 +230,7 @@ export function Outcomes() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ViewToggle view={view} onChange={changeView} label="Outcomes view" />
+          <AutomateCalls onChange={() => void load()} />
           <button
             type="button"
             className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-semibold text-foreground transition-colors hover:bg-muted md:h-9"

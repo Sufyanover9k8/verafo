@@ -83,6 +83,13 @@ export function StoreScopeProvider({ children }: { children: ReactNode }) {
   // Load the stores this user may see, then constrain the active store.
   useEffect(() => {
     if (sessionLoading || adminChecking) return
+    // Nothing to ask for until there is a signed-in user — this used to fire a
+    // pointless `owner_email=eq.__none__` request on the login screen.
+    if (!email) {
+      setStores([])
+      setStoresLoading(false)
+      return
+    }
     if (!supabase) {
       setStores([])
       setStoresLoading(false)
