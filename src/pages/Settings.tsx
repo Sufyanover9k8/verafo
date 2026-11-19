@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { CardState } from '../components/app/card-state'
+import { OrderImport } from '../components/app/order-import'
 import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
 import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
@@ -49,6 +50,7 @@ export function Settings() {
   const [ready, setReady] = useState(false)
   const [buyerCount, setBuyerCount] = useState<number | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [name, setName] = useState<string>(displayName)
@@ -700,6 +702,34 @@ export function Settings() {
             </div>
           </section>
         )}
+
+        <section className="card settings-section">
+          <button
+            type="button"
+            className="settings-toggle"
+            aria-expanded={importOpen}
+            aria-controls="import-orders"
+            onClick={() => setImportOpen((v) => !v)}
+          >
+            <span className="kpi-icon safe">
+              <Icon name="cloud-upload" size={16} />
+            </span>
+            <span className="eyebrow">Import orders</span>
+            <Icon name="chevron-down" size={16} className="toggle-chevron" />
+          </button>
+
+          {importOpen && (
+            <div id="import-orders" className="settings-panel">
+              <p className="setting-desc" style={{ marginBottom: 'var(--s-4)' }}>
+                Bring order history in from another platform — an Instagram or WhatsApp order sheet,
+                Daraz, WooCommerce, or an older Verafo export. Re-importing is safe, and rows that
+                already arrived from Shopify are skipped. Courier delivery reports stay on the
+                Courier reports page, because they are what sets outcomes.
+              </p>
+              <OrderImport />
+            </div>
+          )}
+        </section>
 
         <section className="card settings-section">
           <button

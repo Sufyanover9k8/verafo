@@ -82,7 +82,7 @@ async function post<T>(fn: 'auto-verify' | 'verify-status' | 'call-queue', body:
   })
 
   const text = await res.text()
-  let parsed: Record<string, unknown> = {}
+  let parsed: Record<string, unknown>
   try {
     parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {}
   } catch {

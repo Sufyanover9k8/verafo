@@ -21,6 +21,7 @@ const PAGE_ICONS: Record<string, string> = {
   'Buyer Lookup': 'search',
   'Buyer Map': 'layers',
   'Ask Verafo': 'chatbubbles',
+  'Courier reports': 'cloud-upload',
   'Bulk Import': 'cloud-upload',
   Settings: 'settings',
 }

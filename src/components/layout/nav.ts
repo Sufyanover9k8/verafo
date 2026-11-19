@@ -67,7 +67,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Data',
-    items: [{ to: '/import', label: 'Bulk Import', icon: UploadCloud }],
+    items: [{ to: '/import', label: 'Courier reports', icon: UploadCloud }],
   },
 ]
 

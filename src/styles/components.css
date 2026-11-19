@@ -3206,3 +3206,21 @@ code {
   transform: none !important;
   animation: none !important;
 }
+
+/* Settings → Import orders (the demoted CSV importer) --------------------- */
+.order-import { display: flex; flex-direction: column; gap: var(--s-3); }
+.order-import .import-head { margin-bottom: 0; justify-content: flex-start; }
+.order-import .gen-grid { margin-bottom: 0; }
+.order-import .import-textarea { width: 100%; min-height: 140px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: var(--s-3); color: var(--ink); font-family: var(--v-font-mono); font-size: var(--t-data); }
+.import-callout { display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-3); border-radius: var(--r-sm); background: var(--v-purple-bg, color-mix(in srgb, var(--v-purple-300) 12%, transparent)); border: 1px solid color-mix(in srgb, var(--v-purple-300) 35%, transparent); color: var(--v-ink-100); font-size: var(--t-body-sm); line-height: 1.55; }
+.import-callout strong { color: var(--v-ink-050); }
+.csv-details { margin-top: var(--s-2); }
+.csv-details > summary { display: inline-flex; align-items: center; gap: var(--s-1); cursor: pointer; font-size: var(--t-caption); font-weight: 600; color: var(--v-ink-300); list-style: none; }
+.csv-details > summary::-webkit-details-marker { display: none; }
+.csv-details > summary:hover { color: var(--v-ink-050); }
+.csv-details[open] > summary svg { transform: rotate(180deg); }
+.csv-details > summary svg { transition: transform .15s ease; }
+.csv-details .import-note { margin-top: var(--s-3); }
+.csv-details .import-note code { font-family: var(--v-font-mono); font-size: var(--t-caption); color: var(--v-ink-100); }
+.csv-details .csv-pre { max-height: 220px; overflow: auto; }
+.order-import .file-input { display: none; }
