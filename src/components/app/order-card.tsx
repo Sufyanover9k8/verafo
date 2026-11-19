@@ -123,6 +123,7 @@ export function OrderCard<T extends CardOrder>({
       {expanded && (
         <div className="border-t border-border px-4 py-3">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {detail('Customer', label.secondary ? `${label.primary} · ${label.secondary}` : label.primary, true)}
             {detail('Product', order.product_name || order.product_category || 'Untitled product', true)}
             {showStore && detail('Store', order.stores?.name ?? '—')}
             {detail('Reference', order.order_reference || '—')}

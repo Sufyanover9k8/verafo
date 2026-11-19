@@ -1,5 +1,7 @@
 import { getSupabase } from "./supabase.server";
 import {
+  customerNameOf,
+  fillCustomerName,
   graphqlNodeToPayload,
   normalizePhone,
   recordShopifyOrdersBatch,
@@ -224,8 +226,7 @@ async function graphqlWithRetry(
 }
 
 /** Fetch and ingest exactly one page, then persist the new cursor. */
-export async function advanceRun(run: SyncRun, admin: AdminGraphql): Promise<AdvanceResult> {
-  const supabase = getSupabase();
+export async function advanceRun(run: SyncRun, admin: AdminGraphql): Promise<AdvanceResult> {  const supabase = getSupabase();
   const sinceDate = run.since.slice(0, 10);
   // Shopify caps order access at 60 days without read_all_orders; the query
   // filter still applies, it just returns nothing older than the window.
@@ -285,4 +286,97 @@ export async function advanceRun(run: SyncRun, admin: AdminGraphql): Promise<Adv
     pageMissingPhone,
     outcomesSkipped: summary.outcomesSkipped,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Customer names for orders that were imported before we asked for them
+ * ------------------------------------------------------------------ */
+
+export interface NameRefresh {
+  named: number;
+  alreadyNamed: number;
+  missing: number;
+  remaining: number;
+}
+
+/** Orders per invitation: each one costs a read and (maybe) a write. */
+const NAME_BATCH = 120;
+
+const NAMES_QUERY = `#graphql
+  query namesFor($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Order {
+        id
+        name
+        customer { firstName lastName }
+        shippingAddress { name }
+      }
+    }
+  }
+`;
+
+/**
+ * Fill `order_fulfillment.customer_name` for orders we already have, using the
+ * live session the merchant is signed in with. The webhook covers new orders,
+ * and this covers the backlog - including the ones imported before the ingest
+ * asked Shopify for a name at all.
+ *
+ * Fill-only, so running it twice is harmless and a name confirmed on a call is
+ * never replaced by a checkout field.
+ */
+export async function refreshCustomerNames(
+  admin: AdminGraphql,
+  storeId: string,
+): Promise<NameRefresh> {
+  const supabase = getSupabase();
+
+  const { data: orders, error } = await supabase
+    .from("orders")
+    .select("id, buyer_phone, shopify_order_id")
+    .eq("store_id", storeId)
+    .not("shopify_order_id", "is", null)
+    .is("deleted_at", null)
+    .order("id")
+    .limit(NAME_BATCH + 1);
+  if (error) throw new Error(`could not read orders: ${error.message}`);
+
+  const rows = orders ?? [];
+  const remaining = Math.max(0, rows.length - NAME_BATCH);
+  const page = rows.slice(0, NAME_BATCH);
+
+  const ids = [...new Set(page.map((o) => String(o.shopify_order_id)))];
+  const names = new Map<string, string | null>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await admin.graphql(NAMES_QUERY, {
+      variables: { ids: ids.slice(i, i + 100).map((id) => `gid://shopify/Order/${id}`) },
+    });
+    const json = (await res.json()) as {
+      data?: { nodes?: (Record<string, unknown> | null)[] };
+      errors?: unknown;
+    };
+    if (json.errors) {
+      throw new Error(`Shopify rejected the name query: ${JSON.stringify(json.errors).slice(0, 300)}`);
+    }
+    for (const node of json.data?.nodes ?? []) {
+      if (!node?.id) continue;
+      const payload = graphqlNodeToPayload(node);
+      names.set(String(payload.id), customerNameOf(payload));
+    }
+  }
+
+  let named = 0;
+  let alreadyNamed = 0;
+  let missing = 0;
+  for (const order of page) {
+    const name = names.get(String(order.shopify_order_id)) ?? null;
+    if (!name) {
+      missing += 1;
+      continue;
+    }
+    const wrote = await fillCustomerName(supabase, order.id, name, order.buyer_phone);
+    if (wrote) named += 1;
+    else alreadyNamed += 1;
+  }
+
+  return { named, alreadyNamed, missing, remaining };
 }

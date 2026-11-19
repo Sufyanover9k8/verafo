@@ -210,13 +210,13 @@ export async function ensureStoreLink(
  * label for the phone, used as a fallback on surfaces that have no single
  * order (Buyer Lookup), and it is only filled when it is still empty.
  */
-async function fillCustomerName(
+export async function fillCustomerName(
   supabase: ReturnType<typeof getSupabase>,
   orderId: string,
   customerName: string | null,
   buyerPhone: string,
-): Promise<void> {
-  if (!customerName) return;
+): Promise<boolean> {
+  if (!customerName) return false;
 
   const { data: existing, error: readErr } = await supabase
     .from("order_fulfillment")
@@ -225,6 +225,7 @@ async function fillCustomerName(
     .maybeSingle();
   if (readErr) throw new Error(`customer name read failed: ${readErr.message}`);
 
+  let wrote = false;
   if (!existing) {
     const { error } = await supabase
       .from("order_fulfillment")
@@ -233,12 +234,14 @@ async function fillCustomerName(
     if (error && !/duplicate key|23505/i.test(error.message)) {
       throw new Error(`customer name insert failed: ${error.message}`);
     }
+    wrote = true;
   } else if (!existing.customer_name) {
     const { error } = await supabase
       .from("order_fulfillment")
       .update({ customer_name: customerName })
       .eq("order_id", orderId);
     if (error) throw new Error(`customer name update failed: ${error.message}`);
+    wrote = true;
   }
 
   await supabase
@@ -246,6 +249,8 @@ async function fillCustomerName(
     .update({ name: customerName })
     .eq("phone", buyerPhone)
     .is("name", null);
+
+  return wrote;
 }
 
 /**
