@@ -23,37 +23,46 @@ import {
 } from '../lib/workflow'
 import { LIVE_CALL, readCall } from '../lib/calls'
 
-/** The six boards, left to right, in the shape the funnel actually has. */
+/** The boards of the funnel, in the shape it actually has. */
 interface BoardSpec {
   stage: Stage
   title: string
   hint: string
   /** CSS custom property the board's header is tinted with. */
   tint?: string
+  /** `row` lays the cards out sideways across the full width. */
+  layout?: 'stack' | 'row'
 }
 
 const COLUMNS: BoardSpec[][] = [
   [{ stage: 'inbox', title: 'Orders', hint: 'Waiting for a decision' }],
   [{ stage: 'queue', title: 'Call queue', hint: 'Being called, or called and waiting', tint: '--risk-watch' }],
-  [
-    { stage: 'to_deliver', title: 'To deliver', hint: 'Approved, waiting for the courier', tint: '--cyan-primary' },
-    { stage: 'declined', title: 'Declined', hint: 'Refused by you or the call, or brought back', tint: '--risk-high' },
-  ],
+  [{ stage: 'to_deliver', title: 'To deliver', hint: 'Approved, waiting for the courier', tint: '--cyan-primary' }],
   [{ stage: 'delivered', title: 'Delivered', hint: 'The courier handed it over', tint: '--risk-safe' }],
+  [
+    {
+      stage: 'declined',
+      title: 'Declined',
+      hint: 'Refused by you or the call, or brought back by the courier',
+      tint: '--risk-high',
+      layout: 'row',
+    },
+  ],
 ]
 
 /**
  * A wire from one board to another, and the switch that automates it.
  * `lane` routes the wire over the top of the board it would otherwise cross, so
  * the fast lane from Orders to To deliver reads as bypassing the call queue.
+ * `drop` is for the board along the bottom: straight down out of the source.
  */
-const WIRES: { from: Stage; to: Stage; edge?: WorkflowEdge; lane?: boolean }[] = [
+const WIRES: { from: Stage; to: Stage; edge?: WorkflowEdge; shape?: 'row' | 'lane' | 'drop' }[] = [
   { from: 'inbox', to: 'queue', edge: 'call_dial' },
-  { from: 'inbox', to: 'to_deliver', edge: 'auto_accept', lane: true },
+  { from: 'inbox', to: 'to_deliver', edge: 'auto_accept', shape: 'lane' },
   { from: 'queue', to: 'to_deliver', edge: 'call_ship' },
-  { from: 'queue', to: 'declined', edge: 'call_refuse' },
+  { from: 'queue', to: 'declined', edge: 'call_refuse', shape: 'drop' },
   { from: 'to_deliver', to: 'delivered', edge: 'courier_delivered' },
-  { from: 'to_deliver', to: 'declined', edge: 'courier_returned' },
+  { from: 'to_deliver', to: 'declined', edge: 'courier_returned', shape: 'drop' },
 ]
 
 interface Box {
@@ -76,12 +85,16 @@ const LANE_Y = 12
 /**
  * Straight elbow between two boards, or - for a wire that would otherwise cross
  * a board standing between them - an elbow that climbs into the lane above the
- * grid and comes back down onto the target. Boards stacked in one column are
- * joined down the gutter on their right.
+ * grid and comes back down onto the target. Wires into the wide board along the
+ * bottom drop straight down out of their source.
  */
-function wireGeometry(from: Box | undefined, to: Box | undefined, lane?: boolean): WireGeometry | null {
+function wireGeometry(
+  from: Box | undefined,
+  to: Box | undefined,
+  shape: 'row' | 'lane' | 'drop' = 'row',
+): WireGeometry | null {
   if (!from || !to) return null
-  if (lane) {
+  if (shape === 'lane') {
     const sx = from.x + from.w
     const sy = from.y + 8
     const tx = to.x
@@ -95,18 +108,15 @@ function wireGeometry(from: Box | undefined, to: Box | undefined, lane?: boolean
       switch: { x: sx + 16, y: (sy + LANE_Y) / 2 + 6 },
     }
   }
-  const stacked = Math.abs(from.x - to.x) < 2 && to.y > from.y
-  if (stacked) {
-    const sx = from.x + from.w
-    const sy = from.y + from.h - 12
-    const tx = to.x + to.w
-    const ty = to.y + 18
-    const gutter = sx + 14
+  if (shape === 'drop') {
+    const cx = from.x + from.w / 2
+    const sy = from.y + from.h
+    const ty = to.y
     return {
-      d: `M ${sx} ${sy} H ${gutter} V ${ty} H ${tx}`,
-      start: { x: sx, y: sy },
-      end: { x: tx, y: ty },
-      switch: { x: gutter, y: (sy + ty) / 2 },
+      d: `M ${cx} ${sy} V ${ty}`,
+      start: { x: cx, y: sy },
+      end: { x: cx, y: ty },
+      switch: { x: cx, y: (sy + ty) / 2 },
     }
   }
   const sx = from.x + from.w
@@ -336,12 +346,12 @@ export function Workflow() {
       />
 
       <div ref={canvasRef} className="relative pt-10">
-        <div className="grid h-[calc(100vh-270px)] min-h-[520px] grid-cols-4 gap-x-14">
+        <div className="grid h-[calc(100vh-280px)] min-h-[560px] grid-cols-4 grid-rows-[minmax(0,1fr)_150px] gap-x-14 gap-y-9">
           {COLUMNS.map((column, index) => (
             <div
               key={index}
               className={
-                column.length > 1 ? 'grid min-h-0 grid-rows-[3fr_1fr] gap-3' : 'grid min-h-0 grid-rows-1'
+                column[0].layout === 'row' ? 'col-span-4 grid min-h-0 grid-rows-1' : 'grid min-h-0 grid-rows-1'
               }
             >
               {column.map((board) => {
@@ -386,6 +396,7 @@ export function Workflow() {
                       <span
                         className="text-[11px] font-semibold uppercase tracking-[0.08em]"
                         style={{ color: board.tint ? `var(${board.tint})` : 'var(--muted-foreground)' }}
+                        title={board.hint}
                       >
                         {board.title}
                       </span>
@@ -393,7 +404,13 @@ export function Workflow() {
                         {items.length}
                       </span>
                     </header>
-                    <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pb-2 pt-2">
+                    <div
+                      className={
+                        board.layout === 'row'
+                          ? 'flex min-h-0 flex-1 flex-wrap content-start gap-1.5 overflow-y-auto px-2 pb-2 pt-2'
+                          : 'min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pb-2 pt-2'
+                      }
+                    >
                       {items.map((order) => {
                         const name =
                           order.order_fulfillment?.customer_name ?? order.buyers?.name ?? phone(order.buyer_phone)
@@ -418,6 +435,8 @@ export function Workflow() {
                               setOver(null)
                             }}
                             className={`relative cursor-grab rounded-lg border border-border bg-background px-2.5 py-2 transition-[transform,box-shadow,border-color,opacity] duration-200 ease-out [transform-origin:50%_40%] ${
+                              board.layout === 'row' ? 'w-[212px] shrink-0' : ''
+                            } ${
                               dragging === order.id
                                 ? 'z-20 rotate-[4deg] scale-[1.05] border-foreground/20 shadow-[0_24px_44px_-18px_rgb(16_24_32/0.5)]'
                                 : pressed === order.id
@@ -478,7 +497,7 @@ export function Workflow() {
             measured and redrawn without touching the layout. */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
           {WIRES.map((wire) => {
-            const geometry = wireGeometry(boxes[wire.from], boxes[wire.to], wire.lane)
+            const geometry = wireGeometry(boxes[wire.from], boxes[wire.to], wire.shape)
             if (!geometry) return null
             const on = wire.edge ? automation[wire.edge] : false
             return (
@@ -503,7 +522,7 @@ export function Workflow() {
             without opening a settings page. */}
         <div className="pointer-events-none absolute inset-0">
           {WIRES.filter((wire) => wire.edge).map((wire) => {
-              const geometry = wireGeometry(boxes[wire.from], boxes[wire.to], wire.lane)
+              const geometry = wireGeometry(boxes[wire.from], boxes[wire.to], wire.shape)
               const edge = wire.edge as WorkflowEdge
               if (!geometry) return null
               const x = geometry.switch.x
