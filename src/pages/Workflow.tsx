@@ -33,29 +33,27 @@ interface BoardSpec {
 }
 
 const COLUMNS: BoardSpec[][] = [
-  [{ stage: 'inbox', title: 'Orders', hint: 'No decision yet' }],
-  [
-    { stage: 'queue', title: 'Call queue', hint: 'Being called, or called and waiting', tint: '--risk-watch' },
-    { stage: 'refused_before', title: 'Refused', hint: 'Refused without a call', tint: '--risk-high' },
-  ],
+  [{ stage: 'inbox', title: 'Orders', hint: 'Waiting for a decision' }],
+  [{ stage: 'queue', title: 'Call queue', hint: 'Being called, or called and waiting', tint: '--risk-watch' }],
   [
     { stage: 'to_deliver', title: 'To deliver', hint: 'Approved, waiting for the courier', tint: '--cyan-primary' },
-    { stage: 'refused_after', title: 'Refused', hint: 'Refused on the call', tint: '--risk-high' },
+    { stage: 'declined', title: 'Declined', hint: 'Refused by you or the call, or brought back', tint: '--risk-high' },
   ],
-  [
-    { stage: 'delivered', title: 'Delivered', hint: 'The courier handed it over', tint: '--risk-safe' },
-    { stage: 'returned', title: 'Declined / returned', hint: 'The courier brought it back', tint: '--risk-watch' },
-  ],
+  [{ stage: 'delivered', title: 'Delivered', hint: 'The courier handed it over', tint: '--risk-safe' }],
 ]
 
-/** A wire from one board to another, and the switch that automates it. */
-const WIRES: { from: Stage; to: Stage; edge?: WorkflowEdge }[] = [
+/**
+ * A wire from one board to another, and the switch that automates it.
+ * `lane` routes the wire over the top of the board it would otherwise cross, so
+ * the fast lane from Orders to To deliver reads as bypassing the call queue.
+ */
+const WIRES: { from: Stage; to: Stage; edge?: WorkflowEdge; lane?: boolean }[] = [
   { from: 'inbox', to: 'queue', edge: 'call_dial' },
-  { from: 'inbox', to: 'refused_before' },
+  { from: 'inbox', to: 'to_deliver', edge: 'auto_accept', lane: true },
   { from: 'queue', to: 'to_deliver', edge: 'call_ship' },
-  { from: 'queue', to: 'refused_after', edge: 'call_refuse' },
+  { from: 'queue', to: 'declined', edge: 'call_refuse' },
   { from: 'to_deliver', to: 'delivered', edge: 'courier_delivered' },
-  { from: 'to_deliver', to: 'returned', edge: 'courier_returned' },
+  { from: 'to_deliver', to: 'declined', edge: 'courier_returned' },
 ]
 
 interface Box {
@@ -63,6 +61,65 @@ interface Box {
   y: number
   w: number
   h: number
+}
+
+interface WireGeometry {
+  d: string
+  start: { x: number; y: number }
+  end: { x: number; y: number }
+  switch: { x: number; y: number }
+}
+
+/** Height of the lane the bypass wire runs through, above the boards. */
+const LANE_Y = 12
+
+/**
+ * Straight elbow between two boards, or - for a wire that would otherwise cross
+ * a board standing between them - an elbow that climbs into the lane above the
+ * grid and comes back down onto the target. Boards stacked in one column are
+ * joined down the gutter on their right.
+ */
+function wireGeometry(from: Box | undefined, to: Box | undefined, lane?: boolean): WireGeometry | null {
+  if (!from || !to) return null
+  if (lane) {
+    const sx = from.x + from.w
+    const sy = from.y + 8
+    const tx = to.x
+    const ty = to.y + 8
+    return {
+      d: `M ${sx} ${sy} H ${sx + 16} V ${LANE_Y} H ${tx - 16} V ${ty} H ${tx}`,
+      start: { x: sx, y: sy },
+      end: { x: tx, y: ty },
+      // The switch sits on the drop out of the source board, where it reads as
+      // "this is the fast lane off Orders" rather than as part of the middle board.
+      switch: { x: sx + 16, y: (sy + LANE_Y) / 2 + 6 },
+    }
+  }
+  const stacked = Math.abs(from.x - to.x) < 2 && to.y > from.y
+  if (stacked) {
+    const sx = from.x + from.w
+    const sy = from.y + from.h - 12
+    const tx = to.x + to.w
+    const ty = to.y + 18
+    const gutter = sx + 14
+    return {
+      d: `M ${sx} ${sy} H ${gutter} V ${ty} H ${tx}`,
+      start: { x: sx, y: sy },
+      end: { x: tx, y: ty },
+      switch: { x: gutter, y: (sy + ty) / 2 },
+    }
+  }
+  const sx = from.x + from.w
+  const sy = from.y + from.h / 2
+  const tx = to.x
+  const ty = to.y + to.h / 2
+  const mx = sx + (tx - sx) * 0.5
+  return {
+    d: `M ${sx} ${sy} H ${mx} V ${ty} H ${tx}`,
+    start: { x: sx, y: sy },
+    end: { x: tx, y: ty },
+    switch: { x: (mx + tx) / 2, y: ty },
+  }
 }
 
 function riskTone(score: number | null): string {
@@ -185,11 +242,9 @@ export function Workflow() {
     const next: Record<Stage, WorkflowOrder[]> = {
       inbox: [],
       queue: [],
-      refused_before: [],
       to_deliver: [],
-      refused_after: [],
+      declined: [],
       delivered: [],
-      returned: [],
     }
     for (const order of orders) next[stageOf(order)].push(order)
     return next
@@ -280,8 +335,8 @@ export function Workflow() {
         }
       />
 
-      <div ref={canvasRef} className="relative">
-        <div className="grid h-[calc(100vh-230px)] min-h-[520px] grid-cols-4 gap-x-14">
+      <div ref={canvasRef} className="relative pt-10">
+        <div className="grid h-[calc(100vh-270px)] min-h-[520px] grid-cols-4 gap-x-14">
           {COLUMNS.map((column, index) => (
             <div
               key={index}
@@ -423,27 +478,22 @@ export function Workflow() {
             measured and redrawn without touching the layout. */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
           {WIRES.map((wire) => {
-            const from = boxes[wire.from]
-            const to = boxes[wire.to]
-            if (!from || !to) return null
-            const sx = from.x + from.w
-            const sy = from.y + from.h / 2
-            const tx = to.x
-            const ty = to.y + to.h / 2
-            const mx = sx + (tx - sx) * 0.5
+            const geometry = wireGeometry(boxes[wire.from], boxes[wire.to], wire.lane)
+            if (!geometry) return null
             const on = wire.edge ? automation[wire.edge] : false
             return (
               <g key={`${wire.from}-${wire.to}`}>
                 <path
-                  d={`M ${sx} ${sy} H ${mx} V ${ty} H ${tx}`}
+                  d={geometry.d}
                   fill="none"
                   stroke="currentColor"
                   strokeWidth={1.5}
                   strokeDasharray={wire.edge && !on ? '4 4' : undefined}
+                  strokeLinejoin="round"
                   className="text-border"
                 />
-                <circle cx={sx} cy={sy} r={2.5} className="fill-border" />
-                <circle cx={tx} cy={ty} r={2.5} className="fill-border" />
+                <circle cx={geometry.start.x} cy={geometry.start.y} r={2.5} className="fill-border" />
+                <circle cx={geometry.end.x} cy={geometry.end.y} r={2.5} className="fill-border" />
               </g>
             )
           })}
@@ -453,15 +503,11 @@ export function Workflow() {
             without opening a settings page. */}
         <div className="pointer-events-none absolute inset-0">
           {WIRES.filter((wire) => wire.edge).map((wire) => {
-            const from = boxes[wire.from]
-            const to = boxes[wire.to]
-            const edge = wire.edge as WorkflowEdge
-            if (!from || !to) return null
-            const sx = from.x + from.w
-            const tx = to.x
-            const mx = sx + (tx - sx) * 0.5
-            const x = (mx + tx) / 2
-            const y = to.y + to.h / 2
+              const geometry = wireGeometry(boxes[wire.from], boxes[wire.to], wire.lane)
+              const edge = wire.edge as WorkflowEdge
+              if (!geometry) return null
+              const x = geometry.switch.x
+              const y = geometry.switch.y
             const on = automation[edge]
             const open = tip === edge
             return (
@@ -508,3 +554,4 @@ export function Workflow() {
     </PageShell>
   )
 }
+

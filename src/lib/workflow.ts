@@ -9,18 +9,23 @@ import { refreshFingerprint, startOrderCall } from './calls'
  * Calls and Outcomes pages agree with the board immediately.
  */
 export type Stage =
-  | 'inbox' // waiting for a decision, nobody has called yet
+  | 'inbox' // waiting for a decision: too risky to wave through, or not called yet
   | 'queue' // a call exists: dialling now, or called and waiting for a verdict
-  | 'refused_before' // refused without a call
   | 'to_deliver' // approved, not dispatched yet
-  | 'refused_after' // refused because of what the call found out
+  | 'declined' // refused by the merchant or the call, or brought back by the courier
   | 'delivered'
-  | 'returned'
 
-export type WorkflowEdge = 'call_dial' | 'call_ship' | 'call_refuse' | 'courier_delivered' | 'courier_returned'
+export type WorkflowEdge =
+  | 'call_dial'
+  | 'auto_accept'
+  | 'call_ship'
+  | 'call_refuse'
+  | 'courier_delivered'
+  | 'courier_returned'
 
 export const EDGE_LABEL: Record<WorkflowEdge, string> = {
-  call_dial: 'Calls are placed automatically',
+  call_dial: 'Risky orders are called automatically',
+  auto_accept: 'Safe orders ship without a call',
   call_ship: 'A confirmed call ships the parcel',
   call_refuse: 'A cancelled call refuses the parcel',
   courier_delivered: 'Courier delivery marks it delivered',
@@ -29,17 +34,20 @@ export const EDGE_LABEL: Record<WorkflowEdge, string> = {
 
 /** What the switch actually changes, in the merchant's terms. */
 export const EDGE_HINT: Record<WorkflowEdge, string> = {
-  call_dial: 'New orders at or above your risk threshold are called without you asking.',
+  call_dial: 'Orders at or above your risk threshold are queued for a call without you asking.',
+  auto_accept:
+    'Orders below your risk threshold are approved on their own, so they reach the courier without anyone touching them.',
   call_ship: 'When the buyer confirms the order on the call, it moves to To deliver on its own.',
-  call_refuse: 'When the buyer cancels on the call, it is refused and never leaves the shelf.',
+  call_refuse: 'When the buyer cancels on the call, it is declined and never leaves the shelf.',
   courier_delivered: 'When the courier reports a delivery, the order is marked delivered here.',
-  courier_returned: 'When the courier reports a refusal, the parcel is marked returned.',
+  courier_returned: 'When the courier reports a refusal, the parcel is marked declined here.',
 }
 
 export type Automation = Record<WorkflowEdge, boolean>
 
 export const DEFAULT_AUTOMATION: Automation = {
   call_dial: true,
+  auto_accept: true,
   call_ship: true,
   call_refuse: true,
   courier_delivered: true,
@@ -84,9 +92,8 @@ export function stageOf(order: WorkflowOrder): Stage {
     case 'delivered':
       return 'delivered'
     case 'returned':
-      return 'returned'
     case 'rejected':
-      return calls.length ? 'refused_after' : 'refused_before'
+      return 'declined'
     default:
       return calls.length ? 'queue' : 'inbox'
   }
@@ -150,11 +157,9 @@ interface Move {
 const MOVES: Record<Stage, Move> = {
   inbox: { decision: 'pending_review', outcome: 'pending' },
   queue: { decision: 'pending_review', call: true },
-  refused_before: { decision: 'rejected', outcome: 'refused' },
-  refused_after: { decision: 'rejected', outcome: 'refused' },
   to_deliver: { decision: 'approved' },
+  declined: { decision: 'rejected', outcome: 'refused' },
   delivered: { decision: 'delivered', outcome: 'accepted' },
-  returned: { decision: 'returned', outcome: 'refused' },
 }
 
 /**

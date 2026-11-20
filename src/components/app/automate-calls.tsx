@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, PhoneCall } from 'lucide-react'
 import { readCallSettings, saveCallSettings, thresholdLabel, type CallSettings } from '@/lib/calls'
+import { setAutomation } from '@/lib/workflow'
 import { useStoreScope } from '@/lib/store'
 import { useToast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,9 @@ export function AutomateCalls({ onChange }: { onChange?: () => void }) {
     try {
       const res = await saveCallSettings(store.id, { auto_call: next })
       setSettings(res.settings ?? { ...settings, auto_call: next })
+      // The same switch lives on the workflow board's Orders → Call queue wire;
+      // keep the two in step so the wire does not contradict this button.
+      void setAutomation(store.id, 'call_dial', next)
       const threshold = thresholdLabel(Number(res.settings?.risk_threshold ?? settings.risk_threshold))
       const added = res.added ?? 0
       toast.push({
