@@ -8,6 +8,7 @@ import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
+import { readCreditStatus, type CreditStatus } from '../lib/credits'
 import { readCallSettings, saveCallSettings, thresholdLabel, type CallSettings } from '../lib/calls'
 import { isConfigured, supabase } from '../lib/supabase'
 import { LOGIN_PATH } from '../lib/ui/auth-redirect'
@@ -63,12 +64,26 @@ export function Settings() {
   /** Calling: the threshold + budget the automated call queue reads. */
   const [calls, setCalls] = useState<CallSettings | null>(null)
   const [callsLoading, setCallsLoading] = useState(true)
-  const [savingCalls, setSavingCalls] = useState<'auto' | 'threshold' | 'budget' | null>(null)
-  const [budget, setBudget] = useState('1000')
+  const [savingCalls, setSavingCalls] = useState<'auto' | 'threshold' | null>(null)
+  const [credits, setCredits] = useState<CreditStatus | null>(null)
 
   useEffect(() => {
     setName(displayName)
   }, [displayName])
+
+  // Plan and credit use for this month, refreshed whenever the store changes.
+  useEffect(() => {
+    if (!store?.id) return
+    let alive = true
+    readCreditStatus(store.id)
+      .then((next) => {
+        if (alive) setCredits(next)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [store?.id])
 
   useEffect(() => {
     let alive = true
@@ -80,7 +95,6 @@ export function Settings() {
           settings?.find((s) => s.store_id === stores?.[0]?.id) ??
           null
         setCalls(row)
-        setBudget(String(row?.monthly_budget_pkr ?? 1000))
       })
       .catch(() => undefined)
       .finally(() => {
@@ -92,8 +106,8 @@ export function Settings() {
   }, [store])
 
   async function saveCalls(
-    patch: Partial<Pick<CallSettings, 'auto_call' | 'risk_threshold' | 'monthly_budget_pkr'>>,
-    which: 'auto' | 'threshold' | 'budget',
+    patch: Partial<Pick<CallSettings, 'auto_call' | 'risk_threshold'>>,
+    which: 'auto' | 'threshold',
   ) {
     if (!calls) return
     setSavingCalls(which)
@@ -416,6 +430,87 @@ export function Settings() {
         <section className="card settings-section">
           <div className="settings-section-head">
             <span className="kpi-icon blue">
+              <Icon name="card" size={16} />
+            </span>
+            <span className="eyebrow">Plan and credits</span>
+          </div>
+          <div className="settings-rows">
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">{credits?.planName ?? 'Free'} plan</div>
+                <div className="setting-desc">
+                  One buyer check costs one credit. One minute of an AI call costs one credit,
+                  rounded up.
+                </div>
+              </div>
+              <div className="setting-control">
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href="https://admin.shopify.com/apps/ec17a432659bf1af629483bf28a50a25/app/billing"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Change plan
+                </a>
+              </div>
+            </div>
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">This month</div>
+                <div className="setting-desc">
+                  {credits
+                    ? `${Math.round(credits.used).toLocaleString()} of ${(
+                        credits.included + credits.overageAllowed
+                      ).toLocaleString()} credits used${
+                        credits.cycleEnd
+                          ? ` · resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, {
+                              day: 'numeric',
+                              month: 'short',
+                            })}`
+                          : ''
+                      }`
+                    : 'Reading your usage…'}
+                </div>
+              </div>
+              <div className="setting-control">
+                <div
+                  className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--v-ink-700)]"
+                  aria-hidden="true"
+                >
+                  <span
+                    className="block h-full rounded-full bg-[var(--cyan-primary)]"
+                    style={{
+                      width: `${
+                        credits && credits.included + credits.overageAllowed > 0
+                          ? Math.min(
+                              100,
+                              (credits.used / (credits.included + credits.overageAllowed)) * 100,
+                            )
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            {credits && credits.overage > 0 && (
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Over the plan</div>
+                  <div className="setting-desc">
+                    {Math.round(credits.overage).toLocaleString()} credits at PKR{' '}
+                    {credits.overageRate} each = PKR{' '}
+                    {Math.round(credits.overage * credits.overageRate).toLocaleString()}, added to
+                    your Shopify invoice.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+        <section className="card settings-section">
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
               <Icon name="shield-checkmark" size={16} />
             </span>
             <span className="eyebrow">Security</span>
@@ -548,37 +643,17 @@ export function Settings() {
 
                 <div className="setting-row">
                   <div className="setting-info">
-                    <div className="setting-title">Monthly call budget</div>
+                    <div className="setting-title">Credits left</div>
                     <div className="setting-desc">
-                      One token is one second of talk time — 12 PKR per minute. Calls stop when the
-                      allowance runs out and reset at the start of each month.
+                      Calls stop when the plan runs out of credits. One minute of talk is one
+                      credit; the plan's overage limit is the most a month can spend.
                     </div>
                   </div>
-                  <form
-                    className="setting-control"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      const value = Number(budget)
-                      if (!Number.isFinite(value) || value < 0) return
-                      void saveCalls({ monthly_budget_pkr: value }, 'budget')
-                    }}
-                  >
-                    <input
-                      type="number"
-                      min={0}
-                      step={100}
-                      value={budget}
-                      onChange={(e) => setBudget(e.target.value)}
-                      aria-label="Monthly call budget in PKR"
-                    />
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      type="submit"
-                      disabled={!calls || savingCalls === 'budget'}
-                    >
-                      {savingCalls === 'budget' ? <Icon name="refresh" size={14} className="spin" /> : 'Save'}
-                    </button>
-                  </form>
+                  <div className="setting-control">
+                    <span className="text-[15px] font-semibold tabular-nums text-foreground">
+                      {credits ? Math.round(credits.remaining).toLocaleString() : '—'}
+                    </span>
+                  </div>
                 </div>
               </>
             )}

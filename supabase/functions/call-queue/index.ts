@@ -52,6 +52,24 @@ function admin() {
   });
 }
 
+/**
+ * Credits left on the store's plan: included credits plus whatever overage the
+ * plan allows, minus everything used since the cycle began. One call minute is
+ * one credit, so a store with less than one left cannot start a call.
+ */
+async function creditStatus(db: ReturnType<typeof admin>, storeId: string) {
+  const { data } = await db.rpc('store_credit_status', { p_store: storeId });
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row ?? null) as {
+    plan_code: string;
+    plan_name: string;
+    included_credits: number;
+    overage_allowed: number;
+    used_credits: number;
+    remaining_credits: number;
+    overage_credits: number;
+  } | null;
+}
 async function usedPkr(db: ReturnType<typeof admin>, storeId: string) {
   const { data } = await db.from('call_usage').select('pkr').eq('store_id', storeId).gte('period', monthStart());
   return (data ?? []).reduce((sum, row) => sum + Number(row.pkr ?? 0), 0);
@@ -354,9 +372,10 @@ async function tick(db: ReturnType<typeof admin>) {
       continue;
     }
 
-    const spent = await usedPkr(db, storeId);
-    const budget = Number(store.monthly_budget_pkr ?? 1000);
-    if (spent + MIN_CALL_PKR > budget) {
+    // Credits, not rupees, decide whether another call may start: the plan
+    // pays for a number of minutes and its overage cap stops the spending.
+    const credits = await creditStatus(db, storeId);
+    if (Number(credits?.remaining_credits ?? 0) < 1) {
       report.skipped += 1;
       report.blocked.push(storeId);
       continue;
@@ -564,6 +583,11 @@ Deno.serve(async (req) => {
       : [];
 
     const byOrder = new Map((orders ?? []).map((o) => [o.order_id, o]));
+    const creditRows = await Promise.all(
+      storeIds.map(async (id) => [id, await creditStatus(admin(), id)] as const),
+    );
+    const credits: Record<string, unknown> = {};
+    for (const [id, row] of creditRows) if (row) credits[id] = row;
     const rows = (queue ?? []).map((q, index) => ({ ...q, position: index + 1, card: byOrder.get(q.order_id) ?? null }));
 
     return json({
@@ -579,6 +603,7 @@ Deno.serve(async (req) => {
         {},
       ),
       rate_pkr_per_second: PKR_PER_SECOND,
+      credits,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

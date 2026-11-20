@@ -16,6 +16,7 @@ import { computeVerdict, riskFactors, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
+import { readCreditStatus } from '../lib/credits'
 import { useToast } from '../lib/toast'
 import type { Buyer, OrderRow, SimilarBuyer } from '../lib/types'
 
@@ -97,6 +98,22 @@ export function Lookup() {
       if (!supabase) return
       const normalized = normalizePhone(p)
       if (normalized.length < 6) return
+
+      // A check costs a credit, so the store has to have one left before
+      // the lookup runs. Free plans stop here; paid plans stop at the cap.
+      if (store?.id) {
+        const status = await readCreditStatus(store.id)
+        if (status && status.remaining < 1) {
+          toast.push({
+            kind: 'error',
+            title: 'Out of credits',
+            detail: `The ${status.planName} plan has no credits left this month. Change plan in the Shopify admin to keep checking buyers.`,
+          })
+          setState({ kind: 'idle' })
+          return
+        }
+      }
+
       setSearched(normalized)
       setExplanation(null)
       setState({ kind: 'loading' })
@@ -153,7 +170,11 @@ export function Lookup() {
       if (!simRes.error) similar = (simRes.data ?? []) as SimilarBuyer[]
 
       if (email) {
-        await supabase.from('lookups').insert({ buyer_phone: normalized, owner_email: email })
+        // The store is what credits are counted against, so it rides along with
+        // the history entry that already records the check.
+        await supabase
+          .from('lookups')
+          .insert({ buyer_phone: normalized, owner_email: email, store_id: store?.id ?? null })
         void loadRecents()
       }
 
