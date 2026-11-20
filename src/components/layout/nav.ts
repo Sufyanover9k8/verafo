@@ -7,6 +7,7 @@ import {
   MapPinned,
   MessageSquare,
   Package,
+  PhoneCall,
   PlusSquare,
   Search,
   Settings,
@@ -41,6 +42,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/orders', label: 'Orders', icon: Package },
       { to: '/orders/new', label: 'New Order', icon: PlusSquare },
+      { to: '/calls', label: 'Calls', icon: PhoneCall },
       // Unreleased pages. Their switches live in src/lib/features.ts; flipping
       // one on brings the sidebar row, the command-palette entry and the route
       // back together, because all three read that single constant.

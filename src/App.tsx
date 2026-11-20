@@ -18,6 +18,7 @@ const ResetPassword = lazy(() =>
 const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })))
 const BulkImport = lazy(() => import('./pages/BulkImport').then((m) => ({ default: m.BulkImport })))
+const Calls = lazy(() => import('./pages/Calls').then((m) => ({ default: m.Calls })))
 const BuyerMap = lazy(() => import('./pages/BuyerMap').then((m) => ({ default: m.BuyerMap })))
 const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })))
 const Lookup = lazy(() => import('./pages/Lookup').then((m) => ({ default: m.Lookup })))
@@ -62,6 +63,7 @@ export function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/orders/new" element={<NewOrder />} />
+          <Route path="/calls" element={<Calls />} />
           <Route path="/orders/pending" element={<Outcomes />} />
           {/* Unreleased pages: switched off in src/lib/features.ts. With the
               route gone, a direct URL falls through to the catch-all below and

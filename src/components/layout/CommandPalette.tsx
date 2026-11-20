@@ -17,6 +17,7 @@ type PaletteItem =
 const PAGE_ICONS: Record<string, string> = {
   Dashboard: 'stats-chart',
   'New Order': 'add',
+  Calls: 'chatbubbles',
   Outcomes: 'clipboard',
   'Buyer Lookup': 'search',
   'Buyer Map': 'layers',
