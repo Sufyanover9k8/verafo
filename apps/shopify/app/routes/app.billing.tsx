@@ -44,6 +44,12 @@ interface CreditStatus {
   remaining_credits: number;
   overage_credits: number;
   overage_pkr_per_credit: number;
+  included_calls: number;
+  used_calls: number;
+  remaining_calls: number;
+  overage_calls: number;
+  overage_pkr_per_call: number;
+  calls_one_time: boolean;
   cycle_end: string;
 }
 
@@ -153,6 +159,11 @@ export default function Billing() {
   const included = Number(credits?.included_credits ?? planOf(current).includedCredits);
   const overage = Number(credits?.overage_credits ?? 0);
   const rate = Number(credits?.overage_pkr_per_credit ?? planOf(current).overagePkrPerCredit);
+  const callsUsed = Number(credits?.used_calls ?? 0);
+  const callsIncluded = Number(credits?.included_calls ?? planOf(current).includedCalls);
+  const overageCalls = Number(credits?.overage_calls ?? 0);
+  const callRate = Number(credits?.overage_pkr_per_call ?? planOf(current).overagePkrPerCall);
+  const callsOneTime = Boolean(credits?.calls_one_time ?? planOf(current).callsOneTime);
 
   return (
     <Page>
@@ -185,7 +196,7 @@ export default function Billing() {
               </Badge>
             </InlineStack>
             <Text as="p" tone="subdued">
-              {used.toLocaleString()} of {included.toLocaleString()} packaged credits used
+              {used.toLocaleString()} of {included.toLocaleString()} check credits used
               {credits?.cycle_end ? ` · resets ${new Date(credits.cycle_end).toDateString()}` : ""}
             </Text>
             <ProgressBar
@@ -193,12 +204,27 @@ export default function Billing() {
               size="small"
             />
             <Text as="p" tone="subdued">
-              One buyer check is one credit. One minute of a call is one credit, rounded up.
-              The package is included in the plan; past it a credit costs {money(rate)}, and
-              there is no cap — the total keeps growing and lands on your next Shopify
-              invoice.
+              {callsUsed.toLocaleString()} of {callsIncluded.toLocaleString()} calls used
+              {callsOneTime
+                ? " · the free calls never reset"
+                : credits?.cycle_end
+                  ? ` · resets ${new Date(credits.cycle_end).toDateString()}`
+                  : ""}
+            </Text>
+            <ProgressBar
+              progress={callsIncluded > 0 ? Math.min(100, (callsUsed / callsIncluded) * 100) : 0}
+              size="small"
+            />
+            <Text as="p" tone="subdued">
+              A buyer check costs one credit and a call costs two, whatever its length. Both
+              packages are included in the plan. Past them a check credit costs {money(rate)} and a
+              call costs {money(callRate)}; there is no cap, so the total keeps growing and lands on
+              your next Shopify invoice.
               {overage > 0
-                ? ` ${overage.toLocaleString()} credits past the package = ${money(overage * rate)} so far.`
+                ? ` ${overage.toLocaleString()} check credits past the package = ${money(overage * rate)} so far.`
+                : ""}
+              {overageCalls > 0
+                ? ` ${overageCalls.toLocaleString()} calls past the package = ${money(overageCalls * callRate)} so far.`
                 : ""}
               {credits?.allow_overage === false ? " The free plan stops at zero." : ""}
             </Text>
@@ -241,11 +267,18 @@ export default function Billing() {
                     </Text>
                     <Divider />
                     <List type="bullet">
-                      <List.Item>{plan.includedCredits.toLocaleString()} credits a month</List.Item>
+                      <List.Item>
+                        {plan.includedCredits.toLocaleString()} check credits a month
+                      </List.Item>
+                      <List.Item>
+                        {plan.callsOneTime
+                          ? `${plan.includedCalls} calls in total, never reset`
+                          : `${plan.includedCalls} calls a month`}
+                      </List.Item>
                       <List.Item>
                         {plan.overagePkrPerCredit === 0
-                          ? "No overage: checks and calls stop when credits run out"
-                          : `${money(plan.overagePkrPerCredit)} per extra credit. Never stops: it keeps billing at that rate.`}
+                          ? "No overage: checks and calls stop when the allowance runs out"
+                          : `${money(plan.overagePkrPerCredit)} per extra credit and ${money(plan.overagePkrPerCall)} per extra call. Never stops: it keeps billing at that rate.`}
                       </List.Item>
                       <List.Item>
                         {plan.trialDays > 0 ? `${plan.trialDays}-day trial` : "No trial needed"}
@@ -272,10 +305,9 @@ export default function Billing() {
               How the charge works
             </Text>
             <Text as="p" tone="subdued">
-              Shopify charges the plan price every 30 days. Usage above the included credits is
-              billed on the same invoice, capped at the plan's overage limit, so a call cannot run
-              away with your margin. Downgrades take effect immediately; upgrades are prorated by
-              Shopify.
+              Shopify charges the plan price every 30 days. Checks and calls above the packages are
+              billed on the same invoice at the plan rates, with no cap. Downgrades take effect
+              immediately; upgrades are prorated by Shopify.
             </Text>
           </BlockStack>
         </Card>

@@ -1,25 +1,45 @@
 import { supabase } from './supabase'
 
 /**
- * Plan credits, as the merchant sees them.
+ * Plan allowances, as the merchant sees them.
  *
- * One buyer check is one credit. One minute of an AI call is one credit,
- * rounded up. A plan packages a number of credits a month; a paid plan keeps
- * working past them and bills each extra credit at the plan rate, which is why
- * only the free plan ever runs out.
+ * Buyer checks and AI calls are two separate pools:
+ *
+ *   - A check is one credit. Free packs 100 a month. Standard 100. Founder One
+ *     350. A paid plan keeps working past its package and bills each extra
+ *     credit at the plan rate (PKR 21 or PKR 16).
+ *   - A call is two credits whatever its length. Free includes ten calls in
+ *     total, never per month. Standard 100 a month, then PKR 40 a call.
+ *     Founder One 300 a month, then PKR 30 a call.
+ *
+ * Two credits a call is what lets a per-call price divide into whole credits:
+ * PKR 40 = 20 credits-worth, PKR 30 = 15.
  */
 export interface CreditStatus {
   planCode: string
   planName: string
-  /** Credits the plan packages each month. */
+  /** Check credits the plan packages each month. */
   included: number
-  /** Credits used this cycle, checks and call minutes together. */
+  /** Check credits used this cycle. */
   used: number
-  /** Packaged credits left; zero once the plan is into overage. */
+  /** Packaged check credits left; zero once the plan is into overage. */
   remaining: number
-  /** Credits above the package, billed at `overageRate`. */
+  /** Check credits above the package, billed at `overageRate`. */
   overage: number
   overageRate: number
+  /** Calls the plan includes. */
+  includedCalls: number
+  /** Calls used this cycle, or ever, when the allowance is one-time. */
+  usedCalls: number
+  /** Included calls left. */
+  remainingCalls: number
+  /** Calls above the package, billed at `overageRatePerCall`. */
+  overageCalls: number
+  overageRatePerCall: number
+  /** PKR owed for the calls above the package. */
+  overageCallPkr: number
+  /** Free's ten calls never come back. */
+  callsOneTime: boolean
   /** Paid plans may overspend their package; the free plan may not. */
   allowOverage: boolean
   pricePkr: number
@@ -35,6 +55,13 @@ export const FREE_STATUS: CreditStatus = {
   remaining: 100,
   overage: 0,
   overageRate: 0,
+  includedCalls: 10,
+  usedCalls: 0,
+  remainingCalls: 10,
+  overageCalls: 0,
+  overageRatePerCall: 0,
+  overageCallPkr: 0,
+  callsOneTime: true,
   allowOverage: false,
   pricePkr: 0,
   cycleEnd: null,
@@ -51,6 +78,13 @@ interface StatusRow {
   allow_overage?: boolean | null
   price_pkr?: number | string | null
   cycle_end?: string | null
+  included_calls?: number | string | null
+  used_calls?: number | string | null
+  remaining_calls?: number | string | null
+  overage_calls?: number | string | null
+  overage_pkr_per_call?: number | string | null
+  overage_call_pkr?: number | string | null
+  calls_one_time?: boolean | null
 }
 
 function toStatus(row: StatusRow): CreditStatus {
@@ -62,6 +96,13 @@ function toStatus(row: StatusRow): CreditStatus {
     remaining: Number(row.remaining_credits ?? 0),
     overage: Number(row.overage_credits ?? 0),
     overageRate: Number(row.overage_pkr_per_credit ?? 0),
+    includedCalls: Number(row.included_calls ?? 0),
+    usedCalls: Number(row.used_calls ?? 0),
+    remainingCalls: Number(row.remaining_calls ?? 0),
+    overageCalls: Number(row.overage_calls ?? 0),
+    overageRatePerCall: Number(row.overage_pkr_per_call ?? 0),
+    overageCallPkr: Number(row.overage_call_pkr ?? 0),
+    callsOneTime: Boolean(row.calls_one_time),
     allowOverage: Boolean(row.allow_overage),
     pricePkr: Number(row.price_pkr ?? 0),
     cycleEnd: row.cycle_end ?? null,
@@ -95,6 +136,11 @@ export async function readCreditsForStores(
       used: acc.used + s.used,
       remaining: acc.remaining + s.remaining,
       overage: acc.overage + s.overage,
+      includedCalls: acc.includedCalls + s.includedCalls,
+      usedCalls: acc.usedCalls + s.usedCalls,
+      remainingCalls: acc.remainingCalls + s.remainingCalls,
+      overageCalls: acc.overageCalls + s.overageCalls,
+      overageCallPkr: acc.overageCallPkr + s.overageCallPkr,
       pricePkr: acc.pricePkr + s.pricePkr,
       allowOverage: acc.allowOverage || s.allowOverage,
       cycleEnd: acc.cycleEnd ?? s.cycleEnd,
@@ -107,28 +153,64 @@ export async function readCreditsForStores(
       used: 0,
       remaining: 0,
       overage: 0,
-      pricePkr: 0,
+      includedCalls: 0,
+      usedCalls: 0,
+      remainingCalls: 0,
+      overageCalls: 0,
       overageRate: live[0].overageRate,
+      overageRatePerCall: live[0].overageRatePerCall,
+      overageCallPkr: 0,
+      pricePkr: 0,
     },
   )
 }
 
-/** May this store spend another credit? Free stops at zero; paid does not. */
+/** May this store run another buyer check? Free stops at zero; paid does not. */
 export function canSpend(c: CreditStatus | null): boolean {
   if (!c) return true
   return c.allowOverage || c.remaining >= 1
 }
 
-/** PKR owed for the credits above the package. */
+/** May this store place another call? Its own allowance decides. */
+export function canCall(c: CreditStatus | null): boolean {
+  if (!c) return true
+  if (c.remainingCalls >= 1) return true
+  return c.allowOverage && c.overageRatePerCall > 0
+}
+
+/** PKR owed for the check credits above the package. */
 export function overagePkr(c: CreditStatus | null): number {
   if (!c) return 0
   return Math.round(Math.max(0, c.overage) * c.overageRate)
 }
 
-/** "Free · 40 of 100 credits used this month". */
+/** PKR owed for the calls above the package. */
+export function overageCallPkr(c: CreditStatus | null): number {
+  if (!c) return 0
+  return Math.round(Math.max(0, c.overageCalls) * c.overageRatePerCall)
+}
+
+const pkr = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
+
+/** "Free · 40 of 100 credits used". */
 export function describeCredits(c: CreditStatus | null): string {
   if (!c) return 'Credits unavailable'
   const used = Math.round(c.used).toLocaleString()
   const total = Math.round(c.included).toLocaleString()
   return `${c.planName} · ${used} of ${total} credits used`
+}
+
+/** "Free · 3 of 10 calls used" — a one-time allowance says so. */
+export function describeCalls(c: CreditStatus | null): string {
+  if (!c) return 'Calls unavailable'
+  const used = Math.round(c.usedCalls).toLocaleString()
+  const total = Math.round(c.includedCalls).toLocaleString()
+  const tail = c.callsOneTime ? ' free calls used' : ' calls used this month'
+  return `${c.planName} · ${used} of ${total}${tail}`
+}
+
+/** "PKR 40 a call" / "PKR 21 a credit" — the rate a plan bills past its package. */
+export function callRateLabel(c: CreditStatus | null): string {
+  if (!c || c.overageRatePerCall <= 0) return 'no extra calls'
+  return `${pkr(c.overageRatePerCall)} a call`
 }

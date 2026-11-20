@@ -8,7 +8,7 @@ import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
-import { overagePkr, readCreditStatus, type CreditStatus } from '../lib/credits'
+import { overageCallPkr, overagePkr, readCreditStatus, type CreditStatus } from '../lib/credits'
 import { readCallSettings, saveCallSettings, thresholdLabel, type CallSettings } from '../lib/calls'
 import { isConfigured, supabase } from '../lib/supabase'
 import { LOGIN_PATH } from '../lib/ui/auth-redirect'
@@ -439,8 +439,7 @@ export function Settings() {
               <div className="setting-info">
                 <div className="setting-title">{credits?.planName ?? 'Free'} plan</div>
                 <div className="setting-desc">
-                  One buyer check costs one credit. One minute of an AI call costs one credit,
-                  rounded up.
+                  A buyer check costs one credit. A call costs two credits, whatever its length.
                 </div>
               </div>
               <div className="setting-control">
@@ -496,8 +495,60 @@ export function Settings() {
                     {Math.round(credits.overage).toLocaleString()} credits at PKR{' '}
                     {credits.overageRate} each = PKR{' '}
                     {overagePkr(credits).toLocaleString()} so far, billed on the next Shopify
-                    invoice. There is no cap: each extra credit is charged at the plan rate,
-                    whether it was a buyer check or a minute of a call.
+                    invoice. There is no cap: each extra credit is charged at the plan rate.
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">Calls</div>
+                <div className="setting-desc">
+                  {credits
+                    ? `${Math.round(credits.usedCalls).toLocaleString()} of ${credits.includedCalls.toLocaleString()} calls used${
+                        credits.callsOneTime
+                          ? ' · the free ten never reset'
+                          : credits.cycleEnd
+                            ? ` · resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, {
+                                day: 'numeric',
+                                month: 'short',
+                              })}`
+                            : ''
+                      }${
+                        credits.overageRatePerCall > 0
+                          ? ` · then PKR ${credits.overageRatePerCall} a call`
+                          : ''
+                      }`
+                    : 'Reading your usage…'}
+                </div>
+              </div>
+              <div className="setting-control">
+                <div
+                  className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--v-ink-700)]"
+                  aria-hidden="true"
+                >
+                  <span
+                    className="block h-full rounded-full bg-[var(--cyan-primary)]"
+                    style={{
+                      width: `${
+                        credits && credits.includedCalls > 0
+                          ? Math.min(100, (credits.usedCalls / credits.includedCalls) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            {credits && credits.overageCalls > 0 && (
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Calls over the package</div>
+                  <div className="setting-desc">
+                    {Math.round(credits.overageCalls).toLocaleString()} extra calls at PKR{' '}
+                    {credits.overageRatePerCall} each = PKR{' '}
+                    {overageCallPkr(credits).toLocaleString()} so far, billed on the next Shopify
+                    invoice.
                   </div>
                 </div>
               </div>
@@ -641,15 +692,17 @@ export function Settings() {
                   <div className="setting-info">
                     <div className="setting-title">Credits left</div>
                     <div className="setting-desc">
-                      One buyer check is one credit and one minute of a call is one credit
-                      (rounded up). The package comes with the plan; past it each credit is
-                      billed on your Shopify invoice at PKR 21 on Standard or PKR 16 on
-                      Founder One. Only the free plan stops at zero.
+                      A buyer check is one credit; the package comes with the plan and each extra
+                      credit is billed at PKR 21 on Standard or PKR 16 on Founder One. A call is two
+                      credits, and calls have their own allowance: {credits?.includedCalls ?? 10} a
+                      month, or ten in total on the free plan, then PKR 40 a call on Standard or
+                      PKR 30 on Founder One.
                     </div>
                   </div>
                   <div className="setting-control">
                     <span className="text-[15px] font-semibold tabular-nums text-foreground">
-                      {credits ? Math.round(credits.remaining).toLocaleString() : '—'}
+                      {credits ? Math.round(credits.remaining).toLocaleString() : '—'} credits ·{' '}
+                      {credits ? Math.round(credits.remainingCalls).toLocaleString() : '—'} calls
                     </span>
                   </div>
                 </div>

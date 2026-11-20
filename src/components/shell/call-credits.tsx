@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Zap } from 'lucide-react'
-import { overagePkr, readCreditsForStores, type CreditStatus } from '@/lib/credits'
+import { Phone, Zap } from 'lucide-react'
+import { overageCallPkr, overagePkr, readCreditsForStores, type CreditStatus } from '@/lib/credits'
 import { useStoreScope } from '@/lib/store'
 
-/** Credits move while the merchant is working, so the figure refreshes on the
- *  same one-minute beat the mobile app polls. */
+/** Allowances move while the merchant is working, so the figure refreshes on
+ *  the same one-minute beat the mobile app polls. */
 const POLL_MS = 60_000
 
 /**
- * Credits in the rail, just above the account: packaged credits left while the
- * plan has some, then the extra credits it is buying.
+ * Allowances in the rail, just above the account. Checks and calls are two
+ * pools: packaged checks left (or the extra ones being bought) on the first
+ * line, the call allowance on the second.
  */
 export function CallCredits() {
   const { store, scopeStoreIds, loading } = useStoreScope()
@@ -45,13 +46,36 @@ export function CallCredits() {
   const value = over ? `${Math.round(credits!.overage).toLocaleString()} over` : left
   const sub = over ? `PKR ${owed.toLocaleString()} so far` : `left · ${plan}`
 
+  const callsLeft = credits ? Math.round(credits.remainingCalls).toLocaleString() : '—'
+  const callsTotal = credits ? Math.round(credits.includedCalls).toLocaleString() : '—'
+  const callsOver = credits ? credits.overageCalls > 0 : false
+  const callsLine = callsOver
+    ? `${Math.round(credits!.overageCalls).toLocaleString()} extra · PKR ${overageCallPkr(credits).toLocaleString()}`
+    : `${callsLeft} of ${callsTotal} calls`
+
   const detail = credits
-    ? over
-      ? `${Math.round(credits.overage).toLocaleString()} credits past the ${plan} package at PKR ${credits.overageRate} each — PKR ${owed.toLocaleString()} added to the next Shopify invoice.`
-      : `${left} credits left on ${plan}. ${Math.round(credits.used).toLocaleString()} of ${Math.round(credits.included).toLocaleString()} used this month at PKR ${credits.overageRate} a credit beyond the package.`
-    : 'Credits left this month'
+    ? [
+        `${left} check credits left on ${plan} (${Math.round(credits.used).toLocaleString()} of ${Math.round(credits.included).toLocaleString()} used this month${
+          credits.overageRate > 0 ? `, PKR ${credits.overageRate} a credit beyond that` : ''
+        }).`,
+        credits.callsOneTime
+          ? `${callsLeft} of ${callsTotal} free calls left; they never reset.`
+          : `${callsLeft} of ${callsTotal} calls left this month${
+              credits.overageRatePerCall > 0 ? `, then PKR ${credits.overageRatePerCall} a call` : ''
+            }.`,
+        credits.overage > 0 || credits.overageCalls > 0
+          ? `PKR ${(owed + overageCallPkr(credits)).toLocaleString()} is added to the next Shopify invoice.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : 'Allowances left this month'
 
   const usedFraction = credits && credits.included > 0 ? Math.min(1, credits.used / credits.included) : 0
+  const callsFraction =
+    credits && credits.includedCalls > 0
+      ? Math.min(1, credits.usedCalls / credits.includedCalls)
+      : 0
 
   return (
     <NavLink
@@ -76,6 +100,23 @@ export function CallCredits() {
         <div
           className="h-full rounded-full bg-sidebar-primary transition-[width] duration-500"
           style={{ width: `${Math.round(usedFraction * 100)}%` }}
+        />
+      </div>
+
+      {/* Calls have their own allowance, so they get their own line. */}
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-sidebar-foreground/55">
+        <span className="inline-flex items-center gap-1">
+          <Phone className="size-3 shrink-0 text-sidebar-foreground/35" />
+          {callsLine}
+        </span>
+        {credits?.callsOneTime ? (
+          <span className="text-[10px] uppercase tracking-[0.1em] text-sidebar-foreground/35">one time</span>
+        ) : null}
+      </div>
+      <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-sidebar-foreground/15">
+        <div
+          className="h-full rounded-full bg-sidebar-foreground/45 transition-[width] duration-500"
+          style={{ width: `${Math.round(callsFraction * 100)}%` }}
         />
       </div>
     </NavLink>

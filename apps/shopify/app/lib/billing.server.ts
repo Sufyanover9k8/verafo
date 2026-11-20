@@ -10,8 +10,11 @@ import { getSupabase } from "./supabase.server";
  * item carries Shopify's own technical ceiling (PKR 100,000), which is only a
  * guard against a runaway bill, not a product limit.
  *
- *   1 check      = 1 credit
- *   1 call minute = 1 credit (rounded up)
+ *   1 buyer check = 1 credit
+ *   1 call        = 2 credits (whatever its length)
+ *
+ * Two credits a call is what makes the per-call prices divide into whole
+ * credits: PKR 40 a call is PKR 20 a credit, PKR 30 is PKR 15.
  */
 
 export interface AdminGraphql {
@@ -27,8 +30,16 @@ export interface PlanDef {
   code: PlanCode;
   name: string;
   pricePkr: number;
+  /** Check credits included each month. */
   includedCredits: number;
   overagePkrPerCredit: number;
+  /** Calls included each month, or in total when `callsOneTime`. */
+  includedCalls: number;
+  overagePkrPerCall: number;
+  /** Credits a single call spends. */
+  callCredits: number;
+  /** Free's ten calls never reset. */
+  callsOneTime: boolean;
   allowOverage: boolean;
   /** Shopify requires a capped usage line item; this is only a safety ceiling. */
   usageCeilingPkr: number;
@@ -44,10 +55,14 @@ export const PLANS: PlanDef[] = [
     pricePkr: 0,
     includedCredits: 100,
     overagePkrPerCredit: 0,
+    includedCalls: 10,
+    overagePkrPerCall: 0,
+    callCredits: 2,
+    callsOneTime: true,
     allowOverage: false,
     usageCeilingPkr: 0,
     trialDays: 0,
-    tagline: "100 credits a month, then it stops. No card, no trial clock.",
+    tagline: "100 check credits a month and 10 calls in total. Then it stops.",
   },
   {
     code: "standard",
@@ -55,10 +70,14 @@ export const PLANS: PlanDef[] = [
     pricePkr: 6999,
     includedCredits: 100,
     overagePkrPerCredit: 21,
+    includedCalls: 100,
+    overagePkrPerCall: 40,
+    callCredits: 2,
+    callsOneTime: false,
     allowOverage: true,
     usageCeilingPkr: 100000,
     trialDays: 7,
-    tagline: "100 credits a month, then PKR 21 a credit. Never stops.",
+    tagline: "100 checks and 100 calls a month, then PKR 21 a credit, PKR 40 a call.",
   },
   {
     code: "founder",
@@ -66,10 +85,14 @@ export const PLANS: PlanDef[] = [
     pricePkr: 12499,
     includedCredits: 350,
     overagePkrPerCredit: 16,
+    includedCalls: 300,
+    overagePkrPerCall: 30,
+    callCredits: 2,
+    callsOneTime: false,
     allowOverage: true,
     usageCeilingPkr: 100000,
     trialDays: 45,
-    tagline: "350 credits a month, then PKR 16 a credit. Price locked.",
+    tagline: "350 checks and 300 calls a month, then PKR 16 a credit, PKR 30 a call.",
   },
 ];
 
@@ -82,7 +105,7 @@ export async function loadPlans(): Promise<PlanDef[]> {
   const { data } = await getSupabase()
     .from("plans")
     .select(
-      "code, name, price_pkr, included_credits, overage_pkr_per_credit, allow_overage, usage_ceiling_pkr, trial_days, sort_order",
+      "code, name, price_pkr, included_credits, overage_pkr_per_credit, included_calls, overage_pkr_per_call, call_credits, calls_one_time, allow_overage, usage_ceiling_pkr, trial_days, sort_order",
     )
     .order("sort_order", { ascending: true });
   if (!data?.length) return PLANS;
@@ -94,6 +117,10 @@ export async function loadPlans(): Promise<PlanDef[]> {
       pricePkr: Number(row.price_pkr ?? fallback.pricePkr),
       includedCredits: Number(row.included_credits ?? fallback.includedCredits),
       overagePkrPerCredit: Number(row.overage_pkr_per_credit ?? fallback.overagePkrPerCredit),
+      includedCalls: Number(row.included_calls ?? fallback.includedCalls),
+      overagePkrPerCall: Number(row.overage_pkr_per_call ?? fallback.overagePkrPerCall),
+      callCredits: Number(row.call_credits ?? fallback.callCredits),
+      callsOneTime: Boolean(row.calls_one_time ?? fallback.callsOneTime),
       allowOverage: Boolean(row.allow_overage ?? fallback.allowOverage),
       usageCeilingPkr: Number(row.usage_ceiling_pkr ?? fallback.usageCeilingPkr),
       trialDays: Number(row.trial_days ?? fallback.trialDays),
@@ -277,7 +304,9 @@ export async function createSubscription(
     trialDays: plan.trialDays,
     recurring: { amount: plan.pricePkr.toFixed(2), currencyCode: "PKR" },
     capped: { amount: capPkr.toFixed(2), currencyCode: "PKR" },
-    terms: `${plan.overagePkrPerCredit} PKR per credit above ${plan.includedCredits}`,
+    terms: plan.overagePkrPerCall > 0
+      ? `${plan.overagePkrPerCredit} PKR per check credit above ${plan.includedCredits}; ${plan.overagePkrPerCall} PKR per call above ${plan.includedCalls}`
+      : `${plan.includedCredits} check credits and ${plan.includedCalls} calls; no overage on this plan`,
   });
 
   const errors = data.appSubscriptionCreate.userErrors ?? [];
@@ -345,6 +374,10 @@ export interface StoredPlan {
   usageLineItemId: string | null;
   includedCredits: number | null;
   overagePkrPerCredit: number | null;
+  includedCalls: number | null;
+  overagePkrPerCall: number | null;
+  callCredits: number | null;
+  callsOneTime: boolean | null;
   allowOverage: boolean | null;
   usageCeilingPkr: number | null;
   currentPeriodEnd: string | null;

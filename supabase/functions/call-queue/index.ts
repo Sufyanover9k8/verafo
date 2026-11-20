@@ -53,9 +53,8 @@ function admin() {
 }
 
 /**
- * Credits left on the store's plan: included credits plus whatever overage the
- * plan allows, minus everything used since the cycle began. One call minute is
- * one credit, so a store with less than one left cannot start a call.
+ * What is left of the store's plan: buyer checks and calls are two separate
+ * allowances. A call costs the plan's call_credits (two), whatever its length.
  */
 async function creditStatus(db: ReturnType<typeof admin>, storeId: string) {
   const { data } = await db.rpc('store_credit_status', { p_store: storeId });
@@ -64,15 +63,26 @@ async function creditStatus(db: ReturnType<typeof admin>, storeId: string) {
     plan_code: string;
     plan_name: string;
     included_credits: number;
-    overage_allowed: number;
     used_credits: number;
     remaining_credits: number;
-    allow_overage: boolean;
-    included_credits: number;
     overage_credits: number;
     overage_pkr_per_credit: number;
-    overage_credits: number;
+    allow_overage: boolean;
+    call_credits: number;
+    included_calls: number;
+    used_calls: number;
+    remaining_calls: number;
+    overage_calls: number;
+    overage_pkr_per_call: number;
+    overage_call_pkr: number;
+    calls_one_time: boolean;
   } | null;
+}
+
+/** Calls have their own allowance, so only a call credit may block a dial. */
+function canCall(credits: Awaited<ReturnType<typeof creditStatus>>) {
+  if (Number(credits?.remaining_calls ?? 0) >= 1) return true;
+  return Boolean(credits?.allow_overage) && Number(credits?.overage_pkr_per_call ?? 0) > 0;
 }
 async function usedPkr(db: ReturnType<typeof admin>, storeId: string) {
   const { data } = await db.from('call_usage').select('pkr').eq('store_id', storeId).gte('period', monthStart());
@@ -376,10 +386,10 @@ async function tick(db: ReturnType<typeof admin>) {
       continue;
     }
 
-    // Credits, not rupees, decide whether another call may start: the plan
-    // pays for a number of minutes and its overage cap stops the spending.
+    // Calls, not checks, decide whether another call may start: the plan pays
+    // for a number of calls and nothing else spends them.
     const credits = await creditStatus(db, storeId);
-    if (Number(credits?.remaining_credits ?? 0) < 1 && !credits?.allow_overage) {
+    if (!canCall(credits)) {
       report.skipped += 1;
       report.blocked.push(storeId);
       continue;

@@ -3,13 +3,14 @@ import { getSupabase } from "../lib/supabase.server";
 import { planOf, recordUsage } from "../lib/billing.server";
 
 /**
- * Bill the credits a store used above its plan.
+ * Bill what a store used above its plan.
  *
- * Shopify bills usage in arrears: we add one usage record per cycle with the
- * overage credits converted at the plan's rate, capped at the plan's limit.
- * Runs from a cron with the shared secret; safe to call repeatedly because
- * the record carries an idempotency key and the store row remembers how many
- * credits were already billed.
+ * Two pools bill separately: buyer checks past the package at the plan's
+ * per-credit rate, and calls past the package at the plan's per-call rate.
+ * Shopify bills usage in arrears: one usage record per cycle carries both.
+ * Runs from a cron with the shared secret; safe to call repeatedly because the
+ * record carries an idempotency key and the store row remembers how much of
+ * each pool was already billed.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const supabase = getSupabase();
@@ -25,9 +26,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { data: plans } = await supabase
     .from("store_plans")
-    .select("store_id, plan_name, subscription_id, usage_line_item_id, included_credits, overage_pkr_per_credit, allow_overage, usage_ceiling_pkr, overage_billed_credits, cycle_start, cycle_end, shop, stores(id, shopify_domain, name)");
+    .select(
+      "store_id, plan_name, subscription_id, usage_line_item_id, included_credits, overage_pkr_per_credit, allow_overage, usage_ceiling_pkr, overage_billed_credits, call_overage_billed_credits, cycle_start, cycle_end, shop, stores(id, shopify_domain, name)",
+    );
 
-  const report: { store: string; billed: number; credits: number; skipped?: string }[] = [];
+  const report: {
+    store: string;
+    billed: number;
+    credits: number;
+    calls: number;
+    skipped?: string;
+  }[] = [];
   const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
 
   for (const row of plans ?? []) {
@@ -35,30 +44,61 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shop = String(row.shop ?? store?.shopify_domain ?? "");
     const plan = planOf(String(row.plan_name ?? "free"));
     const rate = Number(row.overage_pkr_per_credit ?? plan.overagePkrPerCredit);
+    const callRate = plan.overagePkrPerCall;
+    const perCall = plan.callCredits > 0 ? plan.callCredits : 2;
     const included = Number(row.included_credits ?? plan.includedCredits);
+    const includedCalls = plan.includedCalls;
     const allowOverage = Boolean(row.allow_overage ?? plan.allowOverage);
     // Shopify needs a ceiling on the usage line item; it is not a product cap.
     const ceilingPkr = Number(row.usage_ceiling_pkr ?? plan.usageCeilingPkr);
 
-    if (!row.subscription_id || !row.usage_line_item_id || rate <= 0 || !allowOverage) {
-      report.push({ store: shop, billed: 0, credits: 0, skipped: "no usage line item" });
+    if (!row.subscription_id || !row.usage_line_item_id || !allowOverage) {
+      report.push({ store: shop, billed: 0, credits: 0, calls: 0, skipped: "no usage line item" });
+      continue;
+    }
+    if (rate <= 0 && callRate <= 0) {
+      report.push({ store: shop, billed: 0, credits: 0, calls: 0, skipped: "no overage rates" });
       continue;
     }
 
     const { data: events } = await supabase
       .from("credit_events")
-      .select("credits")
+      .select("kind, credits")
       .eq("store_id", row.store_id)
       .gte("occurred_at", monthStart.toISOString());
-    const used = (events ?? []).reduce((sum, e) => sum + Number(e.credits ?? 0), 0);
-    // No product cap: everything past the package is billable, bounded only by
-    // Shopify's technical ceiling so a single invoice cannot run away.
-    const billable = Math.max(0, used - included);
-    const overage = ceilingPkr > 0 ? Math.min(billable, ceilingPkr / rate) : billable;
-    const already = Number(row.overage_billed_credits ?? 0);
-    const credits = Math.max(0, Math.floor(overage - already));
-    if (credits <= 0) {
-      report.push({ store: shop, billed: 0, credits: 0, skipped: "nothing over the plan" });
+
+    let checkUsed = 0;
+    let callCredits = 0;
+    for (const event of events ?? []) {
+      const credits = Number(event.credits ?? 0);
+      if (event.kind === "call") callCredits += credits;
+      else checkUsed += credits;
+    }
+    const callsUsed = Math.ceil(callCredits / perCall);
+
+    // Only whole units bill, so a partly used credit waits for the next sweep.
+    const overageCredits = rate > 0 ? Math.max(0, checkUsed - included) : 0;
+    const overageCalls = callRate > 0 ? Math.max(0, callsUsed - includedCalls) : 0;
+
+    const alreadyCredits = Number(row.overage_billed_credits ?? 0);
+    const alreadyCalls = Number(row.call_overage_billed_credits ?? 0);
+    let credits = Math.max(0, Math.floor(overageCredits - alreadyCredits));
+    let calls = Math.max(0, Math.floor(overageCalls - alreadyCalls));
+
+    // Everything past the package is billable, bounded only by Shopify's
+    // technical ceiling so a single invoice cannot run away.
+    if (ceilingPkr > 0) {
+      const room = ceilingPkr - (alreadyCredits * rate + alreadyCalls * callRate);
+      if (credits * rate + calls * callRate > room) {
+        const creditRoom = Math.max(0, Math.floor(Math.max(0, room) / (rate || Infinity)));
+        credits = Math.min(credits, creditRoom);
+        const left = Math.max(0, room - credits * rate);
+        calls = Math.min(calls, Math.floor(left / (callRate || Infinity)));
+      }
+    }
+
+    if (credits <= 0 && calls <= 0) {
+      report.push({ store: shop, billed: 0, credits: 0, calls: 0, skipped: "nothing over the plan" });
       continue;
     }
 
@@ -72,11 +112,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       .maybeSingle();
     const token = (session as { accessToken?: string } | null)?.accessToken;
     if (!token) {
-      report.push({ store: shop, billed: 0, credits, skipped: "no offline token" });
+      report.push({ store: shop, billed: 0, credits, calls, skipped: "no offline token" });
       continue;
     }
 
-    const amount = Math.round(credits * rate * 100) / 100;
+    const amount = Math.round((credits * rate + calls * callRate) * 100) / 100;
     const admin = {
       // Same shape as the session client, so both paths share one writer.
       graphql: (query: string, options?: { variables?: Record<string, unknown> }) =>
@@ -89,23 +129,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     try {
       const cycle = String(row.cycle_start ?? monthStart.toISOString().slice(0, 10));
+      const parts: string[] = [];
+      if (credits > 0) parts.push(`${credits} check credits`);
+      if (calls > 0) parts.push(`${calls} calls`);
       await recordUsage(
         admin,
         String(row.usage_line_item_id),
         amount,
-        `Verafo credits: ${credits} over the ${plan.name} plan (${cycle})`,
-        `${row.store_id}:${cycle}:${already + credits}`,
+        `Verafo: ${parts.join(" and ")} over the ${plan.name} plan (${cycle})`,
+        `${row.store_id}:${cycle}:${alreadyCredits + credits}:${alreadyCalls + calls}`,
       );
       await supabase
         .from("store_plans")
-        .update({ overage_billed_credits: already + credits, updated_at: new Date().toISOString() })
+        .update({
+          overage_billed_credits: alreadyCredits + credits,
+          call_overage_billed_credits: alreadyCalls + calls,
+          updated_at: new Date().toISOString(),
+        })
         .eq("store_id", row.store_id);
-      report.push({ store: shop, billed: amount, credits });
+      report.push({ store: shop, billed: amount, credits, calls });
     } catch (error) {
       report.push({
         store: shop,
         billed: 0,
         credits,
+        calls,
         skipped: error instanceof Error ? error.message : "usage record failed",
       });
     }

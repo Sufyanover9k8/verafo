@@ -127,21 +127,25 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // Credits gate: the plan pays for a number of call minutes (one credit is
-    // one minute, rounded up) and only its overage cap lets a store go past
-    // that. With no credit left, no call may start.
+    // Calls gate: a plan includes a number of calls, and a call costs two
+    // credits whatever its length. Free's ten calls are one-time, so this is
+    // the gate that actually stops it once they are gone.
     const { data: creditRows } = await admin.rpc('store_credit_status', {
       p_store: card.store_id,
     });
     const creditRow = Array.isArray(creditRows) ? creditRows[0] : creditRows;
-    if (Number(creditRow?.remaining_credits ?? 0) < 1 && !creditRow?.allow_overage) {
+    const callsLeft = Number(creditRow?.remaining_calls ?? 0);
+    const callOverage =
+      Boolean(creditRow?.allow_overage) && Number(creditRow?.overage_pkr_per_call ?? 0) > 0;
+    if (callsLeft < 1 && !callOverage) {
       return json(
         {
           error:
-        'the plan has no credits left - upgrade the plan or add credits in the Shopify admin',
+            'the plan has no calls left - upgrade the plan in the Shopify admin to call again',
           plan: creditRow?.plan_name ?? 'Free',
-          used_credits: Number(creditRow?.used_credits ?? 0),
-          remaining_credits: 0,
+          included_calls: Number(creditRow?.included_calls ?? 0),
+          used_calls: Number(creditRow?.used_calls ?? 0),
+          remaining_calls: 0,
         },
         402,
       );

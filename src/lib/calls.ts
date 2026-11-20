@@ -139,56 +139,6 @@ export const readCallQueue = () =>
   }>('call-queue', { action: 'status' })
 
 /**
- * Call credits: talk time bought by this month's budget minus what the calls
- * have spent. One credit is one second of talk (PKR 12 a minute today), which
- * is the same arithmetic the mobile app shows in its header pill.
- */
-export interface CallCredits {
-  /** Seconds of talk still paid for. */
-  credits: number
-  minutes: number
-  budgetPkr: number
-  spentPkr: number
-  /** Share of the month's credits that is still unspent, 0–1. */
-  remaining: number
-}
-
-export async function readCallCredits(
-  storeIds: string[] | null,
-  onlyStoreId?: string | null,
-): Promise<CallCredits> {
-  const { stores, settings, usage, rate_pkr_per_second } = await post<{
-    stores: { id: string; name: string }[]
-    settings: CallSettings[]
-    usage?: Record<string, { pkr: number; seconds: number }>
-    rate_pkr_per_second?: number
-  }>('call-queue', { action: 'status' })
-
-  const rate = Number(rate_pkr_per_second) > 0 ? Number(rate_pkr_per_second) : 0.2
-  const wanted = onlyStoreId ? [onlyStoreId] : storeIds
-  const scope = wanted ? (stores ?? []).filter((s) => wanted.includes(s.id)) : (stores ?? [])
-  const byStore = new Map((settings ?? []).map((s) => [s.store_id, s]))
-
-  // A store with no settings row still has the default allowance, exactly as
-  // `call-queue` treats it when it decides whether a call may be placed.
-  const budgetPkr = scope.reduce(
-    (sum, s) => sum + Number(byStore.get(s.id)?.monthly_budget_pkr ?? 1000),
-    0,
-  )
-  const spentPkr = scope.reduce((sum, s) => sum + Number(usage?.[s.id]?.pkr ?? 0), 0)
-
-  const total = Math.floor(budgetPkr / rate)
-  const credits = Math.max(0, total - Math.round(spentPkr / rate))
-  return {
-    credits,
-    minutes: Math.floor(credits / 60),
-    budgetPkr,
-    spentPkr,
-    remaining: total > 0 ? credits / total : 0,
-  }
-}
-
-/**
  * One turn of a call, as `verify-status` stores it. `role` is normalised to
  * "agent" / "customer" when the provider's wording can be mapped.
  */
