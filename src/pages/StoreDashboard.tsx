@@ -190,7 +190,7 @@ export function StoreDashboard() {
             detail="Only administrators can view store dashboards."
           />
           <div className="store-restricted-cta">
-            <Link className="btn btn-primary" to="/">
+            <Link className="btn btn-primary" to="/dashboard">
               <Icon name="arrow-forward" size={14} /> Back to dashboard
             </Link>
           </div>

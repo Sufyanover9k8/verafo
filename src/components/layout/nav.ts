@@ -38,7 +38,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Operate',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/orders', label: 'Orders', icon: Package },
       { to: '/orders/new', label: 'New Order', icon: PlusSquare },
       // Unreleased pages. Their switches live in src/lib/features.ts; flipping

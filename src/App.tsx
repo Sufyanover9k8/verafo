@@ -58,7 +58,11 @@ export function App() {
     <AppShell>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          {/* The app lives under /dashboard. `/` belongs to the public site,
+              which the deployment serves as a static page (see vercel.json), so
+              a browser that reaches the router at `/` is sent on to the app. */}
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/orders/new" element={<NewOrder />} />
@@ -77,7 +81,7 @@ export function App() {
           <Route path="/chat" element={<Chat />} />
           <Route path="/import" element={<BulkImport />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Suspense>
     </AppShell>
