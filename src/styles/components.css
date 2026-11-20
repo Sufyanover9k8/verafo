@@ -857,6 +857,19 @@ select option { background: var(--v-ink-800); color: var(--v-ink-100); }
    ──────────────────────────────────────────────────────────── */
 
 .table-wrap { overflow-x: auto; }
+
+/* Ops tables run wider than a 1440 screen. Pin the Action column so Accept and
+   Call stay in view while the rest of the row scrolls under it. */
+.table thead th:last-child,
+.table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--card);
+  box-shadow: -10px 0 10px -10px rgb(16 24 32 / 18%);
+}
+.table tbody tr:hover td:last-child { background: var(--v-ink-700); }
+
 .table {
   width: 100%;
   border-collapse: collapse;
