@@ -40,7 +40,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Operate',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/workflow', label: 'Workflow', icon: Workflow },
       { to: '/orders', label: 'Orders', icon: Package },
       { to: '/orders/new', label: 'New Order', icon: PlusSquare },

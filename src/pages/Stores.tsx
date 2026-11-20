@@ -114,7 +114,7 @@ export function Stores() {
             detail="Only administrators can view and manage stores. Head back to the dashboard to continue."
           />
           <div className="store-restricted-cta">
-            <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/">
+            <Link className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" to="/dashboard">
               <Icon name="arrow-forward" size={14} /> Back to dashboard
             </Link>
           </div>

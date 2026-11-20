@@ -64,7 +64,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="gap-3 pb-1">
-        <NavLink to="/" className="flex h-11 items-center gap-2 px-2 group-data-[collapsible=icon]:px-0">
+        <NavLink to="/dashboard" className="flex h-11 items-center gap-2 px-2 group-data-[collapsible=icon]:px-0">
           {/* Both logos ship as fixed-colour art and the rail is always dark,
               so both are inverted to white regardless of theme. */}
           <img
