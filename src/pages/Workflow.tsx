@@ -8,6 +8,7 @@ import { useStoreScope } from '../lib/store'
 import { useToast } from '../lib/toast'
 import {
   DEFAULT_AUTOMATION,
+  EDGE_HINT,
   EDGE_LABEL,
   ORDER_FIELDS,
   latestCall,
@@ -20,27 +21,30 @@ import {
   type WorkflowEdge,
   type WorkflowOrder,
 } from '../lib/workflow'
+import { LIVE_CALL, readCall } from '../lib/calls'
 
 /** The six boards, left to right, in the shape the funnel actually has. */
 interface BoardSpec {
   stage: Stage
   title: string
   hint: string
+  /** CSS custom property the board's header is tinted with. */
+  tint?: string
 }
 
 const COLUMNS: BoardSpec[][] = [
   [{ stage: 'inbox', title: 'Orders', hint: 'No decision yet' }],
   [
-    { stage: 'queue', title: 'Call queue', hint: 'Being called, or called and waiting' },
-    { stage: 'refused_before', title: 'Refused', hint: 'Refused without a call' },
+    { stage: 'queue', title: 'Call queue', hint: 'Being called, or called and waiting', tint: '--risk-watch' },
+    { stage: 'refused_before', title: 'Refused', hint: 'Refused without a call', tint: '--risk-high' },
   ],
   [
-    { stage: 'to_deliver', title: 'To deliver', hint: 'Approved, waiting for the courier' },
-    { stage: 'refused_after', title: 'Refused', hint: 'Refused on the call' },
+    { stage: 'to_deliver', title: 'To deliver', hint: 'Approved, waiting for the courier', tint: '--cyan-primary' },
+    { stage: 'refused_after', title: 'Refused', hint: 'Refused on the call', tint: '--risk-high' },
   ],
   [
-    { stage: 'delivered', title: 'Delivered', hint: 'The courier handed it over' },
-    { stage: 'returned', title: 'Declined / returned', hint: 'The courier brought it back' },
+    { stage: 'delivered', title: 'Delivered', hint: 'The courier handed it over', tint: '--risk-safe' },
+    { stage: 'returned', title: 'Declined / returned', hint: 'The courier brought it back', tint: '--risk-watch' },
   ],
 ]
 
@@ -66,6 +70,14 @@ function riskTone(score: number | null): string {
   if (value >= 0.65) return 'bg-risk-high'
   if (value >= 0.35) return 'bg-risk-watch'
   return 'bg-risk-safe'
+}
+
+/** The number itself carries the colour, so the score reads before the name. */
+function riskInk(score: number | null): string {
+  if (score == null) return 'text-muted-foreground'
+  if (score >= 0.65) return 'text-[var(--risk-high-strong)]'
+  if (score >= 0.35) return 'text-[var(--risk-watch-strong)]'
+  return 'text-[var(--risk-safe-strong)]'
 }
 
 function callLine(order: WorkflowOrder): string | null {
@@ -97,10 +109,12 @@ export function Workflow() {
   const [pressed, setPressed] = useState<string | null>(null)
   const [landed, setLanded] = useState<{ id: string; stage: Stage } | null>(null)
   const [over, setOver] = useState<Stage | null>(null)
+  const [tip, setTip] = useState<WorkflowEdge | null>(null)
   const [busy, setBusy] = useState<Stage | null>(null)
   const [boxes, setBoxes] = useState<Partial<Record<Stage, Box>>>({})
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
+  const reconciling = useRef(false)
   const boards = useRef<Partial<Record<Stage, HTMLElement | null>>>({})
 
   const load = useCallback(async () => {
@@ -117,7 +131,27 @@ export function Workflow() {
       setFailed(true)
       toast.push({ kind: 'error', title: 'Could not load the board', detail: error.message })
     } else {
-      setOrders((data ?? []) as unknown as WorkflowOrder[])
+      const rows = (data ?? []) as unknown as WorkflowOrder[]
+      setOrders(rows)
+      // A call that is still queued, dialling or in progress is only as fresh
+      // as the last time someone asked the provider. Ask now, so a card never
+      // sits on "Calling now" long after the call ended.
+      const live = rows.filter((order) => {
+        const call = latestCall(order)
+        return call?.status ? LIVE_CALL.includes(call.status as (typeof LIVE_CALL)[number]) : false
+      })
+      if (live.length && !reconciling.current) {
+        reconciling.current = true
+        await Promise.all(live.map((order) => readCall({ orderId: order.id }).catch(() => null)))
+        reconciling.current = false
+        const fresh = await supabase
+          .from('orders')
+          .select(ORDER_FIELDS)
+          .eq('store_id', store.id)
+          .order('ordered_at', { ascending: false })
+          .limit(300)
+        if (!fresh.error) setOrders((fresh.data ?? []) as unknown as WorkflowOrder[])
+      }
     }
     setLoading(false)
   }, [store, toast])
@@ -131,6 +165,21 @@ export function Workflow() {
     void load()
     void loadAutomation()
   }, [load, loadAutomation])
+
+  // While something is on the phone, keep the board honest without a refresh.
+  const hasLiveCall = useMemo(
+    () => orders.some((order) => {
+      const call = latestCall(order)
+      return call?.status ? LIVE_CALL.includes(call.status as (typeof LIVE_CALL)[number]) : false
+    }),
+    [orders],
+  )
+
+  useEffect(() => {
+    if (!hasLiveCall) return
+    const timer = window.setInterval(() => void load(), 15_000)
+    return () => window.clearInterval(timer)
+  }, [hasLiveCall, load])
 
   const groups = useMemo(() => {
     const next: Record<Stage, WorkflowOrder[]> = {
@@ -268,11 +317,24 @@ export function Workflow() {
                           : 'border-border shadow-[0_1px_2px_rgb(16_24_32/0.05),0_10px_28px_-18px_rgb(16_24_32/0.35)]'
                     }`}
                   >
-                    <header className="flex items-baseline justify-between gap-2 rounded-t-xl border-b border-border/60 bg-muted/30 px-3 pb-2 pt-2.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    <header
+                      className="flex items-baseline justify-between gap-2 rounded-t-xl border-b px-3 pb-2 pt-2.5"
+                      style={
+                        board.tint
+                          ? {
+                              background: `color-mix(in srgb, var(${board.tint}) 12%, transparent)`,
+                              borderColor: `color-mix(in srgb, var(${board.tint}) 28%, transparent)`,
+                            }
+                          : { background: 'color-mix(in srgb, var(--muted) 45%, transparent)' }
+                      }
+                    >
+                      <span
+                        className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+                        style={{ color: board.tint ? `var(${board.tint})` : 'var(--muted-foreground)' }}
+                      >
                         {board.title}
                       </span>
-                      <span className="rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
+                      <span className="rounded-full bg-background/70 px-1.5 text-[11px] tabular-nums text-muted-foreground">
                         {items.length}
                       </span>
                     </header>
@@ -302,9 +364,9 @@ export function Workflow() {
                             }}
                             className={`relative cursor-grab rounded-lg border border-border bg-background px-2.5 py-2 transition-[transform,box-shadow,border-color,opacity] duration-200 ease-out [transform-origin:50%_40%] ${
                               dragging === order.id
-                                ? 'z-20 rotate-[1.5deg] scale-[1.03] border-foreground/20 shadow-[0_18px_34px_-16px_rgb(16_24_32/0.45)]'
+                                ? 'z-20 rotate-[4deg] scale-[1.05] border-foreground/20 shadow-[0_24px_44px_-18px_rgb(16_24_32/0.5)]'
                                 : pressed === order.id
-                                  ? 'z-10 -rotate-[1deg] scale-[1.02] border-foreground/25 shadow-[0_12px_24px_-14px_rgb(16_24_32/0.4)]'
+                                  ? 'z-10 -rotate-[3deg] scale-[1.03] border-foreground/25 shadow-[0_14px_28px_-14px_rgb(16_24_32/0.45)]'
                                   : 'shadow-[0_1px_2px_rgb(16_24_32/0.06)] hover:-translate-y-px hover:border-foreground/20 hover:shadow-[0_6px_16px_-10px_rgb(16_24_32/0.45)]'
                             } ${landed?.id === order.id ? 'animate-[wf-land_620ms_cubic-bezier(0.2,0.9,0.25,1)]' : ''}`}
                           >
@@ -324,9 +386,9 @@ export function Workflow() {
                               </div>
                               <div className="shrink-0 text-right">
                                 <div
-                                  className={`text-[17px] font-semibold leading-none tabular-nums ${
-                                    order.buyers?.risk_score == null ? 'text-muted-foreground' : 'text-foreground'
-                                  }`}
+                                  className={`text-[17px] font-semibold leading-none tabular-nums ${riskInk(
+                                    order.buyers?.risk_score ?? null,
+                                  )}`}
                                 >
                                   {order.buyers?.risk_score == null
                                     ? '—'
@@ -401,25 +463,44 @@ export function Workflow() {
             const x = (mx + tx) / 2
             const y = to.y + to.h / 2
             const on = automation[edge]
+            const open = tip === edge
             return (
-              <button
-                key={edge}
-                type="button"
-                aria-pressed={on}
-                aria-label={EDGE_LABEL[edge]}
-                title={EDGE_LABEL[edge]}
-                onClick={() => void toggle(edge)}
-                style={{ left: x, top: y }}
-                className={`pointer-events-auto absolute flex h-[18px] w-[32px] -translate-x-1/2 -translate-y-1/2 items-center rounded-full border px-0.5 transition ${
-                  on ? 'border-transparent bg-foreground/80' : 'border-border bg-card'
-                }`}
-              >
-                <span
-                  className={`h-[12px] w-[12px] rounded-full bg-card transition-transform ${
-                    on ? 'translate-x-[13px]' : 'translate-x-0'
+              <div key={edge} className="pointer-events-none absolute" style={{ left: x, top: y }}>
+                {open && (
+                  <div
+                    role="tooltip"
+                    id={`edge-${edge}`}
+                    className="pointer-events-none absolute bottom-[26px] left-1/2 z-30 w-[224px] -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-left shadow-[0_16px_36px_-18px_rgb(16_24_32/0.55)]"
+                  >
+                    <p className="text-[12px] font-medium leading-snug text-foreground">{EDGE_LABEL[edge]}</p>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{EDGE_HINT[edge]}</p>
+                    <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      {on ? 'On — Verafo does this' : 'Off — you do it'}
+                    </p>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={EDGE_LABEL[edge]}
+                  aria-describedby={open ? `edge-${edge}` : undefined}
+                  onClick={() => void toggle(edge)}
+                  onMouseEnter={() => setTip(edge)}
+                  onMouseLeave={() => setTip((current) => (current === edge ? null : current))}
+                  onFocus={() => setTip(edge)}
+                  onBlur={() => setTip((current) => (current === edge ? null : current))}
+                  style={{ transform: 'translate(-50%, -50%)' }}
+                  className={`pointer-events-auto absolute flex h-[18px] w-[32px] items-center rounded-full border px-0.5 transition ${
+                    on ? 'border-transparent bg-foreground/80' : 'border-border bg-card'
                   }`}
-                />
-              </button>
+                >
+                  <span
+                    className={`h-[12px] w-[12px] rounded-full bg-card transition-transform ${
+                      on ? 'translate-x-[13px]' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             )
           })}
         </div>

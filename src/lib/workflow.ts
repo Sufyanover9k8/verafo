@@ -27,6 +27,15 @@ export const EDGE_LABEL: Record<WorkflowEdge, string> = {
   courier_returned: 'Courier refusal marks it returned',
 }
 
+/** What the switch actually changes, in the merchant's terms. */
+export const EDGE_HINT: Record<WorkflowEdge, string> = {
+  call_dial: 'New orders at or above your risk threshold are called without you asking.',
+  call_ship: 'When the buyer confirms the order on the call, it moves to To deliver on its own.',
+  call_refuse: 'When the buyer cancels on the call, it is refused and never leaves the shelf.',
+  courier_delivered: 'When the courier reports a delivery, the order is marked delivered here.',
+  courier_returned: 'When the courier reports a refusal, the parcel is marked returned.',
+}
+
 export type Automation = Record<WorkflowEdge, boolean>
 
 export const DEFAULT_AUTOMATION: Automation = {
