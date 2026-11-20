@@ -300,6 +300,37 @@ interface SummaryInput {
   phone_age_days: number;
   distinct_stores: number;
   first_seen: string | null;
+  /** What the verification calls observed, when the buyer has any. */
+  calls?: CallSignal | null;
+}
+
+/**
+ * One sentence describing what the verification calls observed.
+ *
+ * Written for anything that has to speak or reason about the buyer (the profile
+ * summary and the embedding text), so it states observations and leaves the
+ * verdict to the risk score: "answered twice and cancelled" is evidence, "high
+ * risk" is a conclusion drawn from it.
+ */
+function describeCalls(c: CallSignal): string {
+  const parts: string[] = [];
+  const reaching = c.connected + c.noAnswer + c.failed;
+  parts.push(
+    `${c.calls} verification call${c.calls === 1 ? "" : "s"} were placed` +
+      (reaching > 0 ? `, ${c.connected} of them answered` : "") +
+      ".",
+  );
+  if (c.confirmed > 0) parts.push("On a call the buyer confirmed the order.");
+  if (c.cancelled > 0) parts.push("On a call the buyer cancelled the order.");
+  if (c.wrongPerson > 0) parts.push("On a call the person who answered was not the buyer.");
+  if (c.noAnswer > 0) parts.push(`The buyer did not answer ${c.noAnswer} of them.`);
+  if (c.correctedFields.length > 0) {
+    parts.push(
+      `A call corrected the ${c.correctedFields.join(", ")} on the order, ` +
+        `so the buyer volunteers accurate details when asked.`,
+    );
+  }
+  return parts.join(" ");
 }
 
 function buildSummaryText(s: SummaryInput): string {
@@ -340,6 +371,9 @@ function buildSummaryText(s: SummaryInput): string {
   }
   if (s.phone_age_days > 0) {
     parts.push(`Known to the network for about ${Math.round(s.phone_age_days)} days.`);
+  }
+  if (s.calls && s.calls.calls > 0) {
+    parts.push(describeCalls(s.calls));
   }
   return parts.join(" ");
 }
@@ -405,6 +439,42 @@ function buildEmbedText(s: SummaryInput, cityRate: number | null = null): string
 
   if (s.phone_age_days > 0) {
     parts.push(`Known to the network for about ${Math.round(s.phone_age_days)} days.`);
+  }
+
+  // Call observations. Kept as behaviour, not as a verdict: a buyer who answers
+  // and corrects their address, one who never picks up, and one who answers and
+  // cancels are three different people even when all three end up refused.
+  if (s.calls && s.calls.calls > 0) {
+    const c = s.calls;
+    const answered = c.connected / c.calls;
+    parts.push(
+      `Reached by phone verification ${c.calls} time(s); ` +
+        `${Math.round(answered * 100)}% of those calls were answered.`,
+    );
+    if (c.correctedFields.length > 0) {
+      parts.push(
+        `On a call the buyer corrected the ${c.correctedFields.join(", ")} on an order.`,
+      );
+    }
+    if (c.wrongPerson > 0) {
+      parts.push("On a call the person who answered said they were not the buyer.");
+    } else if (c.confirmed > 0) {
+      parts.push("On a call the buyer confirmed the order themselves.");
+    } else if (c.cancelled > 0) {
+      parts.push("On a call the buyer cancelled the order themselves.");
+    }
+    if (c.noAnswer > 0 && c.connected === 0) {
+      parts.push("The buyer has never answered a verification call.");
+    }
+    if (c.averageDurationSec != null && c.averageDurationSec > 0) {
+      const bucket =
+        c.averageDurationSec < 45
+          ? "brief"
+          : c.averageDurationSec < 150
+            ? "normal-length"
+            : "long";
+      parts.push(`Their answered calls are ${bucket}.`);
+    }
   }
 
   return parts.join(" ");
@@ -528,6 +598,8 @@ interface BuyerEmbeddingRow {
   total_accepted: number | null
   total_refused: number | null
   embedding: number[] | null
+  /** When the row last changed — an embedding rebuild stamps this too. */
+  updated_at?: string | null
 }
 
 /** One plotted point in the buyer map (classical-MDS projection). */
@@ -572,6 +644,193 @@ interface ChatCompletionTool {
     description: string
     parameters: Record<string, unknown>
   }
+}
+
+/**
+ * What the AI verification calls observed about one buyer.
+ *
+ * A call is the only place the network hears the customer's own voice: they
+ * picked up or they did not, they confirmed or cancelled, and they corrected an
+ * address or an item. That is direct evidence about a person, so it belongs in
+ * the fingerprint next to order timing and basket size — and it is richer than
+ * an outcome bit, because "never answers" and "answers and cancels" are
+ * different people even when both end up refused.
+ *
+ * Counts are rolled up across the caller's own calls only (orders are private;
+ * see `loadCallSignal`), so one merchant's calls never label another's buyer.
+ */
+interface CallSignal {
+  /** Calls attempted for this buyer's orders in the caller's stores. */
+  calls: number
+  /** Calls where the buyer was actually reached (status completed). */
+  connected: number
+  /** Calls that rang out. */
+  noAnswer: number
+  /** Calls that broke before reaching anyone. */
+  failed: number
+  confirmed: number
+  cancelled: number
+  wrongPerson: number
+  /** Order fields a call corrected, deduplicated ("address", "name", ...). */
+  correctedFields: string[]
+  /** How many individual corrections the calls produced. */
+  corrections: number
+  averageDurationSec: number | null
+  lastOutcome: string | null
+  lastAt: string | null
+}
+
+/** A `call_verifications` row as embedded under an order. */
+interface VerificationEmbed {
+  status?: string | null
+  outcome?: string | null
+  corrections?: unknown
+  duration_sec?: number | null
+  ended_at?: string | null
+}
+
+interface CallObservationRow {
+  buyer_phone: string | null
+  call_verifications?: VerificationEmbed[] | VerificationEmbed | null
+}
+
+/**
+ * Roll the caller's verification calls for one phone into a `CallSignal`.
+ *
+ * Returns null when the buyer has no calls at all, so callers can leave every
+ * call dimension out instead of writing zeros that mean "no evidence".
+ * Failures are swallowed: a call lookup must never break a profile or an
+ * embedding rebuild.
+ */
+async function loadCallSignal(
+  supabase: Db,
+  phone: string,
+  storeIds: string[] = [],
+): Promise<CallSignal | null> {
+  const candidates = phoneLookupCandidates(phone);
+  if (candidates.length === 0) return null;
+
+  let rows: CallObservationRow[] = [];
+  try {
+    rows = await fetchRows<CallObservationRow>(
+      "orders",
+      "select=buyer_phone,call_verifications(status,outcome,corrections,duration_sec,ended_at)" +
+        `&buyer_phone=in.(${candidates.map(encodeURIComponent).join(",")})` +
+        `&limit=2000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    return null;
+  }
+
+  const calls: VerificationEmbed[] = [];
+  for (const row of rows) {
+    const embedded = row.call_verifications;
+    if (Array.isArray(embedded)) calls.push(...embedded);
+    else if (embedded) calls.push(embedded);
+  }
+  // Only dial attempts the network actually ran count as observations. A call
+  // the provider cancelled before dialling, or one still ringing, says nothing
+  // about the buyer and would otherwise dilute every rate below.
+  const OBSERVED = new Set(["completed", "no_answer", "failed"]);
+  const observed = calls.filter((c) => OBSERVED.has(String(c.status ?? "").toLowerCase()));
+  if (observed.length === 0) return null;
+
+  const signal: CallSignal = {
+    calls: observed.length,
+    connected: 0,
+    noAnswer: 0,
+    failed: 0,
+    confirmed: 0,
+    cancelled: 0,
+    wrongPerson: 0,
+    correctedFields: [],
+    corrections: 0,
+    averageDurationSec: null,
+    lastOutcome: null,
+    lastAt: null,
+  };
+
+  const fields = new Set<string>();
+  let durationSum = 0;
+  let durationCount = 0;
+
+  for (const call of observed) {
+    const status = String(call.status ?? "").toLowerCase();
+    const outcome = String(call.outcome ?? "").toLowerCase();
+    if (status === "completed") signal.connected += 1;
+    else if (status === "no_answer") signal.noAnswer += 1;
+    else if (status === "failed") signal.failed += 1;
+
+    if (outcome === "confirmed") signal.confirmed += 1;
+    else if (outcome === "cancelled") signal.cancelled += 1;
+    else if (outcome === "wrong_person") signal.wrongPerson += 1;
+
+    if (Array.isArray(call.corrections)) {
+      for (const entry of call.corrections) {
+        const field = (entry as { field?: unknown })?.field;
+        if (typeof field === "string" && field.trim()) {
+          fields.add(field.trim().toLowerCase());
+          signal.corrections += 1;
+        }
+      }
+    }
+
+    const duration = Number(call.duration_sec);
+    if (Number.isFinite(duration) && duration > 0) {
+      durationSum += duration;
+      durationCount += 1;
+    }
+
+    const at = call.ended_at ?? null;
+    if (at && (!signal.lastAt || new Date(at) > new Date(signal.lastAt))) {
+      signal.lastAt = at;
+      signal.lastOutcome = outcome || null;
+    }
+  }
+
+  signal.correctedFields = [...fields].sort();
+  if (durationCount > 0) signal.averageDurationSec = Math.round(durationSum / durationCount);
+  return signal;
+}
+
+/**
+ * Latest verification call per buyer phone, for the caller's stores only.
+ *
+ * Used to spot fingerprints that went stale: an embedding is a snapshot of
+ * behaviour at the moment it was written, so a call that happened afterwards
+ * means the stored vector is describing a slightly different person.
+ */
+async function latestCallTimes(
+  supabase: Db,
+  storeIds: string[] = [],
+): Promise<Map<string, string>> {
+  const latest = new Map<string, string>();
+  let rows: CallObservationRow[] = [];
+  try {
+    rows = await fetchRows<CallObservationRow>(
+      "orders",
+      "select=buyer_phone,call_verifications(status,ended_at)" +
+        `&limit=3000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    return latest;
+  }
+
+  const observed = new Set(["completed", "no_answer", "failed"]);
+  for (const row of rows) {
+    const phone = String(row.buyer_phone ?? "");
+    if (!phone) continue;
+    const embedded = row.call_verifications;
+    const calls = Array.isArray(embedded) ? embedded : embedded ? [embedded] : [];
+    for (const call of calls) {
+      if (!observed.has(String(call.status ?? "").toLowerCase())) continue;
+      const at = call.ended_at;
+      if (!at) continue;
+      const current = latest.get(phone);
+      if (!current || new Date(at) > new Date(current)) latest.set(phone, at);
+    }
+  }
+  return latest;
 }
 
 /**
@@ -635,6 +894,10 @@ async function fetchStats(
     ? Math.max(0, (Date.now() - new Date(buyer.first_seen).getTime()) / 86400000)
     : 0;
 
+  // Calls the caller placed for this buyer. Null when none exist, so no call
+  // dimensions are written for buyers the network has never rung.
+  const calls = await loadCallSignal(supabase, phone, storeIds);
+
   return {
     phone,
     risk_score: Number(buyer.risk_score ?? 0.5),
@@ -652,6 +915,7 @@ async function fetchStats(
     phone_age_days: phoneAgeDays,
     distinct_stores: new Set(rows.map((o) => o.store_id)).size,
     first_seen: buyer.first_seen,
+    calls,
   };
 }
 
@@ -810,6 +1074,31 @@ async function buildFeatureVector(
   push("phone_age_days_norm", normalize(phoneAgeDays, 0, 180));
   push("distinct_stores_norm", normalize(distinctStores, 1, 10));
   push("total_orders_norm", normalize(total, 0, 30));
+
+  // GROUP F — what the verification calls observed. These are the only
+  // dimensions that describe the person rather than the parcel: whether they
+  // pick up, whether they confirm or cancel when they do, and whether they hand
+  // over a better address than the checkout form collected.
+  const calls = await loadCallSignal(supabase, phone, storeIds);
+  if (calls) {
+    const answeredRate = calls.calls > 0 ? calls.connected / calls.calls : 0;
+    const silentRate = calls.calls > 0 ? calls.noAnswer / calls.calls : 0;
+    push("call_answered_rate", answeredRate);
+    push("call_silent_rate", silentRate);
+    push("call_confirmed_rate", calls.calls > 0 ? calls.confirmed / calls.calls : 0);
+    push("call_cancelled_rate", calls.calls > 0 ? calls.cancelled / calls.calls : 0);
+    push("call_wrong_person_rate", calls.calls > 0 ? calls.wrongPerson / calls.calls : 0);
+    push("call_correction_rate", calls.calls > 0 ? calls.corrections / calls.calls : 0);
+    push("call_volume_norm", normalize(calls.calls, 0, 4));
+    const daysSinceCall = calls.lastAt
+      ? Math.max(0, (Date.now() - new Date(calls.lastAt).getTime()) / 86400000)
+      : 180;
+    push("call_recency_days_norm", normalize(daysSinceCall, 0, 180));
+    push(
+      "call_duration_norm",
+      calls.averageDurationSec == null ? 0 : normalize(calls.averageDurationSec, 30, 240),
+    );
+  }
 
   return { vector, labels, cityRate };
 }
@@ -3009,6 +3298,7 @@ const supabase = createClient(
       return json({
         ok: true,
         summary: text,
+        calls: stats.calls,
         feature_labels: fv.labels,
         feature_vector: fv.vector,
         feature_dimensions: fv.vector.length,
@@ -3034,14 +3324,37 @@ const supabase = createClient(
 
       const { data: buyers, error } = await supabase
         .from("buyers")
-        .select("phone, risk_score, total_orders, total_accepted, total_refused, embedding")
+        .select(
+          "phone, risk_score, total_orders, total_accepted, total_refused, embedding, updated_at",
+        )
         .order("total_orders", { ascending: false })
         .limit(MAX_MAP_BUYERS);
       if (error) throw new Error(error.message);
       const rows = asRows<BuyerEmbeddingRow>(buyers);
 
+      // A buyer needs a fingerprint when they have none, or when a verification
+      // call landed after the vector was last written — the call observations
+      // are part of the embedding text now, so the stored vector went stale.
+      //
+      // `embedding` arrives as the pgvector text form ("[0.1,0.2,...]") rather
+      // than a JS array, so "already embedded" must accept a non-empty string;
+      // testing only for an array re-embedded the same 40 buyers on every run.
+      const hasEmbedding = (b: BuyerEmbeddingRow) =>
+        Array.isArray(b.embedding)
+          ? b.embedding.length > 0
+          : typeof b.embedding === "string"
+            ? b.embedding.trim().length > 2
+            : false;
+
+      const latestCall = await latestCallTimes(supabase, storeIds);
       const missing = rows
-        .filter((b) => !b.embedding || !Array.isArray(b.embedding))
+        .filter((b) => {
+          if (!hasEmbedding(b)) return true;
+          const calledAt = latestCall.get(String(b.phone));
+          if (!calledAt) return false;
+          if (!b.updated_at) return true;
+          return new Date(calledAt) > new Date(b.updated_at);
+        })
         .map((b) => String(b.phone))
         .slice(0, MAX_EMBED_PER_RUN);
       const failed: string[] = [];
@@ -3062,17 +3375,33 @@ const supabase = createClient(
         }
       }
 
+      // `embedding` comes back as the pgvector text form ("[0.1,0.2,...]"), not
+      // a JS array, so it has to be parsed before it can be plotted. Testing
+      // only for an array used to leave the map showing just the handful of
+      // buyers embedded in that very request.
+      const asVector = (b: BuyerEmbeddingRow): number[] | null => {
+        if (Array.isArray(b.embedding)) return b.embedding.length > 0 ? b.embedding : null;
+        if (typeof b.embedding === "string" && b.embedding.trim().startsWith("[")) {
+          try {
+            const parsed = JSON.parse(b.embedding) as unknown;
+            return Array.isArray(parsed) && parsed.length > 0 ? (parsed as number[]) : null;
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      };
+
       const vecs = rows
-        .filter((b): b is BuyerEmbeddingRow & { embedding: number[] } =>
-          Array.isArray(b.embedding) && b.embedding.length > 0
-        )
-        .map((b) => ({
-          phone: String(b.phone),
-          risk: Number(b.risk_score ?? 0.5),
-          orders: Number(b.total_orders ?? 0),
-          accepted: Number(b.total_accepted ?? 0),
-          refused: Number(b.total_refused ?? 0),
-          embedding: b.embedding,
+        .map((b) => ({ row: b, vector: asVector(b) }))
+        .filter((e): e is { row: BuyerEmbeddingRow; vector: number[] } => e.vector != null)
+        .map(({ row, vector }) => ({
+          phone: String(row.phone),
+          risk: Number(row.risk_score ?? 0.5),
+          orders: Number(row.total_orders ?? 0),
+          accepted: Number(row.total_accepted ?? 0),
+          refused: Number(row.total_refused ?? 0),
+          embedding: vector,
         }));
 
       const spendMap = new Map<string, number>();

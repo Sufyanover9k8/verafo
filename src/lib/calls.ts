@@ -194,6 +194,8 @@ export async function overrideCallDecision(args: {
   orderId: string
   decision: CallDecision
   previous: { decision: string | null; outcome: string | null; applied: Record<string, unknown> | null }
+  /** Buyer the call was about, so their fingerprint can be rebuilt. */
+  buyerPhone?: string | null
 }): Promise<void> {
   if (!supabase) throw new CallError('Supabase is not configured.', 0)
   const { data: session } = await supabase.auth.getUser()
@@ -229,6 +231,35 @@ export async function overrideCallDecision(args: {
     })
     .eq('id', args.verificationId)
   if (callError) throw new CallError(callError.message, 0, { step: 'verification' })
+
+  // The call's observations are part of the buyer's fingerprint, and this just
+  // changed one of them. Re-embed while we are here so "who is like this buyer"
+  // reflects the merchant's decision immediately instead of at the next rebuild.
+  if (args.buyerPhone) void refreshFingerprint(args.buyerPhone)
+}
+
+/**
+ * Rebuild one buyer's fingerprint after something changed what the network has
+ * observed about them. Fire-and-forget by design: the decision is already
+ * saved, and a stale vector is a smaller problem than an error the merchant
+ * cannot act on.
+ */
+export async function refreshFingerprint(phone: string): Promise<boolean> {
+  const base = functionsBaseUrl()
+  if (!base || !supabase || !phone) return false
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return false
+    const res = await fetch(`${base}/verafo-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'embed', phone }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 /** 0.62 → "62%". The threshold is stored as a 0–1 fraction. */

@@ -192,6 +192,7 @@ export function Calls() {
         verificationId: call.id,
         orderId: call.order_id,
         decision,
+        buyerPhone: call.orders?.buyer_phone ?? null,
         previous: {
           decision: call.orders?.order_fulfillment?.status ?? null,
           outcome: call.outcome,
