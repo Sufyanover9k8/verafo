@@ -19,6 +19,7 @@ const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ defaul
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })))
 const BulkImport = lazy(() => import('./pages/BulkImport').then((m) => ({ default: m.BulkImport })))
 const Calls = lazy(() => import('./pages/Calls').then((m) => ({ default: m.Calls })))
+const WorkflowPage = lazy(() => import('./pages/Workflow').then((m) => ({ default: m.Workflow })))
 const BuyerMap = lazy(() => import('./pages/BuyerMap').then((m) => ({ default: m.BuyerMap })))
 const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })))
 const Lookup = lazy(() => import('./pages/Lookup').then((m) => ({ default: m.Lookup })))
@@ -60,6 +61,7 @@ export function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/workflow" element={<WorkflowPage />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/orders/new" element={<NewOrder />} />

@@ -13,6 +13,7 @@ import {
   Settings,
   Store,
   UploadCloud,
+  Workflow,
 } from 'lucide-react'
 import { FEATURES } from '@/lib/features'
 
@@ -40,6 +41,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Operate',
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/workflow', label: 'Workflow', icon: Workflow },
       { to: '/orders', label: 'Orders', icon: Package },
       { to: '/orders/new', label: 'New Order', icon: PlusSquare },
       { to: '/calls', label: 'Calls', icon: PhoneCall },
