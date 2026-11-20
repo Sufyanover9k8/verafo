@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Zap } from 'lucide-react'
-import { readCreditsForStores, type CreditStatus } from '@/lib/credits'
+import { overagePkr, readCreditsForStores, type CreditStatus } from '@/lib/credits'
 import { useStoreScope } from '@/lib/store'
 
 /** Credits move while the merchant is working, so the figure refreshes on the
@@ -9,9 +9,8 @@ import { useStoreScope } from '@/lib/store'
 const POLL_MS = 60_000
 
 /**
- * Credits left, in the rail just above the account. One check is one credit
- * and one call minute is one credit, so this is the same number the dashboard
- * refuses work against.
+ * Credits in the rail, just above the account: packaged credits left while the
+ * plan has some, then the extra credits it is buying.
  */
 export function CallCredits() {
   const { store, scopeStoreIds, loading } = useStoreScope()
@@ -39,19 +38,20 @@ export function CallCredits() {
     }
   }, [loading, scopeStoreIds, store?.id])
 
-  const total = credits ? credits.included + credits.overageAllowed : 0
+  const over = credits ? credits.overage > 0 : false
+  const owed = overagePkr(credits)
   const left = credits ? Math.round(credits.remaining).toLocaleString() : '—'
   const plan = credits ? credits.planName : 'Credits'
+  const value = over ? `${Math.round(credits!.overage).toLocaleString()} over` : left
+  const sub = over ? `PKR ${owed.toLocaleString()} so far` : `left · ${plan}`
+
   const detail = credits
-    ? `${left} credits left on ${plan}. ${Math.round(credits.used).toLocaleString()} of ${total.toLocaleString()} used this month${
-        credits.overage > 0
-          ? `, ${Math.round(credits.overage).toLocaleString()} of them over the plan at PKR ${credits.overageRate} each`
-          : ''
-      }${credits.cycleEnd ? `. Resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : ''}.`
+    ? over
+      ? `${Math.round(credits.overage).toLocaleString()} credits past the ${plan} package at PKR ${credits.overageRate} each — PKR ${owed.toLocaleString()} added to the next Shopify invoice.`
+      : `${left} credits left on ${plan}. ${Math.round(credits.used).toLocaleString()} of ${Math.round(credits.included).toLocaleString()} used this month at PKR ${credits.overageRate} a credit beyond the package.`
     : 'Credits left this month'
 
-  const usedFraction = credits && total > 0 ? Math.min(1, credits.used / total) : 0
-  const spent = credits ? Math.round(credits.used).toLocaleString() : '—'
+  const usedFraction = credits && credits.included > 0 ? Math.min(1, credits.used / credits.included) : 0
 
   return (
     <NavLink
@@ -68,11 +68,9 @@ export function CallCredits() {
       </div>
       <div className="mt-1 flex items-baseline gap-1.5">
         <span className="text-[15px] font-semibold leading-none tabular-nums text-sidebar-foreground">
-          {left}
+          {value}
         </span>
-        <span className="text-[11px] text-sidebar-foreground/50">
-          {credits ? `left · ${plan}` : 'left'}
-        </span>
+        <span className="text-[11px] text-sidebar-foreground/50">{sub}</span>
       </div>
       <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-sidebar-foreground/15">
         <div
@@ -80,7 +78,6 @@ export function CallCredits() {
           style={{ width: `${Math.round(usedFraction * 100)}%` }}
         />
       </div>
-      <div className="mt-0.5 text-[10px] text-sidebar-foreground/40">{spent} used</div>
     </NavLink>
   )
 }

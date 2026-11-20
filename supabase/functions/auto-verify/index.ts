@@ -134,10 +134,11 @@ Deno.serve(async (req) => {
       p_store: card.store_id,
     });
     const creditRow = Array.isArray(creditRows) ? creditRows[0] : creditRows;
-    if (Number(creditRow?.remaining_credits ?? 0) < 1) {
+    if (Number(creditRow?.remaining_credits ?? 0) < 1 && !creditRow?.allow_overage) {
       return json(
         {
-          error: 'out of credits - calls resume when the plan renews or you add credits',
+          error:
+        'the plan has no credits left - upgrade the plan or add credits in the Shopify admin',
           plan: creditRow?.plan_name ?? 'Free',
           used_credits: Number(creditRow?.used_credits ?? 0),
           remaining_credits: 0,

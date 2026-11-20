@@ -4,9 +4,11 @@ import { getSupabase } from "./supabase.server";
  * Shopify Billing for Verafo.
  *
  * One rail: every account signs in with a Shopify store, so the subscription
- * lives on the shop. Credits are our own bookkeeping — the recurring charge
- * pays for the plan's included credits and a capped usage line item pays for
- * anything above them.
+ * lives on the shop. Credits are our own bookkeeping: the recurring charge
+ * pays for the plan's included credits, and a usage line item bills anything
+ * above them at the plan rate. There is no product cap — the usage line
+ * item carries Shopify's own technical ceiling (PKR 100,000), which is only a
+ * guard against a runaway bill, not a product limit.
  *
  *   1 check      = 1 credit
  *   1 call minute = 1 credit (rounded up)
@@ -27,7 +29,9 @@ export interface PlanDef {
   pricePkr: number;
   includedCredits: number;
   overagePkrPerCredit: number;
-  overageCapCredits: number;
+  allowOverage: boolean;
+  /** Shopify requires a capped usage line item; this is only a safety ceiling. */
+  usageCeilingPkr: number;
   trialDays: number;
   tagline: string;
 }
@@ -40,29 +44,32 @@ export const PLANS: PlanDef[] = [
     pricePkr: 0,
     includedCredits: 100,
     overagePkrPerCredit: 0,
-    overageCapCredits: 0,
+    allowOverage: false,
+    usageCeilingPkr: 0,
     trialDays: 0,
-    tagline: "100 checks a month. No card, no trial clock.",
+    tagline: "100 credits a month, then it stops. No card, no trial clock.",
   },
   {
     code: "standard",
     name: "Standard",
     pricePkr: 6999,
-    includedCredits: 333,
+    includedCredits: 100,
     overagePkrPerCredit: 21,
-    overageCapCredits: 333,
+    allowOverage: true,
+    usageCeilingPkr: 100000,
     trialDays: 7,
-    tagline: "333 credits a month, then PKR 21 a credit.",
+    tagline: "100 credits a month, then PKR 21 a credit. Never stops.",
   },
   {
     code: "founder",
     name: "Founder One",
     pricePkr: 12499,
-    includedCredits: 781,
+    includedCredits: 350,
     overagePkrPerCredit: 16,
-    overageCapCredits: 781,
+    allowOverage: true,
+    usageCeilingPkr: 100000,
     trialDays: 45,
-    tagline: "781 credits a month, then PKR 16 a credit. Price locked.",
+    tagline: "350 credits a month, then PKR 16 a credit. Price locked.",
   },
 ];
 
@@ -74,7 +81,9 @@ export function planOf(code: string | null | undefined): PlanDef {
 export async function loadPlans(): Promise<PlanDef[]> {
   const { data } = await getSupabase()
     .from("plans")
-    .select("code, name, price_pkr, included_credits, overage_pkr_per_credit, overage_cap_credits, trial_days, sort_order")
+    .select(
+      "code, name, price_pkr, included_credits, overage_pkr_per_credit, allow_overage, usage_ceiling_pkr, trial_days, sort_order",
+    )
     .order("sort_order", { ascending: true });
   if (!data?.length) return PLANS;
   return data.map((row) => {
@@ -85,7 +94,8 @@ export async function loadPlans(): Promise<PlanDef[]> {
       pricePkr: Number(row.price_pkr ?? fallback.pricePkr),
       includedCredits: Number(row.included_credits ?? fallback.includedCredits),
       overagePkrPerCredit: Number(row.overage_pkr_per_credit ?? fallback.overagePkrPerCredit),
-      overageCapCredits: Number(row.overage_cap_credits ?? fallback.overageCapCredits),
+      allowOverage: Boolean(row.allow_overage ?? fallback.allowOverage),
+      usageCeilingPkr: Number(row.usage_ceiling_pkr ?? fallback.usageCeilingPkr),
       trialDays: Number(row.trial_days ?? fallback.trialDays),
       tagline: fallback.tagline,
     };
@@ -243,9 +253,10 @@ const CREATE_SUBSCRIPTION = `#graphql
 `;
 
 /**
- * Start a subscription and return the URL the merchant must approve. The
- * usage line item is always capped: Shopify refuses uncapped usage pricing,
- * and a cap is what stops a runaway call bill.
+ * Start a subscription and return the URL the merchant must approve. Shopify
+ * refuses uncapped usage pricing, so the line item carries the plan's
+ * technical ceiling (PKR 100,000), not a product limit: the merchant keeps
+ * getting credits past the package and keeps paying per credit.
  */
 export async function createSubscription(
   admin: AdminGraphql,
@@ -253,7 +264,7 @@ export async function createSubscription(
   returnUrl: string,
   test: boolean,
 ): Promise<string> {
-  const capPkr = Math.max(1, plan.overageCapCredits * plan.overagePkrPerCredit);
+  const capPkr = Math.max(1, plan.usageCeilingPkr);
   const data = await gql<{
     appSubscriptionCreate: {
       confirmationUrl: string | null;
@@ -334,7 +345,8 @@ export interface StoredPlan {
   usageLineItemId: string | null;
   includedCredits: number | null;
   overagePkrPerCredit: number | null;
-  overageCapCredits: number | null;
+  allowOverage: boolean | null;
+  usageCeilingPkr: number | null;
   currentPeriodEnd: string | null;
 }
 
@@ -359,7 +371,9 @@ export async function saveStorePlan(
     usage_line_item_id: subscription?.usageLineItemId ?? null,
     included_credits: plan.includedCredits,
     overage_pkr_per_credit: plan.overagePkrPerCredit,
-    overage_cap_credits: plan.overageCapCredits,
+    overage_cap_credits: 0,
+    allow_overage: plan.allowOverage,
+    usage_ceiling_pkr: plan.usageCeilingPkr,
     current_period_end: cycleEnd.toISOString(),
     cycle_start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10),
     cycle_end: cycleEnd.toISOString().slice(0, 10),

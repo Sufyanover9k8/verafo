@@ -67,6 +67,10 @@ async function creditStatus(db: ReturnType<typeof admin>, storeId: string) {
     overage_allowed: number;
     used_credits: number;
     remaining_credits: number;
+    allow_overage: boolean;
+    included_credits: number;
+    overage_credits: number;
+    overage_pkr_per_credit: number;
     overage_credits: number;
   } | null;
 }
@@ -375,7 +379,7 @@ async function tick(db: ReturnType<typeof admin>) {
     // Credits, not rupees, decide whether another call may start: the plan
     // pays for a number of minutes and its overage cap stops the spending.
     const credits = await creditStatus(db, storeId);
-    if (Number(credits?.remaining_credits ?? 0) < 1) {
+    if (Number(credits?.remaining_credits ?? 0) < 1 && !credits?.allow_overage) {
       report.skipped += 1;
       report.blocked.push(storeId);
       continue;

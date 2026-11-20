@@ -25,7 +25,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { data: plans } = await supabase
     .from("store_plans")
-    .select("store_id, plan_name, subscription_id, usage_line_item_id, included_credits, overage_pkr_per_credit, overage_cap_credits, overage_billed_credits, cycle_start, cycle_end, shop, stores(id, shopify_domain, name)");
+    .select("store_id, plan_name, subscription_id, usage_line_item_id, included_credits, overage_pkr_per_credit, allow_overage, usage_ceiling_pkr, overage_billed_credits, cycle_start, cycle_end, shop, stores(id, shopify_domain, name)");
 
   const report: { store: string; billed: number; credits: number; skipped?: string }[] = [];
   const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
@@ -35,10 +35,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const shop = String(row.shop ?? store?.shopify_domain ?? "");
     const plan = planOf(String(row.plan_name ?? "free"));
     const rate = Number(row.overage_pkr_per_credit ?? plan.overagePkrPerCredit);
-    const cap = Number(row.overage_cap_credits ?? plan.overageCapCredits);
     const included = Number(row.included_credits ?? plan.includedCredits);
+    const allowOverage = Boolean(row.allow_overage ?? plan.allowOverage);
+    // Shopify needs a ceiling on the usage line item; it is not a product cap.
+    const ceilingPkr = Number(row.usage_ceiling_pkr ?? plan.usageCeilingPkr);
 
-    if (!row.subscription_id || !row.usage_line_item_id || rate <= 0 || cap <= 0) {
+    if (!row.subscription_id || !row.usage_line_item_id || rate <= 0 || !allowOverage) {
       report.push({ store: shop, billed: 0, credits: 0, skipped: "no usage line item" });
       continue;
     }
@@ -49,7 +51,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       .eq("store_id", row.store_id)
       .gte("occurred_at", monthStart.toISOString());
     const used = (events ?? []).reduce((sum, e) => sum + Number(e.credits ?? 0), 0);
-    const overage = Math.max(0, Math.min(cap, used - included));
+    // No product cap: everything past the package is billable, bounded only by
+    // Shopify's technical ceiling so a single invoice cannot run away.
+    const billable = Math.max(0, used - included);
+    const overage = ceilingPkr > 0 ? Math.min(billable, ceilingPkr / rate) : billable;
     const already = Number(row.overage_billed_credits ?? 0);
     const credits = Math.max(0, Math.floor(overage - already));
     if (credits <= 0) {

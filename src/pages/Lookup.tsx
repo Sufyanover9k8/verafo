@@ -16,7 +16,7 @@ import { computeVerdict, riskFactors, type VerdictTone } from '../lib/risk'
 import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { useStoreScope } from '../lib/store'
-import { readCreditStatus } from '../lib/credits'
+import { canSpend, readCreditStatus } from '../lib/credits'
 import { useToast } from '../lib/toast'
 import type { Buyer, OrderRow, SimilarBuyer } from '../lib/types'
 
@@ -103,7 +103,7 @@ export function Lookup() {
       // the lookup runs. Free plans stop here; paid plans stop at the cap.
       if (store?.id) {
         const status = await readCreditStatus(store.id)
-        if (status && status.remaining < 1) {
+        if (status && !canSpend(status)) {
           toast.push({
             kind: 'error',
             title: 'Out of credits',

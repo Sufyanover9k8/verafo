@@ -38,7 +38,8 @@ function appOrigin() {
 interface CreditStatus {
   plan_name: string;
   included_credits: number;
-  overage_allowed: number;
+  allow_overage: boolean;
+  usage_ceiling_pkr: number;
   used_credits: number;
   remaining_credits: number;
   overage_credits: number;
@@ -149,8 +150,8 @@ export default function Billing() {
 
   const used = Number(credits?.used_credits ?? 0);
   const included = Number(credits?.included_credits ?? planOf(current).includedCredits);
-  const cap = Number(credits?.overage_allowed ?? 0);
-  const total = included + cap;
+  const overage = Number(credits?.overage_credits ?? 0);
+  const rate = Number(credits?.overage_pkr_per_credit ?? planOf(current).overagePkrPerCredit);
 
   return (
     <Page>
@@ -183,15 +184,22 @@ export default function Billing() {
               </Badge>
             </InlineStack>
             <Text as="p" tone="subdued">
-              {used.toLocaleString()} of {total.toLocaleString()} credits used
+              {used.toLocaleString()} of {included.toLocaleString()} packaged credits used
               {credits?.cycle_end ? ` · resets ${new Date(credits.cycle_end).toDateString()}` : ""}
             </Text>
-            <ProgressBar progress={total > 0 ? Math.min(100, (used / total) * 100) : 0} size="small" />
+            <ProgressBar
+              progress={included > 0 ? Math.min(100, (used / included) * 100) : 0}
+              size="small"
+            />
             <Text as="p" tone="subdued">
               One buyer check is one credit. One minute of a call is one credit, rounded up.
-              {Number(credits?.overage_credits ?? 0) > 0
-                ? ` ${Number(credits?.overage_credits ?? 0).toLocaleString()} credits are over the plan and are billed at the plan rate.`
+              The package is included in the plan; past it a credit costs {money(rate)}, and
+              there is no cap — the total keeps growing and lands on your next Shopify
+              invoice.
+              {overage > 0
+                ? ` ${overage.toLocaleString()} credits past the package = ${money(overage * rate)} so far.`
                 : ""}
+              {credits?.allow_overage === false ? " The free plan stops at zero." : ""}
             </Text>
             {subscription && (
               <Text as="p" tone="subdued">
@@ -235,8 +243,8 @@ export default function Billing() {
                       <List.Item>{plan.includedCredits.toLocaleString()} credits a month</List.Item>
                       <List.Item>
                         {plan.overagePkrPerCredit === 0
-                          ? "No overage — calling stops when credits run out"
-                          : `${money(plan.overagePkrPerCredit)} per extra credit, up to ${plan.overageCapCredits.toLocaleString()}`}
+                          ? "No overage: checks and calls stop when credits run out"
+                          : `${money(plan.overagePkrPerCredit)} per extra credit. Never stops: it keeps billing at that rate.`}
                       </List.Item>
                       <List.Item>
                         {plan.trialDays > 0 ? `${plan.trialDays}-day trial` : "No trial needed"}
