@@ -32,8 +32,6 @@ const json = (body: unknown, status = 200) =>
 
 /** PKR per second of talk time: Uplift charges a flat 12 PKR/minute. */
 const PKR_PER_SECOND = 12 / 60;
-/** Refuse to start a call with less than a minute of budget left. */
-const MIN_CALL_PKR = 12;
 const LIVE_VERIFY = ['queued', 'dialing', 'in_call'];
 
 /** An order is retried automatically at most this often after a finished call. */
@@ -85,10 +83,6 @@ function canCall(credits: Awaited<ReturnType<typeof creditStatus>>) {
   if (Number(credits?.remaining_calls ?? 0) >= 1) return true;
   return Boolean(credits?.allow_overage) && Number(credits?.overage_pkr_per_call ?? 0) > 0;
 }
-async function usedPkr(db: ReturnType<typeof admin>, storeId: string) {
-  const { data } = await db.from('call_usage').select('pkr').eq('store_id', storeId).gte('period', monthStart());
-  return (data ?? []).reduce((sum, row) => sum + Number(row.pkr ?? 0), 0);
-}
 
 /** Dispatch one queued call through auto-verify (which owns the Uplift call). */
 async function dispatch(db: ReturnType<typeof admin>, queueRow: Record<string, unknown>) {
@@ -112,7 +106,7 @@ async function dispatch(db: ReturnType<typeof admin>, queueRow: Record<string, u
     body: JSON.stringify({ order_id: queueRow.order_id, queue_id: queueRow.id }),
   });
   const text = await res.text();
-  let body: Record<string, unknown> = {};
+  let body: Record<string, unknown>;
   try {
     body = text ? JSON.parse(text) : {};
   } catch {
