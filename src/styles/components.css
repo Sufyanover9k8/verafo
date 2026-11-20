@@ -866,7 +866,6 @@ select option { background: var(--v-ink-800); color: var(--v-ink-100); }
   right: 0;
   z-index: 1;
   background: var(--card);
-  box-shadow: -10px 0 10px -10px rgb(16 24 32 / 18%);
 }
 .table tbody tr:hover td:last-child { background: var(--v-ink-700); }
 
