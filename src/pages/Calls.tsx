@@ -69,14 +69,12 @@ function durationLabel(seconds: number | null): string {
 function CorrectionList({ corrections }: { corrections: CallHistoryRow['corrections'] }) {
   if (!corrections || corrections.length === 0) return null
   return (
-    <ul className="flex flex-col gap-1.5">
+    <ul className="flex list-none flex-col gap-1.5 pl-0">
       {corrections.map((c, i) => (
         <li key={`${c.field}-${i}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]">
           <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {c.field}
           </span>
-          {c.from ? <span className="text-muted-foreground line-through">{c.from}</span> : null}
-          <Icon name="arrow-forward" size={13} className="text-muted-foreground" />
           <span className="font-medium text-foreground">{c.to}</span>
         </li>
       ))}
@@ -466,70 +464,46 @@ export function Calls() {
           ) : null}
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-            <div className="flex flex-col gap-4">
-              <div>
-                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  What the call concluded
-                </h3>
-                <p className="text-[13px] leading-relaxed text-foreground">
-                  {selected.summary ?? 'The call finished without a written summary.'}
-                </p>
+            <div className="flex flex-col gap-3">
+              <p className="text-[13px] leading-relaxed text-foreground">
+                {selected.summary ?? 'The call finished without a written summary.'}
                 {selected.sentiment ? (
-                  <p className="mt-1 text-[12px] text-muted-foreground">Sentiment: {selected.sentiment}</p>
+                  <span className="text-muted-foreground"> · {selected.sentiment}</span>
                 ) : null}
-              </div>
+              </p>
 
-              {(selected.corrections?.length ?? 0) > 0 ? (
-                <div>
-                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Corrections the buyer made
-                  </h3>
-                  <CorrectionList corrections={selected.corrections} />
-                  <p className="mt-1.5 text-[12px] text-muted-foreground">
-                    These are written to the order, so the courier label and the Shopify order carry them too.
-                  </p>
-                </div>
-              ) : null}
+              <CorrectionList corrections={selected.corrections} />
 
-              <div className="rounded-[10px] border border-border p-3">
-                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Your decision
-                </h3>
-                <p className="mb-2.5 text-[13px] text-muted-foreground">
-                  A call decides whether the parcel ships. The courier decides later whether it was accepted —
-                  those are two different answers and this page keeps them apart.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--cta-bg)] px-3.5 text-[12.5px] font-semibold text-[var(--cta-fg)] transition-colors hover:bg-[var(--cta-bg-hover)] disabled:opacity-60"
-                    disabled={working != null}
-                    onClick={() => void decide(selected, 'approved')}
-                  >
-                    {working === 'approved' ? (
-                      <Icon name="refresh" size={14} className="spin" />
-                    ) : (
-                      <Icon name="check" size={14} />
-                    )}
-                    Ship it
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-risk-high/45 bg-card px-3.5 text-[12.5px] font-semibold text-risk-high-strong transition-colors hover:bg-risk-high-soft disabled:opacity-60"
-                    disabled={working != null}
-                    onClick={() => void decide(selected, 'rejected')}
-                  >
-                    {working === 'rejected' ? (
-                      <Icon name="refresh" size={14} className="spin" />
-                    ) : (
-                      <Icon name="close" size={14} />
-                    )}
-                    Refuse it
-                  </button>
-                  <Link className="btn btn-ghost btn-sm" to={`/lookup?phone=${encodeURIComponent(selected.orders?.buyer_phone ?? '')}`}>
-                    Buyer profile
-                  </Link>
-                </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--cta-bg)] px-3.5 text-[12.5px] font-semibold text-[var(--cta-fg)] transition-colors hover:bg-[var(--cta-bg-hover)] disabled:opacity-60"
+                  disabled={working != null}
+                  onClick={() => void decide(selected, 'approved')}
+                >
+                  {working === 'approved' ? (
+                    <Icon name="refresh" size={14} className="spin" />
+                  ) : (
+                    <Icon name="check" size={14} />
+                  )}
+                  Ship it
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-risk-high/45 bg-card px-3.5 text-[12.5px] font-semibold text-risk-high-strong transition-colors hover:bg-risk-high-soft disabled:opacity-60"
+                  disabled={working != null}
+                  onClick={() => void decide(selected, 'rejected')}
+                >
+                  {working === 'rejected' ? (
+                    <Icon name="refresh" size={14} className="spin" />
+                  ) : (
+                    <Icon name="close" size={14} />
+                  )}
+                  Refuse it
+                </button>
+                <Link className="btn btn-ghost btn-sm" to={`/lookup?phone=${encodeURIComponent(selected.orders?.buyer_phone ?? '')}`}>
+                  Buyer profile
+                </Link>
               </div>
             </div>
 
