@@ -94,6 +94,8 @@ export function Workflow() {
   const [failed, setFailed] = useState(false)
   const [automation, setAutomationState] = useState<Automation>(DEFAULT_AUTOMATION)
   const [dragging, setDragging] = useState<string | null>(null)
+  const [pressed, setPressed] = useState<string | null>(null)
+  const [landed, setLanded] = useState<{ id: string; stage: Stage } | null>(null)
   const [over, setOver] = useState<Stage | null>(null)
   const [busy, setBusy] = useState<Stage | null>(null)
   const [boxes, setBoxes] = useState<Partial<Record<Stage, Box>>>({})
@@ -190,6 +192,7 @@ export function Workflow() {
     const order = orders.find((entry) => entry.id === orderId)
     setOver(null)
     setDragging(null)
+    setPressed(null)
     if (!order || stageOf(order) === target) return
     setBusy(target)
     try {
@@ -197,6 +200,8 @@ export function Workflow() {
       const name = order.order_fulfillment?.customer_name ?? order.buyers?.name ?? phone(order.buyer_phone)
       toast.push({ kind: 'success', title: `Moved ${name}`, detail: 'The board, Orders, Calls and Outcomes all agree now.' })
       await load()
+      setLanded({ id: orderId, stage: target })
+      window.setTimeout(() => setLanded(null), 700)
     } catch (error) {
       toast.push({
         kind: 'error',
@@ -255,10 +260,12 @@ export function Workflow() {
                       const id = event.dataTransfer.getData('text/plain')
                       if (id) void drop(board.stage, id)
                     }}
-                    className={`flex min-h-0 flex-col rounded-xl border bg-card transition ${
+                    className={`flex min-h-0 flex-col rounded-xl border bg-card transition-[box-shadow,border-color,background-color,transform] duration-200 ${
                       active
-                        ? 'border-foreground/30 bg-muted/50 shadow-[0_0_0_3px_hsl(var(--foreground)/0.06)]'
-                        : 'border-border shadow-[0_1px_2px_rgb(16_24_32/0.05),0_10px_28px_-18px_rgb(16_24_32/0.35)]'
+                        ? 'scale-[1.005] border-foreground/30 bg-muted/50 shadow-[0_0_0_3px_hsl(var(--foreground)/0.06)]'
+                        : landed?.stage === board.stage
+                          ? 'border-foreground/25 shadow-[0_0_0_3px_hsl(var(--foreground)/0.08)]'
+                          : 'border-border shadow-[0_1px_2px_rgb(16_24_32/0.05),0_10px_28px_-18px_rgb(16_24_32/0.35)]'
                     }`}
                   >
                     <header className="flex items-baseline justify-between gap-2 rounded-t-xl border-b border-border/60 bg-muted/30 px-3 pb-2 pt-2.5">
@@ -279,6 +286,10 @@ export function Workflow() {
                             key={order.id}
                             data-order-id={order.id}
                             draggable
+                            onPointerDown={() => setPressed(order.id)}
+                            onPointerUp={() => setPressed((current) => (current === order.id ? null : current))}
+                            onPointerCancel={() => setPressed((current) => (current === order.id ? null : current))}
+                            onPointerLeave={() => setPressed((current) => (current === order.id ? null : current))}
                             onDragStart={(event) => {
                               event.dataTransfer.setData('text/plain', order.id)
                               event.dataTransfer.effectAllowed = 'move'
@@ -286,13 +297,16 @@ export function Workflow() {
                             }}
                             onDragEnd={() => {
                               setDragging(null)
+                              setPressed(null)
                               setOver(null)
                             }}
-                            className={`cursor-grab rounded-lg border border-border bg-background px-2.5 py-2 shadow-[0_1px_2px_rgb(16_24_32/0.06)] transition active:cursor-grabbing ${
+                            className={`relative cursor-grab rounded-lg border border-border bg-background px-2.5 py-2 transition-[transform,box-shadow,border-color,opacity] duration-200 ease-out [transform-origin:50%_40%] ${
                               dragging === order.id
-                                ? 'opacity-40'
-                                : 'hover:-translate-y-px hover:border-foreground/20 hover:shadow-[0_6px_16px_-10px_rgb(16_24_32/0.45)]'
-                            }`}
+                                ? 'z-20 rotate-[1.5deg] scale-[1.03] border-foreground/20 shadow-[0_18px_34px_-16px_rgb(16_24_32/0.45)]'
+                                : pressed === order.id
+                                  ? 'z-10 -rotate-[1deg] scale-[1.02] border-foreground/25 shadow-[0_12px_24px_-14px_rgb(16_24_32/0.4)]'
+                                  : 'shadow-[0_1px_2px_rgb(16_24_32/0.06)] hover:-translate-y-px hover:border-foreground/20 hover:shadow-[0_6px_16px_-10px_rgb(16_24_32/0.45)]'
+                            } ${landed?.id === order.id ? 'animate-[wf-land_620ms_cubic-bezier(0.2,0.9,0.25,1)]' : ''}`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
