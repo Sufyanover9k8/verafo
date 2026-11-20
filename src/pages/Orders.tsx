@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { OrderCard } from '../components/app/order-card'
+import { AutomateCalls } from '../components/app/automate-calls'
 import { ViewToggle, type ViewMode } from '../components/app/view-toggle'
 import { Icon } from '../components/Icon'
 import { CallButton } from '../components/app/call-button'
@@ -335,7 +336,11 @@ function csv(rows: Record<string, unknown>[]): string {
     {
       key: 'product',
       label: 'Product',
-      render: (o) => o.product_name || o.product_category || 'Untitled product',
+      render: (o) => (
+        <span className="block max-w-[240px] truncate" title={o.product_name || o.product_category || 'Untitled product'}>
+          {o.product_name || o.product_category || 'Untitled product'}
+        </span>
+      ),
     },
     {
       key: 'city',
@@ -380,6 +385,7 @@ function csv(rows: Record<string, unknown>[]): string {
             >
               <Icon name="ellipsis-horizontal" size={16} />
             </button>
+            <AutomateCalls onChange={() => void load()} />
             <button
               className="inline-flex h-11 items-center gap-2 rounded-full bg-[var(--cta-accent-bg)] px-4 text-[13px] font-semibold text-[var(--cta-accent-fg)] shadow-sm transition-colors hover:bg-[var(--cta-accent-hover)] disabled:opacity-50 md:h-9"
               onClick={() => void doRecommended()}
