@@ -40,11 +40,20 @@ export function CallCredits() {
   }, [loading, scopeStoreIds, store?.id])
 
   const over = credits ? credits.overage > 0 : false
+  const unlimited = Boolean(credits?.unlimited)
   const owed = overagePkr(credits)
   const left = credits ? Math.round(credits.remaining).toLocaleString() : '—'
   const plan = credits ? credits.planName : 'Credits'
-  const value = over ? `${Math.round(credits!.overage).toLocaleString()} over` : left
-  const sub = over ? `PKR ${owed.toLocaleString()} so far` : `left · ${plan}`
+  const value = unlimited
+    ? 'Unlimited'
+    : over
+      ? `${Math.round(credits!.overage).toLocaleString()} over`
+      : left
+  const sub = unlimited
+    ? `checks · ${plan}`
+    : over
+      ? `PKR ${owed.toLocaleString()} so far`
+      : `left · ${plan}`
 
   const callsLeft = credits ? Math.round(credits.remainingCalls).toLocaleString() : '—'
   const callsTotal = credits ? Math.round(credits.includedCalls).toLocaleString() : '—'
@@ -55,9 +64,11 @@ export function CallCredits() {
 
   const detail = credits
     ? [
-        `${left} check credits left on ${plan} (${Math.round(credits.used).toLocaleString()} of ${Math.round(credits.included).toLocaleString()} used this month${
-          credits.overageRate > 0 ? `, PKR ${credits.overageRate} a credit beyond that` : ''
-        }).`,
+        unlimited
+          ? `Unlimited check credits on ${plan} (${Math.round(credits.used).toLocaleString()} used this month).`
+          : `${left} check credits left on ${plan} (${Math.round(credits.used).toLocaleString()} of ${Math.round(credits.included).toLocaleString()} used this month${
+              credits.overageRate > 0 ? `, PKR ${credits.overageRate} a check beyond that` : ''
+            }).`,
         credits.callsOneTime
           ? `${callsLeft} of ${callsTotal} free calls left; they never reset.`
           : `${callsLeft} of ${callsTotal} calls left this month${
@@ -96,7 +107,9 @@ export function CallCredits() {
         </span>
         <span className="text-[11px] text-sidebar-foreground/50">{sub}</span>
       </div>
-      <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-sidebar-foreground/15">
+      <div
+        className={`mt-1.5 h-[3px] overflow-hidden rounded-full bg-sidebar-foreground/15 ${unlimited ? 'invisible' : ''}`}
+      >
         <div
           className="h-full rounded-full bg-sidebar-primary transition-[width] duration-500"
           style={{ width: `${Math.round(usedFraction * 100)}%` }}

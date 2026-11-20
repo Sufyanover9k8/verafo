@@ -5,9 +5,9 @@ import { supabase } from './supabase'
  *
  * Buyer checks and AI calls are two separate pools:
  *
- *   - A check is one credit. Free packs 100 a month. Standard 100. Founder One
- *     350. A paid plan keeps working past its package and bills each extra
- *     credit at the plan rate (PKR 21 or PKR 16).
+ *   - A check is one credit. Free packs 100 a month and stops at zero.
+ *     Standard 1,500 a month, then PKR 2 a check. Founder One has no check
+ *     limit at all.
  *   - A call is two credits whatever its length. Free includes ten calls in
  *     total, never per month. Standard 100 a month, then PKR 40 a call.
  *     Founder One 300 a month, then PKR 30 a call.
@@ -42,6 +42,8 @@ export interface CreditStatus {
   callsOneTime: boolean
   /** Paid plans may overspend their package; the free plan may not. */
   allowOverage: boolean
+  /** Founder One has no check limit: counts are informational only. */
+  unlimited: boolean
   pricePkr: number
   cycleEnd: string | null
 }
@@ -63,6 +65,7 @@ export const FREE_STATUS: CreditStatus = {
   overageCallPkr: 0,
   callsOneTime: true,
   allowOverage: false,
+  unlimited: false,
   pricePkr: 0,
   cycleEnd: null,
 }
@@ -85,6 +88,7 @@ interface StatusRow {
   overage_pkr_per_call?: number | string | null
   overage_call_pkr?: number | string | null
   calls_one_time?: boolean | null
+  unlimited_checks?: boolean | null
 }
 
 function toStatus(row: StatusRow): CreditStatus {
@@ -104,6 +108,7 @@ function toStatus(row: StatusRow): CreditStatus {
     overageCallPkr: Number(row.overage_call_pkr ?? 0),
     callsOneTime: Boolean(row.calls_one_time),
     allowOverage: Boolean(row.allow_overage),
+    unlimited: Boolean(row.unlimited_checks),
     pricePkr: Number(row.price_pkr ?? 0),
     cycleEnd: row.cycle_end ?? null,
   }
@@ -143,6 +148,7 @@ export async function readCreditsForStores(
       overageCallPkr: acc.overageCallPkr + s.overageCallPkr,
       pricePkr: acc.pricePkr + s.pricePkr,
       allowOverage: acc.allowOverage || s.allowOverage,
+      unlimited: acc.unlimited && s.unlimited,
       cycleEnd: acc.cycleEnd ?? s.cycleEnd,
     }),
     {
@@ -161,6 +167,7 @@ export async function readCreditsForStores(
       overageRatePerCall: live[0].overageRatePerCall,
       overageCallPkr: 0,
       pricePkr: 0,
+      unlimited: true,
     },
   )
 }
@@ -168,6 +175,7 @@ export async function readCreditsForStores(
 /** May this store run another buyer check? Free stops at zero; paid does not. */
 export function canSpend(c: CreditStatus | null): boolean {
   if (!c) return true
+  if (c.unlimited) return true
   return c.allowOverage || c.remaining >= 1
 }
 
@@ -192,10 +200,11 @@ export function overageCallPkr(c: CreditStatus | null): number {
 
 const pkr = (n: number) => `PKR ${Math.round(n).toLocaleString('en-PK')}`
 
-/** "Free · 40 of 100 credits used". */
+/** "Free · 40 of 100 credits used" — Founder One says unlimited. */
 export function describeCredits(c: CreditStatus | null): string {
   if (!c) return 'Credits unavailable'
   const used = Math.round(c.used).toLocaleString()
+  if (c.unlimited) return `${c.planName} · ${used} checks used · unlimited`
   const total = Math.round(c.included).toLocaleString()
   return `${c.planName} · ${used} of ${total} credits used`
 }
@@ -209,8 +218,16 @@ export function describeCalls(c: CreditStatus | null): string {
   return `${c.planName} · ${used} of ${total}${tail}`
 }
 
-/** "PKR 40 a call" / "PKR 21 a credit" — the rate a plan bills past its package. */
+/** "PKR 40 a call" / "PKR 2 a check" — the rate a plan bills past its package. */
 export function callRateLabel(c: CreditStatus | null): string {
   if (!c || c.overageRatePerCall <= 0) return 'no extra calls'
   return `${pkr(c.overageRatePerCall)} a call`
+}
+
+/** What a check costs past the package: "PKR 2 a check", or "unlimited". */
+export function checkRateLabel(c: CreditStatus | null): string {
+  if (!c) return ''
+  if (c.unlimited) return 'unlimited checks'
+  if (c.overageRate <= 0) return 'stops at zero'
+  return `${pkr(c.overageRate)} a check`
 }

@@ -76,6 +76,7 @@ async function creditStatus(db: ReturnType<typeof admin>, storeId: string) {
     overage_pkr_per_call: number;
     overage_call_pkr: number;
     calls_one_time: boolean;
+    unlimited_checks: boolean;
   } | null;
 }
 

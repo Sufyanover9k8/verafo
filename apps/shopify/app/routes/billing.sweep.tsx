@@ -56,7 +56,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       report.push({ store: shop, billed: 0, credits: 0, calls: 0, skipped: "no usage line item" });
       continue;
     }
-    if (rate <= 0 && callRate <= 0) {
+    if ((rate <= 0 || plan.unlimitedChecks) && callRate <= 0) {
       report.push({ store: shop, billed: 0, credits: 0, calls: 0, skipped: "no overage rates" });
       continue;
     }
@@ -77,7 +77,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const callsUsed = Math.ceil(callCredits / perCall);
 
     // Only whole units bill, so a partly used credit waits for the next sweep.
-    const overageCredits = rate > 0 ? Math.max(0, checkUsed - included) : 0;
+    // Founder One has no check limit, so its checks never bill.
+    const overageCredits = plan.unlimitedChecks || rate <= 0 ? 0 : Math.max(0, checkUsed - included);
     const overageCalls = callRate > 0 ? Math.max(0, callsUsed - includedCalls) : 0;
 
     const alreadyCredits = Number(row.overage_billed_credits ?? 0);

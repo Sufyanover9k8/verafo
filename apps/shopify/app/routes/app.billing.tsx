@@ -50,6 +50,7 @@ interface CreditStatus {
   overage_calls: number;
   overage_pkr_per_call: number;
   calls_one_time: boolean;
+  unlimited_checks: boolean | null;
   cycle_end: string;
 }
 
@@ -164,6 +165,9 @@ export default function Billing() {
   const overageCalls = Number(credits?.overage_calls ?? 0);
   const callRate = Number(credits?.overage_pkr_per_call ?? planOf(current).overagePkrPerCall);
   const callsOneTime = Boolean(credits?.calls_one_time ?? planOf(current).callsOneTime);
+  const unlimitedChecks = Boolean(
+    credits?.unlimited_checks ?? planOf(current).unlimitedChecks,
+  );
 
   return (
     <Page>
@@ -196,13 +200,17 @@ export default function Billing() {
               </Badge>
             </InlineStack>
             <Text as="p" tone="subdued">
-              {used.toLocaleString()} of {included.toLocaleString()} check credits used
+              {unlimitedChecks
+                ? `Unlimited checks · ${used.toLocaleString()} used this cycle`
+                : `${used.toLocaleString()} of ${included.toLocaleString()} check credits used`}
               {credits?.cycle_end ? ` · resets ${new Date(credits.cycle_end).toDateString()}` : ""}
             </Text>
-            <ProgressBar
-              progress={included > 0 ? Math.min(100, (used / included) * 100) : 0}
-              size="small"
-            />
+            {!unlimitedChecks && (
+              <ProgressBar
+                progress={included > 0 ? Math.min(100, (used / included) * 100) : 0}
+                size="small"
+              />
+            )}
             <Text as="p" tone="subdued">
               {callsUsed.toLocaleString()} of {callsIncluded.toLocaleString()} calls used
               {callsOneTime
@@ -217,11 +225,14 @@ export default function Billing() {
             />
             <Text as="p" tone="subdued">
               A buyer check costs one credit and a call costs two, whatever its length. Both
-              packages are included in the plan. Past them a check credit costs {money(rate)} and a
-              call costs {money(callRate)}; there is no cap, so the total keeps growing and lands on
-              your next Shopify invoice.
+              packages are included in the plan.{" "}
+              {unlimitedChecks
+                ? "Your checks are unlimited, so they never bill."
+                : `Past the package a check costs ${money(rate)}.`}{" "}
+              A call past the package costs {money(callRate)}; there is no cap, so the total keeps
+              growing and lands on your next Shopify invoice.
               {overage > 0
-                ? ` ${overage.toLocaleString()} check credits past the package = ${money(overage * rate)} so far.`
+                ? ` ${overage.toLocaleString()} checks past the package = ${money(overage * rate)} so far.`
                 : ""}
               {overageCalls > 0
                 ? ` ${overageCalls.toLocaleString()} calls past the package = ${money(overageCalls * callRate)} so far.`
@@ -268,7 +279,9 @@ export default function Billing() {
                     <Divider />
                     <List type="bullet">
                       <List.Item>
-                        {plan.includedCredits.toLocaleString()} check credits a month
+                        {plan.unlimitedChecks
+                          ? "Unlimited checks"
+                          : `${plan.includedCredits.toLocaleString()} check credits a month`}
                       </List.Item>
                       <List.Item>
                         {plan.callsOneTime
@@ -276,9 +289,13 @@ export default function Billing() {
                           : `${plan.includedCalls} calls a month`}
                       </List.Item>
                       <List.Item>
-                        {plan.overagePkrPerCredit === 0
-                          ? "No overage: checks and calls stop when the allowance runs out"
-                          : `${money(plan.overagePkrPerCredit)} per extra credit and ${money(plan.overagePkrPerCall)} per extra call. Never stops: it keeps billing at that rate.`}
+                        {plan.unlimitedChecks
+                          ? plan.overagePkrPerCall > 0
+                            ? `Checks never bill. ${money(plan.overagePkrPerCall)} per extra call, no cap.`
+                            : "No cap on checks or calls"
+                          : plan.overagePkrPerCredit === 0
+                            ? "No overage: checks and calls stop when the allowance runs out"
+                            : `${money(plan.overagePkrPerCredit)} per extra check and ${money(plan.overagePkrPerCall)} per extra call. Never stops: it keeps billing at that rate.`}
                       </List.Item>
                       <List.Item>
                         {plan.trialDays > 0 ? `${plan.trialDays}-day trial` : "No trial needed"}

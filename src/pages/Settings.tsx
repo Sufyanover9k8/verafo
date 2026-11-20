@@ -458,33 +458,43 @@ export function Settings() {
                 <div className="setting-title">This month</div>
                 <div className="setting-desc">
                   {credits
-                    ? `${Math.round(credits.used).toLocaleString()} of ${credits.included.toLocaleString()} packaged credits used${
-                        credits.cycleEnd
-                          ? ` · resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, {
-                              day: 'numeric',
-                              month: 'short',
-                            })}`
-                          : ''
-                      }`
+                    ? credits.unlimited
+                      ? `${Math.round(credits.used).toLocaleString()} checks used · your plan has no check limit`
+                      : `${Math.round(credits.used).toLocaleString()} of ${credits.included.toLocaleString()} packaged credits used${
+                          credits.cycleEnd
+                            ? ` · resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, {
+                                day: 'numeric',
+                                month: 'short',
+                              })}`
+                            : ''
+                        }${
+                          credits.overageRate > 0 ? ` · then PKR ${credits.overageRate} a check` : ''
+                        }`
                     : 'Reading your usage…'}
                 </div>
               </div>
               <div className="setting-control">
-                <div
-                  className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--v-ink-700)]"
-                  aria-hidden="true"
-                >
-                  <span
-                    className="block h-full rounded-full bg-[var(--cyan-primary)]"
-                    style={{
-                      width: `${
-                        credits && credits.included > 0
-                          ? Math.min(100, (credits.used / credits.included) * 100)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
+                {credits?.unlimited ? (
+                  <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--v-ink-400)]">
+                    Unlimited
+                  </span>
+                ) : (
+                  <div
+                    className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--v-ink-700)]"
+                    aria-hidden="true"
+                  >
+                    <span
+                      className="block h-full rounded-full bg-[var(--cyan-primary)]"
+                      style={{
+                        width: `${
+                          credits && credits.included > 0
+                            ? Math.min(100, (credits.used / credits.included) * 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             {credits && credits.overage > 0 && (
@@ -492,10 +502,10 @@ export function Settings() {
                 <div className="setting-info">
                   <div className="setting-title">Over the package</div>
                   <div className="setting-desc">
-                    {Math.round(credits.overage).toLocaleString()} credits at PKR{' '}
+                    {Math.round(credits.overage).toLocaleString()} checks at PKR{' '}
                     {credits.overageRate} each = PKR{' '}
                     {overagePkr(credits).toLocaleString()} so far, billed on the next Shopify
-                    invoice. There is no cap: each extra credit is charged at the plan rate.
+                    invoice. There is no cap: each extra check is charged at the plan rate.
                   </div>
                 </div>
               </div>
@@ -692,16 +702,21 @@ export function Settings() {
                   <div className="setting-info">
                     <div className="setting-title">Credits left</div>
                     <div className="setting-desc">
-                      A buyer check is one credit; the package comes with the plan and each extra
-                      credit is billed at PKR 21 on Standard or PKR 16 on Founder One. A call is two
-                      credits, and calls have their own allowance: {credits?.includedCalls ?? 10} a
-                      month, or ten in total on the free plan, then PKR 40 a call on Standard or
-                      PKR 30 on Founder One.
+                      A buyer check is one credit and a call is two, whatever its length. Checks and
+                      calls each have their own allowance: Standard packs 1,500 checks a month then
+                      bills PKR 2 a check, and Founder One has no check limit at all. Calls are{' '}
+                      {credits?.includedCalls ?? 100} a month — the free plan's ten never reset — then
+                      PKR 40 a call on Standard or PKR 30 on Founder One.
                     </div>
                   </div>
                   <div className="setting-control">
                     <span className="text-[15px] font-semibold tabular-nums text-foreground">
-                      {credits ? Math.round(credits.remaining).toLocaleString() : '—'} credits ·{' '}
+                      {credits
+                        ? credits.unlimited
+                          ? `${Math.round(credits.used).toLocaleString()} checks · unlimited`
+                          : `${Math.round(credits.remaining).toLocaleString()} credits`
+                        : '—'}
+                      {' · '}
                       {credits ? Math.round(credits.remainingCalls).toLocaleString() : '—'} calls
                     </span>
                   </div>
