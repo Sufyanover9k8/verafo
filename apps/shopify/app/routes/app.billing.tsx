@@ -43,6 +43,7 @@ interface CreditStatus {
   used_credits: number;
   remaining_credits: number;
   overage_credits: number;
+  overage_pkr_per_credit: number;
   cycle_end: string;
 }
 
