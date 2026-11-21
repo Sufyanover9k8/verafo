@@ -64,7 +64,9 @@ document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 document.documentElement.className='js';
 // A merchant who is already signed in and lands on the public home page (for
 // example from "Open Verafo Dashboard" inside the Shopify admin) belongs in the
-// app, not on the marketing page. Signed-out visitors stay here.
+// app, not on the marketing page. On the *.vercel.app host — the address the
+// Shopify app links to — a signed-out visitor belongs on the sign-in page too;
+// on verafo.com the marketing site keeps its own front door.
 (function(){
   try {
     var key = null;
@@ -72,13 +74,20 @@ document.documentElement.className='js';
       var k = localStorage.key(i);
       if (k && k.indexOf('sb-') === 0 && k.slice(-11) === '-auth-token') { key = k; break; }
     }
-    if (!key) return;
-    var raw = localStorage.getItem(key);
-    if (!raw) return;
-    var parsed = JSON.parse(raw);
-    var session = parsed && (parsed.currentSession || parsed);
+    var session = null;
+    if (key) {
+      var raw = localStorage.getItem(key);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        session = parsed && (parsed.currentSession || parsed);
+      }
+    }
     if (session && (session.access_token || session.refresh_token)) {
       window.location.replace('/dashboard');
+      return;
+    }
+    if (/\.vercel\.app$/i.test(window.location.hostname)) {
+      window.location.replace('/login');
     }
   } catch (e) { /* a broken store must never block the site */ }
 })();
