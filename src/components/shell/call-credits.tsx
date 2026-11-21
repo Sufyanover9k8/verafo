@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Phone, Zap } from 'lucide-react'
 import { overageCallPkr, overagePkr, readCreditsForStores, type CreditStatus } from '@/lib/credits'
@@ -14,13 +14,18 @@ const POLL_MS = 60_000
  * line, the call allowance on the second.
  */
 export function CallCredits() {
-  const { store, scopeStoreIds, loading } = useStoreScope()
+  const { store, stores, scopeStoreIds, loading } = useStoreScope()
   const [credits, setCredits] = useState<CreditStatus | null>(null)
 
+  // An admin on the network view has no single store, so the block sums every
+  // store it can see and labels itself with the count.
+  const ids = useMemo(
+    () => scopeStoreIds ?? (store?.id ? [store.id] : stores.map((s) => s.id)),
+    [scopeStoreIds, store, stores],
+  )
+
   useEffect(() => {
-    if (loading) return
-    const ids = scopeStoreIds && scopeStoreIds.length ? scopeStoreIds : store?.id ? [store.id] : []
-    if (!ids.length) return
+    if (loading || !ids.length) return
     let alive = true
     const load = () => {
       readCreditsForStores(ids)
@@ -37,7 +42,7 @@ export function CallCredits() {
       alive = false
       window.clearInterval(timer)
     }
-  }, [loading, scopeStoreIds, store?.id])
+  }, [loading, ids])
 
   const over = credits ? credits.overage > 0 : false
   const unlimited = Boolean(credits?.unlimited)

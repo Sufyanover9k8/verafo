@@ -24,6 +24,7 @@ import {
 } from "../lib/verafo";
 import { computeVerdict } from "../lib/risk";
 import { RiskBadge, StatusPill, formatPhone } from "../components/risk-badge";
+import { callsLabel, checksLabel, readCredits, type StoreCredits } from "../lib/credits.server";
 
 const ORDERS_QUERY = `#graphql
   query shopifyOrders($first: Int!) {
@@ -65,6 +66,13 @@ const ORDERS_QUERY = `#graphql
     }
   }`;
 
+/** "https://www.verafo.com/dashboard" → "https://www.verafo.com" */
+function webRoot(dashboardUrl: string | undefined): string {
+  return (dashboardUrl ?? "https://www.verafo.com/dashboard")
+    .replace(/\/dashboard\/?$/, "")
+    .replace(/\/$/, "");
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
@@ -72,10 +80,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const link = await db.connectedShop.findUnique({ where: { shop } });
   let orders: VerafoOrderRow[] = [];
   let linked = false;
+  let credits: StoreCredits | null = null;
 
   if (link) {
     linked = true;
     orders = await listStoreOrders(shop, 100);
+    credits = await readCredits(link.storeId);
   }
 
   const stats = { total: orders.length, pending: 0, accepted: 0, refused: 0 };
@@ -92,6 +102,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     shop,
     linked,
+    credits,
     stats,
     distribution,
     recent: orders.slice(0, 10),
@@ -99,6 +110,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // sent to *.vercel.app, so this is configurable and defaults to the app's
     // real address (the marketing site is at "/", the SPA lives at "/dashboard").
     dashboardUrl: process.env.VERAFO_DASHBOARD_URL ?? "https://www.verafo.com/dashboard",
+    // Deep links into the web app. Calling and the workflow board live there,
+    // and a signed-in merchant lands straight on the page instead of the
+    // marketing site (the home page forwards a session to /dashboard).
+    callsUrl: `${webRoot(process.env.VERAFO_DASHBOARD_URL)}/calls`,
+    workflowUrl: `${webRoot(process.env.VERAFO_DASHBOARD_URL)}/workflow`,
   };
 };
 
@@ -127,7 +143,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { linked, stats, distribution, recent, dashboardUrl } = useLoaderData<typeof loader>();
+  const { linked, credits, stats, distribution, recent, dashboardUrl, callsUrl, workflowUrl } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const appBridge = useAppBridge();
 
@@ -229,6 +246,58 @@ export default function Index() {
             </Card>
           </Layout.Section>
         </Layout>
+
+        <Card>
+          <BlockStack gap="300">
+            <InlineStack align="space-between" blockAlign="center" wrap>
+              <Text as="h2" variant="headingMd">
+                Calling and credits
+              </Text>
+              <Button url="/app/billing" variant="plain">
+                Plans and credits
+              </Button>
+            </InlineStack>
+            <InlineStack gap="800" wrap>
+              <BlockStack gap="100">
+                <Text as="p" variant="headingLg">
+                  {checksLabel(credits)}
+                </Text>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  Check credits
+                </Text>
+              </BlockStack>
+              <BlockStack gap="100">
+                <Text as="p" variant="headingLg">
+                  {callsLabel(credits)}
+                </Text>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  Calls
+                </Text>
+              </BlockStack>
+              <BlockStack gap="100">
+                <Text as="p" variant="headingLg">
+                  {credits?.plan_name ?? "Free"}
+                </Text>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  Plan
+                </Text>
+              </BlockStack>
+            </InlineStack>
+            <Text as="p" tone="subdued">
+              A check costs one credit and a call costs two, whatever its length. Checks stop at
+              zero on Free; paid plans bill the extra. Calling, the call queue and the workflow
+              board live in the Verafo dashboard.
+            </Text>
+            <InlineStack gap="200" wrap>
+              <Button url={callsUrl} target="_blank" external>
+                Open calls
+              </Button>
+              <Button url={workflowUrl} target="_blank" external>
+                Open workflow
+              </Button>
+            </InlineStack>
+          </BlockStack>
+        </Card>
 
         <Card>
           <BlockStack gap="200">

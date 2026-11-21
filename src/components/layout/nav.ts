@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   ClipboardCheck,
+  CreditCard,
   History,
   SlidersHorizontal,
   LayoutDashboard,
@@ -59,6 +60,7 @@ export const NAV_SECTIONS: NavSection[] = [
         : []),
       { to: '/orders/pending', label: 'Outcomes', icon: ClipboardCheck },
       { to: '/stores', label: 'Stores', icon: Store, adminOnly: true },
+      { to: '/billing', label: 'Billing', icon: CreditCard, adminOnly: true },
     ],
   },
   {
