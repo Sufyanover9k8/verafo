@@ -22,10 +22,10 @@ export function AppDownload() {
         <img
           src="/qr-app.svg"
           alt="QR code to download the Verafo Android app"
-          width={96}
-          height={96}
+          width={112}
+          height={112}
           loading="lazy"
-          className="size-24 shrink-0 rounded-[12px] border bg-white p-1.5"
+          className="size-28 shrink-0 rounded-[12px] border bg-white p-1.5"
         />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-foreground">Verafo on your phone</div>
