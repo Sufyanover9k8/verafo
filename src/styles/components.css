@@ -857,6 +857,18 @@ select option { background: var(--v-ink-800); color: var(--v-ink-100); }
    ──────────────────────────────────────────────────────────── */
 
 .table-wrap { overflow-x: auto; }
+
+/* Ops tables run wider than a 1440 screen. Pin the Action column so Accept and
+   Call stay in view while the rest of the row scrolls under it. */
+.table thead th:last-child,
+.table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--card);
+}
+.table tbody tr:hover td:last-child { background: var(--v-ink-700); }
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -1401,6 +1413,16 @@ code {
 }
 .out-table-row.exit {
   animation: row-out var(--dur-base) var(--ease-in-out) forwards;
+}
+
+/* A card that has just been dropped onto a new board settles into place. */
+@keyframes wf-land {
+  0% { opacity: 0.35; transform: translateY(-10px) scale(1.04) rotate(1.5deg); }
+  45% { opacity: 1; transform: translateY(2px) scale(0.995) rotate(-0.4deg); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[wf-land"] { animation: none !important; }
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -3206,3 +3228,21 @@ code {
   transform: none !important;
   animation: none !important;
 }
+
+/* Settings → Import orders (the demoted CSV importer) --------------------- */
+.order-import { display: flex; flex-direction: column; gap: var(--s-3); }
+.order-import .import-head { margin-bottom: 0; justify-content: flex-start; }
+.order-import .gen-grid { margin-bottom: 0; }
+.order-import .import-textarea { width: 100%; min-height: 140px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: var(--s-3); color: var(--ink); font-family: var(--v-font-mono); font-size: var(--t-data); }
+.import-callout { display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-3); border-radius: var(--r-sm); background: var(--v-purple-bg, color-mix(in srgb, var(--v-purple-300) 12%, transparent)); border: 1px solid color-mix(in srgb, var(--v-purple-300) 35%, transparent); color: var(--v-ink-100); font-size: var(--t-body-sm); line-height: 1.55; }
+.import-callout strong { color: var(--v-ink-050); }
+.csv-details { margin-top: var(--s-2); }
+.csv-details > summary { display: inline-flex; align-items: center; gap: var(--s-1); cursor: pointer; font-size: var(--t-caption); font-weight: 600; color: var(--v-ink-300); list-style: none; }
+.csv-details > summary::-webkit-details-marker { display: none; }
+.csv-details > summary:hover { color: var(--v-ink-050); }
+.csv-details[open] > summary svg { transform: rotate(180deg); }
+.csv-details > summary svg { transition: transform .15s ease; }
+.csv-details .import-note { margin-top: var(--s-3); }
+.csv-details .import-note code { font-family: var(--v-font-mono); font-size: var(--t-caption); color: var(--v-ink-100); }
+.csv-details .csv-pre { max-height: 220px; overflow: auto; }
+.order-import .file-input { display: none; }

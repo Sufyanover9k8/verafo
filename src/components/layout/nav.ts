@@ -1,17 +1,20 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   ClipboardCheck,
+  CreditCard,
   History,
   SlidersHorizontal,
   LayoutDashboard,
   MapPinned,
   MessageSquare,
   Package,
+  PhoneCall,
   PlusSquare,
   Search,
   Settings,
   Store,
   UploadCloud,
+  Workflow,
 } from 'lucide-react'
 import { FEATURES } from '@/lib/features'
 
@@ -39,8 +42,10 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Operate',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/workflow', label: 'Workflow', icon: Workflow },
       { to: '/orders', label: 'Orders', icon: Package },
       { to: '/orders/new', label: 'New Order', icon: PlusSquare },
+      { to: '/calls', label: 'Calls', icon: PhoneCall },
       // Unreleased pages. Their switches live in src/lib/features.ts; flipping
       // one on brings the sidebar row, the command-palette entry and the route
       // back together, because all three read that single constant.
@@ -55,6 +60,7 @@ export const NAV_SECTIONS: NavSection[] = [
         : []),
       { to: '/orders/pending', label: 'Outcomes', icon: ClipboardCheck },
       { to: '/stores', label: 'Stores', icon: Store, adminOnly: true },
+      { to: '/billing', label: 'Billing', icon: CreditCard, adminOnly: true },
     ],
   },
   {
@@ -67,7 +73,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: 'Data',
-    items: [{ to: '/import', label: 'Bulk Import', icon: UploadCloud }],
+    items: [{ to: '/import', label: 'Courier reports', icon: UploadCloud }],
   },
 ]
 

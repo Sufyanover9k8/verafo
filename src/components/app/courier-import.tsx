@@ -20,6 +20,7 @@ import {
   type StoredOutcome,
 } from '@/lib/ui/courier-reconciliation'
 import { canonicalPhone } from '@/lib/format'
+import { readAutomation } from '@/lib/workflow'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
 import type { Store } from '@/lib/types'
@@ -314,6 +315,31 @@ export function CourierImport({ stores }: { stores: Store[] }) {
           { onConflict: 'order_id' },
         )
         if (error) throw error
+
+        // The Workflow board's courier wires decide whether a courier report also
+        // moves the parcel itself: delivered when the courier handed it over,
+        // returned when they brought it back.
+        if (storeId) {
+          const wires = await readAutomation(storeId)
+          const decidedAt = new Date().toISOString()
+          const parcels = changes
+            .map((row) => {
+              if (row.next === 'accepted' && wires.courier_delivered) {
+                return { order_id: row.orderId, status: 'delivered', decided_by: 'courier', decided_at: decidedAt }
+              }
+              if (row.next === 'refused' && wires.courier_returned) {
+                return { order_id: row.orderId, status: 'returned', decided_by: 'courier', decided_at: decidedAt }
+              }
+              return null
+            })
+            .filter((row): row is { order_id: string; status: string; decided_by: string; decided_at: string } => row !== null)
+          if (parcels.length) {
+            const { error: parcelError } = await supabase
+              .from('order_fulfillment')
+              .upsert(parcels, { onConflict: 'order_id' })
+            if (parcelError) throw parcelError
+          }
+        }
 
         // Remember the courier's CN on the order, so the next report matches by
         // tracking number even when the reference column changes.

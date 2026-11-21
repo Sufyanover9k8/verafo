@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Phone } from 'lucide-react'
 import { OrderCard } from '../components/app/order-card'
+import { AutomateCalls } from '../components/app/automate-calls'
 import { ViewToggle, type ViewMode } from '../components/app/view-toggle'
 import { Icon } from '../components/Icon'
+import { CallButton } from '../components/app/call-button'
+import { BuyerName } from '../components/app/buyer-name'
+import { customerNameOfOrder } from '../lib/buyer-name'
 import { PageHeader } from '../components/app/page-header'
 import { PageShell } from '../components/app/page-shell'
 import { Skeleton } from '../components/primitives/Skeleton'
@@ -31,6 +34,8 @@ interface Row extends OrderRow {
     total_orders: number
     total_accepted: number
     total_refused: number
+    /** Last name seen for this phone; the per-order name wins over it. */
+    name?: string | null
   } | null
 }
 
@@ -80,7 +85,7 @@ function csv(rows: Record<string, unknown>[]): string {
     let query = supabase
       .from('orders')
       .select(
-        '*, stores(name), buyers(risk_score, total_orders, total_accepted, total_refused), outcomes(status, resolved_at, refusal_reason)',
+        '*, stores(name), order_fulfillment(customer_name), buyers(risk_score, total_orders, total_accepted, total_refused, name), outcomes(status, resolved_at, refusal_reason)',
       )
     if (store) query = query.eq('store_id', store.id)
     else if (scopeStoreIds) query = query.in('store_id', scopeStoreIds)
@@ -203,7 +208,7 @@ function csv(rows: Record<string, unknown>[]): string {
       toast.push({
         kind: 'success',
         title: next === 'accepted' ? 'Marked accepted' : 'Marked refused',
-        detail: `${phone(order.buyer_phone)} — risk ${formatScore(score)} (${riskLevel(score)})`,
+        detail: `${customerNameOfOrder(order) ?? phone(order.buyer_phone)} — risk ${formatScore(score)} (${riskLevel(score)})`,
       })
       void load()
     } catch (err) {
@@ -219,6 +224,7 @@ function csv(rows: Record<string, unknown>[]): string {
 
   function exportCsv() {
     const out = sorted.map((o) => ({
+      buyer_name: customerNameOfOrder(o) ?? '',
       buyer_phone: o.buyer_phone,
       store: o.stores?.name ?? '',
       product: o.product_name || o.product_category || '',
@@ -261,16 +267,8 @@ function csv(rows: Record<string, unknown>[]): string {
           Accept
         </button>
 
-        {/* Placeholder: calling is not wired up yet, so it does nothing. */}
-        <button
-          type="button"
-          className="inline-flex size-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
-          disabled={busy}
-          title="Call buyer — not available yet"
-          aria-label={`Call ${phone(o.buyer_phone)} (not available yet)`}
-        >
-          <Phone size={15} strokeWidth={2} />
-        </button>
+        {/* Calls through Verafo's AI agent, one at a time. */}
+        <CallButton orderId={o.id} iconOnly onSettled={() => void load()} />
 
         {/* Refuse is just an X — the tooltip and aria-label carry the word. */}
         <button
@@ -293,8 +291,16 @@ function csv(rows: Record<string, unknown>[]): string {
       label: 'Buyer',
       id: true,
       render: (o) => (
-        <Link className="font-mono text-[13px] font-medium text-primary-text hover:underline" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-          {phone(o.buyer_phone)}
+        <Link
+          className="block min-w-0 hover:underline"
+          to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}
+          aria-label={`Look up ${o.order_fulfillment?.customer_name?.trim() || o.buyers?.name?.trim() || phone(o.buyer_phone)}`}
+        >
+          <BuyerName
+            order={o}
+            primaryClassName="text-[13px] font-medium text-primary-text"
+            secondaryClassName="font-mono text-[11px] text-muted-foreground"
+          />
         </Link>
       ),
     },
@@ -330,7 +336,11 @@ function csv(rows: Record<string, unknown>[]): string {
     {
       key: 'product',
       label: 'Product',
-      render: (o) => o.product_name || o.product_category || 'Untitled product',
+      render: (o) => (
+        <span className="block max-w-[240px] truncate" title={o.product_name || o.product_category || 'Untitled product'}>
+          {o.product_name || o.product_category || 'Untitled product'}
+        </span>
+      ),
     },
     {
       key: 'city',
@@ -375,6 +385,7 @@ function csv(rows: Record<string, unknown>[]): string {
             >
               <Icon name="ellipsis-horizontal" size={16} />
             </button>
+            <AutomateCalls onChange={() => void load()} />
             <button
               className="inline-flex h-11 items-center gap-2 rounded-full bg-[var(--cta-accent-bg)] px-4 text-[13px] font-semibold text-[var(--cta-accent-fg)] shadow-sm transition-colors hover:bg-[var(--cta-accent-hover)] disabled:opacity-50 md:h-9"
               onClick={() => void doRecommended()}

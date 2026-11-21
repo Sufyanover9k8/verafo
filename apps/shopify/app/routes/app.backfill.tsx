@@ -17,7 +17,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureStoreLink } from "../lib/verafo";
-import { advanceRun, abandonRun, getLatestRun, grantedScopes, startOrResumeRun } from "../lib/backfill.server";
+import { advanceRun, abandonRun, getLatestRun, grantedScopes, refreshCustomerNames, startOrResumeRun } from "../lib/backfill.server";
 
 type Range = "1m" | "3m" | "12m" | "all";
 
@@ -47,6 +47,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const intent = String(form.get("intent") ?? "step");
+
+  if (intent === "names") {
+    try {
+      const storeId = await ensureStoreLink(session.shop, session.shop);
+      const summary = await refreshCustomerNames(admin, storeId);
+      return { intent, ok: true as const, ...summary };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { intent, ok: false as const, error: message };
+    }
+  }
 
   if (intent === "start" || intent === "reset") {
     const range = String(form.get("range") ?? "12m") as Range;
@@ -115,7 +126,8 @@ export default function Backfill() {
   const [range, setRange] = useState<Range>("12m");
 
   const busy = fetcher.state !== "idle";
-  const latest = fetcher.data?.run ?? initialRun;
+  // The action also answers the names intent, which carries no run.
+  const latest = (fetcher.data && "run" in fetcher.data ? fetcher.data.run : null) ?? initialRun;
   const error = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
   const pageMissingPhone =
     fetcher.data && "pageMissingPhone" in fetcher.data ? fetcher.data.pageMissingPhone : 0;
@@ -128,7 +140,7 @@ export default function Backfill() {
   // each response advances one page, then asks for the next until done.
   const { state, data, submit } = fetcher;
   useEffect(() => {
-    if (state !== "idle" || !data || !data.ok || !data.run) return;
+    if (state !== "idle" || !data || !data.ok || !("run" in data) || !data.run) return;
     if (data.run.status === "running") {
       submit({ intent: "step" }, { method: "post" });
     }
@@ -144,6 +156,14 @@ export default function Backfill() {
       failed: latest.status === "failed",
     };
   }, [latest]);
+
+  // Names backfill runs on its own fetcher so it never disturbs the import loop.
+  const namesFetcher = useFetcher<typeof action>();
+  const namesData = namesFetcher.data;
+  const namesResult = namesData && "named" in namesData ? namesData : null;
+  const namesError =
+    namesData && "error" in namesData && namesData.error ? namesData.error : null;
+  const namesBusy = namesFetcher.state !== "idle";
 
   return (
     <Page>
@@ -257,6 +277,47 @@ export default function Backfill() {
                     : ""}
                   .
                 </Text>
+              </Banner>
+            )}
+          </BlockStack>
+        </Card>
+
+        <Card>
+          <BlockStack gap="300">
+            <Text as="h2" variant="headingMd">
+              Customer names
+            </Text>
+            <Text as="p" tone="subdued">
+              Name the buyers you already have. Orders saved before this was captured
+              show a phone number where the name should be; this reads the name from
+              each order in Shopify and fills it in, without touching a name that is
+              already on file. Safe to run again whenever you add history.
+            </Text>
+            <InlineStack gap="300" blockAlign="center">
+              <Button
+                loading={namesBusy}
+                onClick={() => namesFetcher.submit({ intent: "names" }, { method: "post" })}
+              >
+                Refresh customer names
+              </Button>
+              {namesResult && !namesBusy && (
+                <Text as="p" tone="subdued">
+                  {namesResult.named} named · {namesResult.alreadyNamed} already named ·{" "}
+                  {namesResult.missing} with no name in Shopify
+                </Text>
+              )}
+            </InlineStack>
+            {namesResult && namesResult.remaining > 0 && !namesBusy && (
+              <Banner tone="info" title="More orders to go">
+                <Text as="p">
+                  Another {" "}
+                  {namesResult.remaining} order(s) still need a name. Run it again to continue.
+                </Text>
+              </Banner>
+            )}
+            {namesError && (
+              <Banner tone="critical" title="Could not read names">
+                <Text as="p">{namesError}</Text>
               </Banner>
             )}
           </BlockStack>

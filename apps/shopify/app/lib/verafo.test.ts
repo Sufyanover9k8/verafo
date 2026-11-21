@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  customerNameOf,
   normalizePhone,
   mapOrder,
   outcomeFor,
@@ -29,8 +30,17 @@ describe("mapOrder", () => {
       id: 123456789,
       name: "#1001",
       created_at: "2026-08-10T12:00:00Z",
-      customer: { phone: "+92 300 111 2222" },
-      shipping_address: { address1: "House 12, Block B", city: "Lahore", province: "Punjab" },
+      customer: {
+        phone: "+92 300 111 2222",
+        first_name: "Ayesha",
+        last_name: "Siddiqui",
+      },
+      shipping_address: {
+        name: "Ayesha Siddiqui",
+        address1: "House 12, Block B",
+        city: "Lahore",
+        province: "Punjab",
+      },
       total_price: "2499.00",
       line_items: [
         { title: "Vitamin C serum", product_type: "Skincare", quantity: 2 },
@@ -40,6 +50,7 @@ describe("mapOrder", () => {
     expect(mapped).toEqual({
       shopifyOrderId: "123456789",
       buyerPhone: "+923001112222",
+      customerName: "Ayesha Siddiqui",
       productCategory: "skincare",
       productName: "Vitamin C serum",
       // 2499 total across 2 units → unit price, because the dashboard
@@ -112,8 +123,8 @@ describe("graphqlNodeToPayload", () => {
       createdAt: "2026-08-11T09:00:00Z",
       phone: null,
       cancelledAt: null,
-      customer: { phone: "+923214445555" },
-      shippingAddress: { address1: "Street 4", city: "Karachi" },
+      customer: { phone: "+923214445555", firstName: "Bilal", lastName: "Ahmed" },
+      shippingAddress: { name: "Bilal Ahmed", address1: "Street 4", city: "Karachi" },
       lineItems: {
         edges: [
           {
@@ -133,5 +144,48 @@ describe("graphqlNodeToPayload", () => {
     expect(payload.line_items?.[0]?.product_type).toBe("Clothing");
     expect(payload.total_price).toBe("2499.00");
     expect(payload.created_at).toBe("2026-08-11T09:00:00Z");
+    expect(payload.shipping_address?.name).toBe("Bilal Ahmed");
+    expect(customerNameOf(payload)).toBe("Bilal Ahmed");
+  });
+});
+
+describe("customerNameOf", () => {
+  it("prefers the shipping-address name, because that is what the courier prints", () => {
+    const name = customerNameOf({
+      id: "1",
+      customer: { first_name: "Account", last_name: "Holder" },
+      shipping_address: { name: "  Hina   Raza " },
+    } as ShopifyOrderLike);
+    expect(name).toBe("Hina Raza");
+  });
+
+  it("falls back to the customer's first and last name", () => {
+    const name = customerNameOf({
+      id: "2",
+      customer: { first_name: "Usman", last_name: "Tariq" },
+      shipping_address: { name: "   " },
+    } as ShopifyOrderLike);
+    expect(name).toBe("Usman Tariq");
+  });
+
+  it("reads GraphQL casing", () => {
+    const name = customerNameOf({
+      id: "3",
+      customer: { firstName: "Fatima", lastName: "Noor" },
+    } as ShopifyOrderLike);
+    expect(name).toBe("Fatima Noor");
+  });
+
+  it("returns null when Shopify sent no name at all", () => {
+    expect(customerNameOf({ id: "4", customer: { phone: "+92300" } } as ShopifyOrderLike)).toBeNull();
+    expect(customerNameOf({ id: "5" } as ShopifyOrderLike)).toBeNull();
+  });
+
+  it("caps absurdly long names", () => {
+    const name = customerNameOf({
+      id: "6",
+      shipping_address: { name: "x".repeat(400) },
+    } as ShopifyOrderLike);
+    expect(name?.length).toBe(120);
   });
 });

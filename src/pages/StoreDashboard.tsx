@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { BuyerName } from '../components/app/buyer-name'
 import { PageHeader } from '../components/app/page-header'
 import { RangeFilter, type RangeDays } from '../components/RangeFilter'
 import { Badge } from '../components/primitives/Badge'
@@ -17,7 +18,7 @@ import { Sparkline } from '../components/Sparkline'
 import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
-import { dateTime, money, phone } from '../lib/format'
+import { dateTime, money } from '../lib/format'
 import { isConfigured, supabase } from '../lib/supabase'
 import { useStoreScope } from '../lib/store'
 import { computeCityStats, computeDailySales, computeStoreOverview, computeTopProducts } from '../lib/storeStats'
@@ -49,7 +50,7 @@ export function StoreDashboard() {
       supabase.rpc('daily_sales', { p_store_id: id, p_days: range }),
       supabase
         .from('orders')
-        .select('*, stores(name), outcomes(status, resolved_at)')
+        .select('*, stores(name), order_fulfillment(customer_name), outcomes(status, resolved_at)')
         .eq('store_id', id)
         .gte('ordered_at', cutoff.toISOString())
         .order('ordered_at', { ascending: false })
@@ -121,8 +122,12 @@ export function StoreDashboard() {
       render: (o) => (
         <span className="cell-avatar">
           <Avatar phone={o.buyer_phone} size={26} />
-          <Link className="link" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
-            {phone(o.buyer_phone)}
+          <Link className="link min-w-0" to={`/lookup?phone=${encodeURIComponent(o.buyer_phone)}`}>
+            <BuyerName
+              order={o}
+              primaryClassName="text-[13px] font-medium text-primary-text"
+              secondaryClassName="font-mono text-[11px] text-muted-foreground"
+            />
           </Link>
         </span>
       ),

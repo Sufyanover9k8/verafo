@@ -18,6 +18,8 @@ const ResetPassword = lazy(() =>
 const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })))
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })))
 const BulkImport = lazy(() => import('./pages/BulkImport').then((m) => ({ default: m.BulkImport })))
+const Calls = lazy(() => import('./pages/Calls').then((m) => ({ default: m.Calls })))
+const WorkflowPage = lazy(() => import('./pages/Workflow').then((m) => ({ default: m.Workflow })))
 const BuyerMap = lazy(() => import('./pages/BuyerMap').then((m) => ({ default: m.BuyerMap })))
 const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })))
 const Lookup = lazy(() => import('./pages/Lookup').then((m) => ({ default: m.Lookup })))
@@ -30,6 +32,7 @@ const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m
 const StoreDashboard = lazy(() => import('./pages/StoreDashboard').then((m) => ({ default: m.StoreDashboard })))
 const Stores = lazy(() => import('./pages/Stores').then((m) => ({ default: m.Stores })))
 const AddStore = lazy(() => import('./pages/AddStore').then((m) => ({ default: m.AddStore })))
+const Billing = lazy(() => import('./pages/Billing').then((m) => ({ default: m.Billing })))
 
 function RouteFallback() {
   return (
@@ -63,9 +66,11 @@ export function App() {
               a browser that reaches the router at `/` is sent on to the app. */}
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/workflow" element={<WorkflowPage />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/orders/new" element={<NewOrder />} />
+          <Route path="/calls" element={<Calls />} />
           <Route path="/orders/pending" element={<Outcomes />} />
           {/* Unreleased pages: switched off in src/lib/features.ts. With the
               route gone, a direct URL falls through to the catch-all below and
@@ -78,6 +83,7 @@ export function App() {
           {isAdmin && <Route path="/stores" element={<Stores />} />}
           {isAdmin && <Route path="/stores/add" element={<AddStore />} />}
           {isAdmin && <Route path="/stores/:id" element={<StoreDashboard />} />}
+          {isAdmin && <Route path="/billing" element={<Billing />} />}
           <Route path="/chat" element={<Chat />} />
           <Route path="/import" element={<BulkImport />} />
           <Route path="/settings" element={<Settings />} />

@@ -247,7 +247,7 @@ function summarizeTool(name: string, result: unknown): string {
     case "refusal_reasons":
       return `${r?.total_refused ?? 0} refusals analysed`;
     case "buyer_orders":
-      return `${Array.isArray(r) ? r.length : 0} orders`;
+      return `${Array.isArray(r?.orders) ? r.orders.length : Array.isArray(r) ? r.length : 0} orders`;
     case "weekly_trend":
       return `${Array.isArray(r) ? r.length : 0} weeks`;
     case "similar_buyers":
@@ -300,6 +300,37 @@ interface SummaryInput {
   phone_age_days: number;
   distinct_stores: number;
   first_seen: string | null;
+  /** What the verification calls observed, when the buyer has any. */
+  calls?: CallSignal | null;
+}
+
+/**
+ * One sentence describing what the verification calls observed.
+ *
+ * Written for anything that has to speak or reason about the buyer (the profile
+ * summary and the embedding text), so it states observations and leaves the
+ * verdict to the risk score: "answered twice and cancelled" is evidence, "high
+ * risk" is a conclusion drawn from it.
+ */
+function describeCalls(c: CallSignal): string {
+  const parts: string[] = [];
+  const reaching = c.connected + c.noAnswer + c.failed;
+  parts.push(
+    `${c.calls} verification call${c.calls === 1 ? "" : "s"} were placed` +
+      (reaching > 0 ? `, ${c.connected} of them answered` : "") +
+      ".",
+  );
+  if (c.confirmed > 0) parts.push("On a call the buyer confirmed the order.");
+  if (c.cancelled > 0) parts.push("On a call the buyer cancelled the order.");
+  if (c.wrongPerson > 0) parts.push("On a call the person who answered was not the buyer.");
+  if (c.noAnswer > 0) parts.push(`The buyer did not answer ${c.noAnswer} of them.`);
+  if (c.correctedFields.length > 0) {
+    parts.push(
+      `A call corrected the ${c.correctedFields.join(", ")} on the order, ` +
+        `so the buyer volunteers accurate details when asked.`,
+    );
+  }
+  return parts.join(" ");
 }
 
 function buildSummaryText(s: SummaryInput): string {
@@ -341,6 +372,111 @@ function buildSummaryText(s: SummaryInput): string {
   if (s.phone_age_days > 0) {
     parts.push(`Known to the network for about ${Math.round(s.phone_age_days)} days.`);
   }
+  if (s.calls && s.calls.calls > 0) {
+    parts.push(describeCalls(s.calls));
+  }
+  return parts.join(" ");
+}
+
+/**
+ * The text that becomes the buyer's `embedding`.
+ *
+ * Deliberately different from `buildSummaryText`, which is written for a human
+ * (and for the agent) and therefore quotes the risk score. An embedding is only
+ * useful if it describes what was OBSERVABLE, never the verdict derived from it:
+ * put `risk_score` in the vector and every neighbour is just the person with the
+ * nearest label, buyers with no history cannot be placed at all, and whatever
+ * the rule engine already believes gets counted twice.
+ *
+ * For the same reason the city NAME is not listed here — it is a coarse proxy
+ * that carves the space into ten blobs. What replaces it is the city's learned
+ * refusal rate, which is a prior rather than a label.
+ */
+function buildEmbedText(s: SummaryInput, cityRate: number | null = null): string {
+  const parts: string[] = [];
+
+  parts.push(
+    s.total_orders <= 1
+      ? "First order on the network."
+      : `Buyer with ${s.total_orders} orders across ${s.stores} store(s).`,
+  );
+
+  if (s.categories.length > 0) {
+    const sum = s.categories.reduce((n, [, c]) => n + c, 0) || 1;
+    parts.push(
+      `Category mix: ${
+        s.categories.map(([c, n]) => `${c} ${Math.round((n / sum) * 100)}%`).join(", ")
+      }.`,
+    );
+  }
+
+  if (s.avg_order_value != null) {
+    parts.push(`Average order value ${Math.round(s.avg_order_value)} PKR.`);
+  }
+  if (s.avg_item_count > 1) {
+    parts.push(`Average basket ${Math.round(s.avg_item_count * 10) / 10} item(s) per order.`);
+  }
+  if (s.night_ratio > 0) {
+    parts.push(`${Math.round(s.night_ratio * 100)}% of orders placed late at night (18:00-02:59).`);
+  }
+  if (s.weekend_ratio > 0) {
+    parts.push(`${Math.round(s.weekend_ratio * 100)}% placed on weekends.`);
+  }
+
+  if (cityRate != null) {
+    parts.push(
+      `Deliveries to this buyer's city are refused or returned ${Math.round(cityRate * 100)}% of the time.`,
+    );
+  }
+
+  if (s.total_orders >= 3 && s.stores >= 2) {
+    parts.push(`Repeat buyer who shops across ${s.stores} different stores.`);
+  } else if (s.total_orders >= 3) {
+    parts.push("Repeat buyer within a single store.");
+  } else {
+    parts.push("Limited history in the network.");
+  }
+
+  if (s.phone_age_days > 0) {
+    parts.push(`Known to the network for about ${Math.round(s.phone_age_days)} days.`);
+  }
+
+  // Call observations. Kept as behaviour, not as a verdict: a buyer who answers
+  // and corrects their address, one who never picks up, and one who answers and
+  // cancels are three different people even when all three end up refused.
+  if (s.calls && s.calls.calls > 0) {
+    const c = s.calls;
+    const answered = c.connected / c.calls;
+    parts.push(
+      `Reached by phone verification ${c.calls} time(s); ` +
+        `${Math.round(answered * 100)}% of those calls were answered.`,
+    );
+    if (c.correctedFields.length > 0) {
+      parts.push(
+        `On a call the buyer corrected the ${c.correctedFields.join(", ")} on an order.`,
+      );
+    }
+    if (c.wrongPerson > 0) {
+      parts.push("On a call the person who answered said they were not the buyer.");
+    } else if (c.confirmed > 0) {
+      parts.push("On a call the buyer confirmed the order themselves.");
+    } else if (c.cancelled > 0) {
+      parts.push("On a call the buyer cancelled the order themselves.");
+    }
+    if (c.noAnswer > 0 && c.connected === 0) {
+      parts.push("The buyer has never answered a verification call.");
+    }
+    if (c.averageDurationSec != null && c.averageDurationSec > 0) {
+      const bucket =
+        c.averageDurationSec < 45
+          ? "brief"
+          : c.averageDurationSec < 150
+            ? "normal-length"
+            : "long";
+      parts.push(`Their answered calls are ${bucket}.`);
+    }
+  }
+
   return parts.join(" ");
 }
 
@@ -462,6 +598,8 @@ interface BuyerEmbeddingRow {
   total_accepted: number | null
   total_refused: number | null
   embedding: number[] | null
+  /** When the row last changed — an embedding rebuild stamps this too. */
+  updated_at?: string | null
 }
 
 /** One plotted point in the buyer map (classical-MDS projection). */
@@ -506,6 +644,193 @@ interface ChatCompletionTool {
     description: string
     parameters: Record<string, unknown>
   }
+}
+
+/**
+ * What the AI verification calls observed about one buyer.
+ *
+ * A call is the only place the network hears the customer's own voice: they
+ * picked up or they did not, they confirmed or cancelled, and they corrected an
+ * address or an item. That is direct evidence about a person, so it belongs in
+ * the fingerprint next to order timing and basket size — and it is richer than
+ * an outcome bit, because "never answers" and "answers and cancels" are
+ * different people even when both end up refused.
+ *
+ * Counts are rolled up across the caller's own calls only (orders are private;
+ * see `loadCallSignal`), so one merchant's calls never label another's buyer.
+ */
+interface CallSignal {
+  /** Calls attempted for this buyer's orders in the caller's stores. */
+  calls: number
+  /** Calls where the buyer was actually reached (status completed). */
+  connected: number
+  /** Calls that rang out. */
+  noAnswer: number
+  /** Calls that broke before reaching anyone. */
+  failed: number
+  confirmed: number
+  cancelled: number
+  wrongPerson: number
+  /** Order fields a call corrected, deduplicated ("address", "name", ...). */
+  correctedFields: string[]
+  /** How many individual corrections the calls produced. */
+  corrections: number
+  averageDurationSec: number | null
+  lastOutcome: string | null
+  lastAt: string | null
+}
+
+/** A `call_verifications` row as embedded under an order. */
+interface VerificationEmbed {
+  status?: string | null
+  outcome?: string | null
+  corrections?: unknown
+  duration_sec?: number | null
+  ended_at?: string | null
+}
+
+interface CallObservationRow {
+  buyer_phone: string | null
+  call_verifications?: VerificationEmbed[] | VerificationEmbed | null
+}
+
+/**
+ * Roll the caller's verification calls for one phone into a `CallSignal`.
+ *
+ * Returns null when the buyer has no calls at all, so callers can leave every
+ * call dimension out instead of writing zeros that mean "no evidence".
+ * Failures are swallowed: a call lookup must never break a profile or an
+ * embedding rebuild.
+ */
+async function loadCallSignal(
+  supabase: Db,
+  phone: string,
+  storeIds: string[] = [],
+): Promise<CallSignal | null> {
+  const candidates = phoneLookupCandidates(phone);
+  if (candidates.length === 0) return null;
+
+  let rows: CallObservationRow[] = [];
+  try {
+    rows = await fetchRows<CallObservationRow>(
+      "orders",
+      "select=buyer_phone,call_verifications(status,outcome,corrections,duration_sec,ended_at)" +
+        `&buyer_phone=in.(${candidates.map(encodeURIComponent).join(",")})` +
+        `&limit=2000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    return null;
+  }
+
+  const calls: VerificationEmbed[] = [];
+  for (const row of rows) {
+    const embedded = row.call_verifications;
+    if (Array.isArray(embedded)) calls.push(...embedded);
+    else if (embedded) calls.push(embedded);
+  }
+  // Only dial attempts the network actually ran count as observations. A call
+  // the provider cancelled before dialling, or one still ringing, says nothing
+  // about the buyer and would otherwise dilute every rate below.
+  const OBSERVED = new Set(["completed", "no_answer", "failed"]);
+  const observed = calls.filter((c) => OBSERVED.has(String(c.status ?? "").toLowerCase()));
+  if (observed.length === 0) return null;
+
+  const signal: CallSignal = {
+    calls: observed.length,
+    connected: 0,
+    noAnswer: 0,
+    failed: 0,
+    confirmed: 0,
+    cancelled: 0,
+    wrongPerson: 0,
+    correctedFields: [],
+    corrections: 0,
+    averageDurationSec: null,
+    lastOutcome: null,
+    lastAt: null,
+  };
+
+  const fields = new Set<string>();
+  let durationSum = 0;
+  let durationCount = 0;
+
+  for (const call of observed) {
+    const status = String(call.status ?? "").toLowerCase();
+    const outcome = String(call.outcome ?? "").toLowerCase();
+    if (status === "completed") signal.connected += 1;
+    else if (status === "no_answer") signal.noAnswer += 1;
+    else if (status === "failed") signal.failed += 1;
+
+    if (outcome === "confirmed") signal.confirmed += 1;
+    else if (outcome === "cancelled") signal.cancelled += 1;
+    else if (outcome === "wrong_person") signal.wrongPerson += 1;
+
+    if (Array.isArray(call.corrections)) {
+      for (const entry of call.corrections) {
+        const field = (entry as { field?: unknown })?.field;
+        if (typeof field === "string" && field.trim()) {
+          fields.add(field.trim().toLowerCase());
+          signal.corrections += 1;
+        }
+      }
+    }
+
+    const duration = Number(call.duration_sec);
+    if (Number.isFinite(duration) && duration > 0) {
+      durationSum += duration;
+      durationCount += 1;
+    }
+
+    const at = call.ended_at ?? null;
+    if (at && (!signal.lastAt || new Date(at) > new Date(signal.lastAt))) {
+      signal.lastAt = at;
+      signal.lastOutcome = outcome || null;
+    }
+  }
+
+  signal.correctedFields = [...fields].sort();
+  if (durationCount > 0) signal.averageDurationSec = Math.round(durationSum / durationCount);
+  return signal;
+}
+
+/**
+ * Latest verification call per buyer phone, for the caller's stores only.
+ *
+ * Used to spot fingerprints that went stale: an embedding is a snapshot of
+ * behaviour at the moment it was written, so a call that happened afterwards
+ * means the stored vector is describing a slightly different person.
+ */
+async function latestCallTimes(
+  supabase: Db,
+  storeIds: string[] = [],
+): Promise<Map<string, string>> {
+  const latest = new Map<string, string>();
+  let rows: CallObservationRow[] = [];
+  try {
+    rows = await fetchRows<CallObservationRow>(
+      "orders",
+      "select=buyer_phone,call_verifications(status,ended_at)" +
+        `&limit=3000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    return latest;
+  }
+
+  const observed = new Set(["completed", "no_answer", "failed"]);
+  for (const row of rows) {
+    const phone = String(row.buyer_phone ?? "");
+    if (!phone) continue;
+    const embedded = row.call_verifications;
+    const calls = Array.isArray(embedded) ? embedded : embedded ? [embedded] : [];
+    for (const call of calls) {
+      if (!observed.has(String(call.status ?? "").toLowerCase())) continue;
+      const at = call.ended_at;
+      if (!at) continue;
+      const current = latest.get(phone);
+      if (!current || new Date(at) > new Date(current)) latest.set(phone, at);
+    }
+  }
+  return latest;
 }
 
 /**
@@ -569,6 +894,10 @@ async function fetchStats(
     ? Math.max(0, (Date.now() - new Date(buyer.first_seen).getTime()) / 86400000)
     : 0;
 
+  // Calls the caller placed for this buyer. Null when none exist, so no call
+  // dimensions are written for buyers the network has never rung.
+  const calls = await loadCallSignal(supabase, phone, storeIds);
+
   return {
     phone,
     risk_score: Number(buyer.risk_score ?? 0.5),
@@ -586,6 +915,7 @@ async function fetchStats(
     phone_age_days: phoneAgeDays,
     distinct_stores: new Set(rows.map((o) => o.store_id)).size,
     first_seen: buyer.first_seen,
+    calls,
   };
 }
 
@@ -600,22 +930,24 @@ const FEATURE_CATEGORIES = [
   "haircare",
 ];
 
-const FEATURE_CITIES = [
-  "Lahore",
-  "Karachi",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Sialkot",
-  "Gujranwala",
-  "Quetta",
-];
-
 interface FeatureVector {
   vector: number[];
   labels: string[];
+  /** Learned refusal rate for the buyer's latest city, when the prior exists. */
+  cityRate: number | null;
+}
+
+/**
+ * Refusal rate for a city, learned across the network and refreshed monthly by
+ * `supabase/city-base-rates.sql`. Returns null when the prior has not been built
+ * yet or the RPC is not deployed, so callers fall back to a neutral value.
+ */
+async function fetchCityRate(supabase: Db, city: string): Promise<number | null> {
+  if (!city) return null;
+  const { data, error } = await supabase.rpc("verafo_city_rate", { p_city: city });
+  if (error || data == null) return null;
+  const rate = Number(data);
+  return Number.isFinite(rate) ? rate : null;
 }
 
 function normalize(v: number, lo: number, hi: number): number {
@@ -662,7 +994,6 @@ async function buildFeatureVector(
 
   const rows = asRows<OrderRow>(orders);
   const resolved = rows.filter((o) => embedOne(o.outcomes)?.status === "accepted");
-  const refused = rows.filter((o) => embedOne(o.outcomes)?.status === "refused");
   const last = rows[rows.length - 1];
 
   const categoryCount = new Map<string, number>();
@@ -685,7 +1016,6 @@ async function buildFeatureVector(
   }
 
   const total = rows.length;
-  const dominant = [...categoryCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown";
   const latestCity = last?.city ?? "";
   const avgQty = total > 0 ? qtySum / total : 1;
   const avgValue = priceCount > 0 ? priceSum / priceCount : 0;
@@ -693,6 +1023,12 @@ async function buildFeatureVector(
     ? Math.max(0, (Date.now() - new Date(buyerIdentity.first_seen).getTime()) / 86400000)
     : 0;
   const distinctStores = new Set(rows.map((o) => o.store_id)).size;
+  const distinctAddresses = new Set(
+    rows.map((o) => (o.address ?? "").trim().toLowerCase()).filter(Boolean),
+  ).size;
+
+  // A learned prior, not a label: how often deliveries to this city come back.
+  const cityRate = latestCity ? await fetchCityRate(supabase, latestCity) : null;
 
   // Known-good address: the buyer's most recent address has been accepted before
   const lastAddress = last?.address ?? null;
@@ -706,45 +1042,65 @@ async function buildFeatureVector(
     vector.push(value);
   };
 
-  // GROUP A — order timing (cyclical sin/cos, weekend flag, sequence)
+  // GROUP A — order timing (cyclical sin/cos + the weekend SHARE, not a flag:
+  // a majority bit throws away a real distribution and flips on one order)
   const [hSin, hCos] = sinCos(last?.ordered_at ? new Date(last.ordered_at).getHours() : 12, 24);
   const [dSin, dCos] = sinCos(last?.ordered_at ? new Date(last.ordered_at).getDay() : 0, 7);
   push("order_hour_sin", hSin);
   push("order_hour_cos", hCos);
   push("order_dow_sin", dSin);
   push("order_dow_cos", dCos);
-  push("is_weekend", total > 0 ? (weekend / total > 0.5 ? 1 : 0) : 0);
+  push("weekend_ratio", total > 0 ? weekend / total : 0);
   push("order_sequence", normalize(total, 1, 30));
 
   // GROUP B — order value & basket
   push("avg_order_value", normalize(Math.log1p(avgValue), Math.log1p(500), Math.log1p(15000)));
   push("avg_item_count", normalize(avgQty, 1, 5));
 
-  // GROUP C — dominant category (one-hot MVP)
+  // GROUP C — category mix as shares, not the winner takes all: a buyer who is
+  // 40% skincare and 35% haircare is not the same person as a 100% skincare one.
   for (const c of FEATURE_CATEGORIES) {
-    push(`category_${c}`, dominant === c ? 1 : 0);
+    push(`category_${c}`, total > 0 ? (categoryCount.get(c) ?? 0) / total : 0);
   }
 
-  // GROUP D — messaging metadata (WhatsApp not wired yet: safe defaults)
-  push("replied_to_automsg", 0);
-  push("time_to_reply_min_norm", 0);
-
-  // GROUP E — outcomes
-  push("refusal_rate", total > 0 ? refused.length / total : 0.5);
-  push("acceptance_count_norm", normalize(Number(buyerIdentity.total_accepted ?? 0), 0, 20));
-
-  // GROUP F — location
-  for (const c of FEATURE_CITIES) {
-    push(`city_${c}`, latestCity === c ? 1 : 0);
-  }
+  // GROUP D — address behaviour (structural, and it is what address fraud shows
+  // up as: many destinations, few repeats)
   push("address_seen_before", addressSeen ? 1 : 0);
+  push("distinct_addresses_norm", normalize(distinctAddresses, 1, 5));
+  push("address_churn", total > 0 ? Math.max(0, 1 - distinctAddresses / total) : 0);
+  push("city_rate", cityRate ?? 0.5);
 
-  // GROUP G — identity
+  // GROUP E — identity
   push("phone_age_days_norm", normalize(phoneAgeDays, 0, 180));
   push("distinct_stores_norm", normalize(distinctStores, 1, 10));
   push("total_orders_norm", normalize(total, 0, 30));
 
-  return { vector, labels };
+  // GROUP F — what the verification calls observed. These are the only
+  // dimensions that describe the person rather than the parcel: whether they
+  // pick up, whether they confirm or cancel when they do, and whether they hand
+  // over a better address than the checkout form collected.
+  const calls = await loadCallSignal(supabase, phone, storeIds);
+  if (calls) {
+    const answeredRate = calls.calls > 0 ? calls.connected / calls.calls : 0;
+    const silentRate = calls.calls > 0 ? calls.noAnswer / calls.calls : 0;
+    push("call_answered_rate", answeredRate);
+    push("call_silent_rate", silentRate);
+    push("call_confirmed_rate", calls.calls > 0 ? calls.confirmed / calls.calls : 0);
+    push("call_cancelled_rate", calls.calls > 0 ? calls.cancelled / calls.calls : 0);
+    push("call_wrong_person_rate", calls.calls > 0 ? calls.wrongPerson / calls.calls : 0);
+    push("call_correction_rate", calls.calls > 0 ? calls.corrections / calls.calls : 0);
+    push("call_volume_norm", normalize(calls.calls, 0, 4));
+    const daysSinceCall = calls.lastAt
+      ? Math.max(0, (Date.now() - new Date(calls.lastAt).getTime()) / 86400000)
+      : 180;
+    push("call_recency_days_norm", normalize(daysSinceCall, 0, 180));
+    push(
+      "call_duration_norm",
+      calls.averageDurationSec == null ? 0 : normalize(calls.averageDurationSec, 30, 240),
+    );
+  }
+
+  return { vector, labels, cityRate };
 }
 
 async function listChatHistory(
@@ -1282,6 +1638,34 @@ async function toolSearchOrders(supabase: Db, args: Record<string, unknown>, sto
   return { count: orders.length, orders };
 }
 
+/**
+ * Phones the caller has ordered from, grouped by their last four digits - the
+ * only handle `verafo_buyer_ranking` gives back. Used to un-mask a ranked row
+ * only when the digits identify exactly one of the caller's own buyers.
+ */
+async function ownPhonesByLast4(storeIds: string[]): Promise<Map<string, string[]>> {
+  const byLast4 = new Map<string, string[]>();
+  if (!storeIds || storeIds.length === 0) return byLast4;
+  let rows: { buyer_phone?: string | null }[];
+  try {
+    rows = await fetchRows("orders",
+      `select=buyer_phone&order=ordered_at.desc&limit=5000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    return byLast4;
+  }
+  for (const row of rows) {
+    const phone = String(row.buyer_phone ?? "").trim();
+    if (!phone) continue;
+    const last4 = digitsOnly(phone).slice(-4);
+    if (last4.length < 4) continue;
+    const list = byLast4.get(last4) ?? [];
+    if (!list.includes(phone)) list.push(phone);
+    byLast4.set(last4, list);
+  }
+  return byLast4;
+}
+
 async function toolTopBuyers(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
   // PRIVACY: this used to read the whole `buyers` table and return every
   // buyer's PHONE NUMBER across the entire network. It now calls
@@ -1310,9 +1694,22 @@ async function toolTopBuyers(supabase: Db, args: Record<string, unknown>, storeI
   });
   if (error) return { error: error.message };
 
-  return asRows<BuyerRankingRow>(data).map((r) => ({
+  const rows = asRows<BuyerRankingRow>(data);
+  // The ranking is masked by design. When a masked label matches exactly one
+  // phone the caller has an order for, that row IS their own customer, so the
+  // full number and the saved name may be shown; an ambiguous label stays masked.
+  const own = await ownPhonesByLast4(storeIds);
+  const resolved = rows.map((r) => {
+    const last4 = digitsOnly(r.buyer_label).slice(-4);
+    const matches = own.get(last4) ?? [];
+    return { row: r, phone: matches.length === 1 ? matches[0] : null };
+  });
+  const names = await loadBuyerNames(resolved.map((x) => x.phone).filter(Boolean) as string[], storeIds);
+
+  return resolved.map(({ row: r, phone }) => ({
     rank: Number(r.rank),
     buyer: String(r.buyer_label ?? "····"),
+    ...(phone ? { phone, buyer_name: names.get(phone) ?? null } : {}),
     orders: Number(r.orders ?? 0),
     accepted: Number(r.accepted ?? 0),
     refused: Number(r.refused ?? 0),
@@ -1354,6 +1751,10 @@ async function toolBuyersByCity(supabase: Db, args: Record<string, unknown>, sto
   const floor =
     minPrice != null && Number.isFinite(minPrice) && minPrice > 0 ? minPrice : 0;
   const above = floor > 0 ? list.filter((b) => b.max_order >= floor) : null;
+  const sample = list.slice(0, 20);
+  // These are the caller's own buyers (the rows are scoped to their stores), so
+  // showing the name they saved is safe; phones without one stay phone-only.
+  const names = await loadBuyerNames(sample.map((b) => b.phone), storeIds);
   return {
     city,
     ...(category ? { category: args.category } : {}),
@@ -1361,8 +1762,25 @@ async function toolBuyersByCity(supabase: Db, args: Record<string, unknown>, sto
     ...(above
       ? { buyers_with_order_above: above.length, above_phones: above.map((b) => b.phone).slice(0, 20) }
       : {}),
-    sample_buyers: list.slice(0, 20),
+    sample_buyers: sample.map((b) => ({ ...b, buyer_name: names.get(b.phone) ?? null })),
   };
+}
+
+/**
+ * The stored spelling of a phone number. Buyers are keyed by the canonical form
+ * (e.g. +923001234567), so "0300 1234567" and "+92 300 1234567" must resolve to
+ * the same row before we can look anything up.
+ */
+async function resolveBuyerPhone(supabase: Db, phone: string): Promise<string | null> {
+  const candidates = phoneLookupCandidates(phone);
+  if (candidates.length === 0) return null;
+  const { data, error } = await supabase
+    .from("buyers")
+    .select("phone")
+    .in("phone", candidates)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return asOne<{ phone: string }>(data)?.phone ?? null;
 }
 
 async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
@@ -1370,11 +1788,15 @@ async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, sto
   if (denied) return denied;
   const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone, storeIds);
+  // Resolve first: the caller may type the local format, and a wrong-looking
+  // phone must never be reported back as "not in the network".
+  const canonical = (await resolveBuyerPhone(supabase, phone)) ?? phone;
+  const stats = await fetchStats(supabase, canonical, storeIds);
   const rows = await fetchRows<OrderRow>(
     "orders",
-    `${buildOrderParams({ phone, limit: 50 })}${storeIdFilter(storeIds)}`,
+    `${buildOrderParams({ phone: canonical, limit: 50 })}${storeIdFilter(storeIds)}`,
   );
+  const names = await loadBuyerNames(phoneLookupCandidates(canonical), storeIds);
   const orders = rows.map((o) => ({
     product: o.product_name ?? o.product_category ?? "?",
     category: o.product_category ?? "?",
@@ -1383,7 +1805,12 @@ async function toolBuyerProfile(supabase: Db, args: Record<string, unknown>, sto
     status: orderOutcome(o),
     date: (o.ordered_at ?? "").slice(0, 10),
   }));
-  return { summary: buildSummaryText(stats), orders };
+  return {
+    phone: canonical,
+    buyer_name: [...names.values()][0] ?? null,
+    summary: buildSummaryText(stats),
+    orders,
+  };
 }
 
 async function toolCityOverview(supabase: Db, _args: unknown, _storeIds: string[] = []) {
@@ -1624,6 +2051,39 @@ function storeIdFilter(storeIds: string[]): string {
   return `&store_id=in.(${encodeURIComponent(list)})`;
 }
 
+/**
+ * Names for buyers the caller actually has on file.
+ *
+ * The identity rule matches the dashboard: a name is shown only when it came
+ * from an order in one of the caller's own stores. `buyers.name` is a
+ * network-wide label, so it is deliberately not used here - it would leak the
+ * name of somebody else's customer.
+ */
+async function loadBuyerNames(phones: unknown[], storeIds: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const wanted = [...new Set(phones.map((p) => String(p ?? "").trim()).filter(Boolean))];
+  if (wanted.length === 0 || !storeIds || storeIds.length === 0) return names;
+  const list = wanted.map((p) => `"${p.replace(/"/g, "")}"`).join(",");
+  let rows: { buyer_phone?: string | null; order_fulfillment?: unknown }[];
+  try {
+    rows = await fetchRows("orders",
+      `select=buyer_phone,order_fulfillment(customer_name)&buyer_phone=in.(${encodeURIComponent(list)})&limit=2000${storeIdFilter(storeIds)}`,
+    );
+  } catch {
+    // A name is a nicety: never fail a tool call because the lookup broke.
+    return names;
+  }
+  for (const row of rows) {
+    const phone = String(row.buyer_phone ?? "").trim();
+    if (!phone || names.has(phone)) continue;
+    const name = embedOne<{ customer_name?: string | null }>(row.order_fulfillment as never)
+      ?.customer_name;
+    const clean = String(name ?? "").trim();
+    if (clean) names.set(phone, clean);
+  }
+  return names;
+}
+
 async function toolBuyerOrders(supabase: Db, args: Record<string, unknown>, storeIds: string[] = []) {
   const denied = requireOwnStores(storeIds);
   if (denied) return denied;
@@ -1637,15 +2097,19 @@ async function toolBuyerOrders(supabase: Db, args: Record<string, unknown>, stor
     "orders",
     `${buildOrderParams({ phone, limit })}${storeIdFilter(storeIds)}`,
   );
-  return rows.map((o) => ({
-    product: o.product_name ?? o.product_category ?? "?",
-    category: o.product_category ?? "?",
-    price: o.price ?? 0,
-    quantity: o.quantity ?? 1,
-    city: o.city ?? "?",
-    status: orderOutcome(o),
-    date: (o.ordered_at ?? "").slice(0, 10),
-  }));
+  const names = await loadBuyerNames(phoneLookupCandidates(phone), storeIds);
+  return {
+    buyer_name: [...names.values()][0] ?? null,
+    orders: rows.map((o) => ({
+      product: o.product_name ?? o.product_category ?? "?",
+      category: o.product_category ?? "?",
+      price: o.price ?? 0,
+      quantity: o.quantity ?? 1,
+      city: o.city ?? "?",
+      status: orderOutcome(o),
+      date: (o.ordered_at ?? "").slice(0, 10),
+    })),
+  };
 }
 
 async function toolWeeklyTrend(supabase: Db, _args: unknown, _storeIds: string[] = []) {
@@ -1707,11 +2171,14 @@ async function toolBuyerVerdict(
   if (denied) return denied;
   const phone = argString(args, "phone");
   if (!phone) return { error: "phone is required" };
-  const stats = await fetchStats(supabase, phone, storeIds);
+  const canonical = (await resolveBuyerPhone(supabase, phone)) ?? phone;
+  const stats = await fetchStats(supabase, canonical, storeIds);
+  const names = await loadBuyerNames(phoneLookupCandidates(canonical), storeIds);
+  const buyerName = [...names.values()][0] ?? null;
   const { data: recent, error: rErr } = await supabase
     .from("orders")
     .select("product_name, product_category, price, city, ordered_at, outcomes(status, refusal_reason)")
-    .eq("buyer_phone", phone)
+    .eq("buyer_phone", canonical)
     .in("store_id", storeIds)
     .order("ordered_at", { ascending: false })
     .limit(10);
@@ -1722,6 +2189,9 @@ async function toolBuyerVerdict(
         `${o.product_name ?? o.product_category} - ${o.price ?? "?"} PKR - ${o.city ?? "?"} - ${embedOne(o.outcomes)?.status ?? "pending"}`,
     )
     .join("\n");
+  const identify = buyerName
+    ? `Buyer ${canonical} (${buyerName}).`
+    : `Buyer ${canonical}. No name on file - never invent one.`;
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     response_format: { type: "json_object" },
@@ -1735,14 +2205,14 @@ async function toolBuyerVerdict(
           "\"verdict\": string (one sentence), \"confidence\": \"low\" | \"medium\" | \"high\"}. " +
           "Base every claim on the provided data.",
       },
-      { role: "user", content: `Buyer ${phone}.\n${buildSummaryText(stats)}\n\nRecent orders:\n${detail}` },
+      { role: "user", content: `${identify}\n${buildSummaryText(stats)}\n\nRecent orders:\n${detail}` },
     ],
     temperature: 0.3,
   });
   try {
-    return { phone, ...JSON.parse(res.choices[0].message.content ?? "{}") };
+    return { phone: canonical, buyer_name: buyerName, ...JSON.parse(res.choices[0].message.content ?? "{}") };
   } catch {
-    return { phone, error: "invalid verdict JSON" };
+    return { phone: canonical, buyer_name: buyerName, error: "invalid verdict JSON" };
   }
 }
 
@@ -1874,9 +2344,13 @@ async function toolSearchBuyers(supabase: Db, args: Record<string, unknown>, sto
   if (rows.length === 0) {
     return { buyers: [], note: "No buyer with that phone number exists in the network yet." };
   }
+  // A name is attached only when the caller has an order for the number (their
+  // own customer); otherwise the lookup stays phone-only, like Buyer Lookup.
+  const names = await loadBuyerNames(rows.map((r) => String(r.phone)), storeIds);
   return {
     buyers: rows.map((b) => ({
       phone: String(b.phone),
+      buyer_name: names.get(String(b.phone)) ?? null,
       risk_score: Number(b.risk_score),
       total_orders: Number(b.total_orders),
       total_accepted: Number(b.total_accepted),
@@ -2498,7 +2972,7 @@ async function embedBuyerVector(
 ): Promise<number[]> {
   const stats = await fetchStats(supabase, phone, storeIds);
   const fv = await buildFeatureVector(supabase, phone, storeIds);
-  const text = buildSummaryText(stats);
+  const text = buildEmbedText(stats, fv.cityRate);
   const res = await openai.embeddings.create({
     model: "text-embedding-3-small",
     input: text,
@@ -2599,6 +3073,16 @@ const supabase = createClient(
     // PRIVACY: the service role bypasses RLS, so identify the caller here and
     // hand the owned store ids to every tool that returns private data.
     const { storeIds } = await authorizeCaller(req);
+    // Every action below this point reads the caller's own stores. With no
+    // store ids there is nothing to read, and letting the request continue
+    // produces db errors that read like bugs ("db orders: 400") instead of
+    // what actually happened: the browser did not send a session token.
+    // map_columns and classify_courier_status are pure text helpers and are
+    // allowed to run without a session.
+    const SESSIONLESS_ACTIONS = new Set(["map_columns", "classify_courier_status"]);
+    if (storeIds.length === 0 && !SESSIONLESS_ACTIONS.has(String(action))) {
+      return json({ error: "not signed in: no session token on this request" }, 401);
+    }
     const apiKey = Deno.env.get("OPENAI_API_KEY");
     if (!apiKey) {
       return json({ error: "OPENAI_API_KEY is not set on this function" }, 500);
@@ -2682,7 +3166,9 @@ const supabase = createClient(
       // Models answer either {field: header} or the reverse {header: field}, and
       // sometimes nest it. Accept all three rather than silently returning an
       // empty map. Header names are matched case-insensitively.
-      const headerByLower = new Map(headers.map((h: string) => [h.trim().toLowerCase(), h.trim()]));
+      const headerByLower = new Map<string, string>(
+        headers.map((h: unknown): [string, string] => [String(h).trim().toLowerCase(), String(h).trim()]),
+      );
       const norm = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
       // The model sometimes answers with a sample cell instead of the header
       // name. Resolve that back to its column rather than dropping the mapping.
@@ -2794,7 +3280,7 @@ const supabase = createClient(
     if (action === "embed") {
       const stats = await fetchStats(supabase, phone, storeIds);
       const fv = await buildFeatureVector(supabase, phone, storeIds);
-      const text = buildSummaryText(stats);
+      const text = buildEmbedText(stats, fv.cityRate);
       const res = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: text,
@@ -2812,6 +3298,7 @@ const supabase = createClient(
       return json({
         ok: true,
         summary: text,
+        calls: stats.calls,
         feature_labels: fv.labels,
         feature_vector: fv.vector,
         feature_dimensions: fv.vector.length,
@@ -2837,14 +3324,37 @@ const supabase = createClient(
 
       const { data: buyers, error } = await supabase
         .from("buyers")
-        .select("phone, risk_score, total_orders, total_accepted, total_refused, embedding")
+        .select(
+          "phone, risk_score, total_orders, total_accepted, total_refused, embedding, updated_at",
+        )
         .order("total_orders", { ascending: false })
         .limit(MAX_MAP_BUYERS);
       if (error) throw new Error(error.message);
       const rows = asRows<BuyerEmbeddingRow>(buyers);
 
+      // A buyer needs a fingerprint when they have none, or when a verification
+      // call landed after the vector was last written — the call observations
+      // are part of the embedding text now, so the stored vector went stale.
+      //
+      // `embedding` arrives as the pgvector text form ("[0.1,0.2,...]") rather
+      // than a JS array, so "already embedded" must accept a non-empty string;
+      // testing only for an array re-embedded the same 40 buyers on every run.
+      const hasEmbedding = (b: BuyerEmbeddingRow) =>
+        Array.isArray(b.embedding)
+          ? b.embedding.length > 0
+          : typeof b.embedding === "string"
+            ? b.embedding.trim().length > 2
+            : false;
+
+      const latestCall = await latestCallTimes(supabase, storeIds);
       const missing = rows
-        .filter((b) => !b.embedding || !Array.isArray(b.embedding))
+        .filter((b) => {
+          if (!hasEmbedding(b)) return true;
+          const calledAt = latestCall.get(String(b.phone));
+          if (!calledAt) return false;
+          if (!b.updated_at) return true;
+          return new Date(calledAt) > new Date(b.updated_at);
+        })
         .map((b) => String(b.phone))
         .slice(0, MAX_EMBED_PER_RUN);
       const failed: string[] = [];
@@ -2865,17 +3375,33 @@ const supabase = createClient(
         }
       }
 
+      // `embedding` comes back as the pgvector text form ("[0.1,0.2,...]"), not
+      // a JS array, so it has to be parsed before it can be plotted. Testing
+      // only for an array used to leave the map showing just the handful of
+      // buyers embedded in that very request.
+      const asVector = (b: BuyerEmbeddingRow): number[] | null => {
+        if (Array.isArray(b.embedding)) return b.embedding.length > 0 ? b.embedding : null;
+        if (typeof b.embedding === "string" && b.embedding.trim().startsWith("[")) {
+          try {
+            const parsed = JSON.parse(b.embedding) as unknown;
+            return Array.isArray(parsed) && parsed.length > 0 ? (parsed as number[]) : null;
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      };
+
       const vecs = rows
-        .filter((b): b is BuyerEmbeddingRow & { embedding: number[] } =>
-          Array.isArray(b.embedding) && b.embedding.length > 0
-        )
-        .map((b) => ({
-          phone: String(b.phone),
-          risk: Number(b.risk_score ?? 0.5),
-          orders: Number(b.total_orders ?? 0),
-          accepted: Number(b.total_accepted ?? 0),
-          refused: Number(b.total_refused ?? 0),
-          embedding: b.embedding,
+        .map((b) => ({ row: b, vector: asVector(b) }))
+        .filter((e): e is { row: BuyerEmbeddingRow; vector: number[] } => e.vector != null)
+        .map(({ row, vector }) => ({
+          phone: String(row.phone),
+          risk: Number(row.risk_score ?? 0.5),
+          orders: Number(row.total_orders ?? 0),
+          accepted: Number(row.total_accepted ?? 0),
+          refused: Number(row.total_refused ?? 0),
+          embedding: vector,
         }));
 
       const spendMap = new Map<string, number>();
@@ -3075,9 +3601,26 @@ const supabase = createClient(
           /\b(?:file|pdf|csv|excel|xlsx|spreadsheet|download|export|report)\b/i.test(rawPrompt)
             ? "\n\n(If the user asked for a downloadable file, call create_file - it is attached automatically.)"
             : "";
+        // A follow-up like "what's his name" carries no phone number of its own.
+        // Hand the model the buyer the conversation was already about instead of
+        // letting it ask again (or, worse, answer as if the buyer vanished).
+        const lastMentionedPhone = (() => {
+          if (/\d{9,}/.test(rawPrompt)) return null;
+          for (let i = history.length - 1; i >= 0; i--) {
+            const hit = String((history[i] as { content?: unknown })?.content ?? "").match(
+              /\+?\d{11,13}/,
+            );
+            if (hit) return hit[0];
+          }
+          return null;
+        })();
+        const followUpNote = lastMentionedPhone
+          ? `\n\n(Follow-up question: the buyer already under discussion is ${lastMentionedPhone}. ` +
+            "Use that number for any buyer tool call - do not ask the user to repeat it.)"
+          : "";
         const userContent = context
-          ? `Context:\n${context}\n\nQuestion:\n${rawPrompt}${chartUserNote}${fileUserNote}`
-          : `${rawPrompt}${chartUserNote}${fileUserNote}`;
+          ? `Context:\n${context}\n\nQuestion:\n${rawPrompt}${chartUserNote}${fileUserNote}${followUpNote}`
+          : `${rawPrompt}${chartUserNote}${fileUserNote}${followUpNote}`;
 
         const detectedCity = detectCity(rawPrompt);
         const cityScopeNote = detectedCity
@@ -3121,6 +3664,21 @@ const supabase = createClient(
               "to get exact matches before estimating.\n" +
               "- Buyer phone numbers returned by tools are this seller's own customers - include them " +
               "verbatim in your answer (e.g. +923001112222). Never mask or anonymize them.\n" +
+              "- BUYER NAMES: tools return `buyer_name` (or `name`) only when the seller has an order " +
+              "from that person in their own store. If it is null, say \"no name on file for that " +
+              "number\" and give the number - NEVER invent a name, and never explain the missing " +
+              "name with a theory (\"they may not have a complete profile\").\n" +
+              "- When you talk about a specific buyer, name them AND repeat their phone number in the " +
+              "same answer (e.g. \"Ayesha Siddiqui, +923001234501\"). Follow-up questions like \"what is " +
+              "his name\" refer back to that number, so it must already be in the conversation.\n" +
+              "- NEVER say a buyer \"does not exist\" or \"is not in the network\" if a tool returned a " +
+              "profile, orders or stats for them: they exist, the field is just missing. Use only the " +
+              "phrases \"no name on file\" / \"not in the data\".\n" +
+              "- When you report a buyer's figures, copy the exact fields a tool returned " +
+              "(orders, accepted, refused, spend, risk_score). Do not restate them from memory, and do " +
+              "not add a value that no tool returned - that is how wrong order counts get told.\n" +
+              "- top_buyers returns masked labels like \"••••4009\" on purpose. Quote the label as " +
+              "given, and tell the seller they can ask about a full number for the named profile.\n" +
               "- When the user asks whether to ship to a buyer, prefer calling buyer_verdict to get a " +
               "recommendation, and quote its verdict.\n" +
               "- When the user asks who is similar to a buyer, call similar_buyers.\n\n" +
@@ -3170,7 +3728,7 @@ const supabase = createClient(
                   args: summarizeArgs(args),
                   label: TOOL_LABELS[tc.function.name] ?? tc.function.name,
                 });
-                result = await runAgentTool(tc.function.name, args, supabase, openai);
+                result = await runAgentTool(tc.function.name, args, supabase, openai, storeIds);
                 emit("tool_result", {
                   name: tc.function.name,
                   summary: summarizeTool(tc.function.name, result),

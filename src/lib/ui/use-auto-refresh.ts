@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 /**
  * Re-run a loader on a timer, but only while the tab is actually visible.
  *
- * - stops while the tab is hidden, and runs once on the way back
+ * - stops while the tab is hidden; on the way back the timer restarts and the
+ *   data is refreshed only if it is already older than `intervalMs` (coming
+ *   back after two seconds should not throw the page away and reload it)
  * - never starts a second run while one is still going
  * - the loader is read from a ref, so a new function identity does not
  *   restart the timer
@@ -27,10 +29,14 @@ export function useAutoRefresh(
     if (!enabled || intervalMs <= 0) return
 
     let timer: number | null = null
+    // Everything the caller renders is already fresh when this effect mounts,
+    // so the clock starts now rather than at zero.
+    let lastRun = Date.now()
 
     async function run() {
       if (running.current) return
       running.current = true
+      lastRun = Date.now()
       try {
         await loadRef.current()
       } finally {
@@ -51,7 +57,9 @@ export function useAutoRefresh(
 
     function onVisibility() {
       if (document.visibilityState === 'visible') {
-        void run()
+        // Only catch up if the tab was away long enough for the data to be
+        // stale. A quick glance away and back leaves the page untouched.
+        if (Date.now() - lastRun >= intervalMs) void run()
         start()
       } else {
         stop()

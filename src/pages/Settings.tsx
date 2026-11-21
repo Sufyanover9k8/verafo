@@ -2,16 +2,22 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { CardState } from '../components/app/card-state'
+import { OrderImport } from '../components/app/order-import'
 import { canExportAudience, exportAudienceCsv, type AudienceBuyer } from '../lib/ui/audiences'
 import { PageHeader } from '../components/app/page-header'
 import { NeedsSetup } from '../components/States'
 import { useIsAdmin } from '../lib/admin'
 import { useStoreScope } from '../lib/store'
+import { overageCallPkr, overagePkr, readCreditStatus, type CreditStatus } from '../lib/credits'
+import { readCallSettings, saveCallSettings, thresholdLabel, type CallSettings } from '../lib/calls'
 import { isConfigured, supabase } from '../lib/supabase'
 import { LOGIN_PATH } from '../lib/ui/auth-redirect'
 import { useSession } from '../lib/session'
 import { useTheme, type Theme } from '../lib/theme'
 import { useToast } from '../lib/toast'
+
+/** Risk thresholds offered for automated calls — matches the mobile app. */
+const CALL_THRESHOLDS = [0.35, 0.5, 0.65, 0.8]
 
 function download(name: string, content: string) {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
@@ -45,6 +51,7 @@ export function Settings() {
   const [ready, setReady] = useState(false)
   const [buyerCount, setBuyerCount] = useState<number | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [name, setName] = useState<string>(displayName)
@@ -54,10 +61,81 @@ export function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
+  /** Calling: the threshold + budget the automated call queue reads. */
+  const [calls, setCalls] = useState<CallSettings | null>(null)
+  const [callsLoading, setCallsLoading] = useState(true)
+  const [savingCalls, setSavingCalls] = useState<'auto' | 'threshold' | null>(null)
+  const [credits, setCredits] = useState<CreditStatus | null>(null)
 
   useEffect(() => {
     setName(displayName)
   }, [displayName])
+
+  // Plan and credit use for this month, refreshed whenever the store changes.
+  useEffect(() => {
+    if (!store?.id) return
+    let alive = true
+    readCreditStatus(store.id)
+      .then((next) => {
+        if (alive) setCredits(next)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [store?.id])
+
+  useEffect(() => {
+    let alive = true
+    readCallSettings()
+      .then(({ settings, stores }) => {
+        if (!alive) return
+        const row =
+          (store ? settings?.find((s) => s.store_id === store.id) : undefined) ??
+          settings?.find((s) => s.store_id === stores?.[0]?.id) ??
+          null
+        setCalls(row)
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setCallsLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [store])
+
+  async function saveCalls(
+    patch: Partial<Pick<CallSettings, 'auto_call' | 'risk_threshold'>>,
+    which: 'auto' | 'threshold',
+  ) {
+    if (!calls) return
+    setSavingCalls(which)
+    try {
+      const res = await saveCallSettings(calls.store_id, patch)
+      setCalls(res.settings ?? { ...calls, ...patch })
+      const threshold = thresholdLabel(Number(res.settings?.risk_threshold ?? calls.risk_threshold))
+      toast.push({
+        kind: 'success',
+        title:
+          which === 'auto'
+            ? calls.auto_call
+              ? 'Automated calls are off'
+              : `Automated calls are on — ${threshold} risk and above`
+            : which === 'threshold'
+              ? `Calls now start at ${threshold} risk`
+              : 'Call budget saved',
+      })
+    } catch (error) {
+      toast.push({
+        kind: 'error',
+        title: 'Could not save calling settings',
+        detail: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSavingCalls(null)
+    }
+  }
 
   useEffect(() => {
     if (!supabase) {
@@ -66,9 +144,10 @@ export function Settings() {
     }
     let cancelled = false
     // Only the buyer count is shown; the page does not need to wait on a ping.
+    // `buyers` is keyed by phone — asking for `id` is a 400 on every visit.
     supabase
       .from('buyers')
-      .select('id', { count: 'exact', head: true })
+      .select('phone', { count: 'exact', head: true })
       .then(({ count }) => {
         if (cancelled) return
         setBuyerCount(count)
@@ -351,6 +430,144 @@ export function Settings() {
         <section className="card settings-section">
           <div className="settings-section-head">
             <span className="kpi-icon blue">
+              <Icon name="card" size={16} />
+            </span>
+            <span className="eyebrow">Plan and credits</span>
+          </div>
+          <div className="settings-rows">
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">{credits?.planName ?? 'Free'} plan</div>
+                <div className="setting-desc">
+                  A buyer check costs one credit. A call costs two credits, whatever its length.
+                </div>
+              </div>
+              <div className="setting-control">
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href="https://admin.shopify.com/apps/ec17a432659bf1af629483bf28a50a25/app/billing"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Change plan
+                </a>
+              </div>
+            </div>
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">This month</div>
+                <div className="setting-desc">
+                  {credits
+                    ? credits.unlimited
+                      ? `${Math.round(credits.used).toLocaleString()} checks used · your plan has no check limit`
+                      : `${Math.round(credits.used).toLocaleString()} of ${credits.included.toLocaleString()} packaged credits used${
+                          credits.cycleEnd
+                            ? ` · resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, {
+                                day: 'numeric',
+                                month: 'short',
+                              })}`
+                            : ''
+                        }${
+                          credits.overageRate > 0 ? ` · then PKR ${credits.overageRate} a check` : ''
+                        }`
+                    : 'Reading your usage…'}
+                </div>
+              </div>
+              <div className="setting-control">
+                {credits?.unlimited ? (
+                  <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--v-ink-400)]">
+                    Unlimited
+                  </span>
+                ) : (
+                  <div
+                    className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--v-ink-700)]"
+                    aria-hidden="true"
+                  >
+                    <span
+                      className="block h-full rounded-full bg-[var(--cyan-primary)]"
+                      style={{
+                        width: `${
+                          credits && credits.included > 0
+                            ? Math.min(100, (credits.used / credits.included) * 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            {credits && credits.overage > 0 && (
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Over the package</div>
+                  <div className="setting-desc">
+                    {Math.round(credits.overage).toLocaleString()} checks at PKR{' '}
+                    {credits.overageRate} each = PKR{' '}
+                    {overagePkr(credits).toLocaleString()} so far, billed on the next Shopify
+                    invoice. There is no cap: each extra check is charged at the plan rate.
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="setting-row">
+              <div className="setting-info">
+                <div className="setting-title">Calls</div>
+                <div className="setting-desc">
+                  {credits
+                    ? `${Math.round(credits.usedCalls).toLocaleString()} of ${credits.includedCalls.toLocaleString()} calls used${
+                        credits.callsOneTime
+                          ? ' · the free ten never reset'
+                          : credits.cycleEnd
+                            ? ` · resets ${new Date(credits.cycleEnd).toLocaleDateString(undefined, {
+                                day: 'numeric',
+                                month: 'short',
+                              })}`
+                            : ''
+                      }${
+                        credits.overageRatePerCall > 0
+                          ? ` · then PKR ${credits.overageRatePerCall} a call`
+                          : ''
+                      }`
+                    : 'Reading your usage…'}
+                </div>
+              </div>
+              <div className="setting-control">
+                <div
+                  className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--v-ink-700)]"
+                  aria-hidden="true"
+                >
+                  <span
+                    className="block h-full rounded-full bg-[var(--cyan-primary)]"
+                    style={{
+                      width: `${
+                        credits && credits.includedCalls > 0
+                          ? Math.min(100, (credits.usedCalls / credits.includedCalls) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            {credits && credits.overageCalls > 0 && (
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Calls over the package</div>
+                  <div className="setting-desc">
+                    {Math.round(credits.overageCalls).toLocaleString()} extra calls at PKR{' '}
+                    {credits.overageRatePerCall} each = PKR{' '}
+                    {overageCallPkr(credits).toLocaleString()} so far, billed on the next Shopify
+                    invoice.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+        <section className="card settings-section">
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
               <Icon name="shield-checkmark" size={16} />
             </span>
             <span className="eyebrow">Security</span>
@@ -416,6 +633,96 @@ export function Settings() {
                 </button>
               </form>
             </div>
+          </div>
+        </section>
+
+        <section className="card settings-section">
+          <div className="settings-section-head">
+            <span className="kpi-icon blue">
+              <Icon name="sparkles" size={16} />
+            </span>
+            <span className="eyebrow">Calling</span>
+          </div>
+          <div className="settings-rows">
+            {!calls && !callsLoading ? (
+              <div className="setting-row">
+                <div className="setting-info">
+                  <div className="setting-title">Not set up yet</div>
+                  <div className="setting-desc">
+                    Open Verafo on your phone once for this store and calling settings appear here.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-title">Automate calls</div>
+                    <div className="setting-desc">
+                      Verafo calls every order at or above the threshold, one at a time, and records
+                      what the buyer says. Orders below it are accepted without a call.
+                    </div>
+                  </div>
+                  <button
+                    className={`switch${calls?.auto_call ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={Boolean(calls?.auto_call)}
+                    aria-label="Automate calls"
+                    disabled={!calls || savingCalls === 'auto'}
+                    onClick={() => void saveCalls({ auto_call: !calls?.auto_call }, 'auto')}
+                  />
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-title">Call at this risk or higher</div>
+                    <div className="setting-desc">
+                      The line between calling and accepting silently. Applies to automation and to
+                      the “Automate calls” switch on Outcomes.
+                    </div>
+                  </div>
+                  <div className="seg" role="group" aria-label="Call risk threshold">
+                    {CALL_THRESHOLDS.map((t) => (
+                      <button
+                        key={t}
+                        className={
+                          calls && Math.abs(calls.risk_threshold - t) < 0.001 ? 'active' : undefined
+                        }
+                        disabled={!calls || savingCalls === 'threshold'}
+                        onClick={() => void saveCalls({ risk_threshold: t }, 'threshold')}
+                        aria-pressed={Boolean(calls && Math.abs(calls.risk_threshold - t) < 0.001)}
+                      >
+                        {thresholdLabel(t)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-title">Credits left</div>
+                    <div className="setting-desc">
+                      A buyer check is one credit and a call is two, whatever its length. Checks and
+                      calls each have their own allowance: Standard packs 1,500 checks a month then
+                      bills PKR 2 a check, and Founder One has no check limit at all. Calls are{' '}
+                      {credits?.includedCalls ?? 100} a month — the free plan's ten never reset — then
+                      PKR 40 a call on Standard or PKR 30 on Founder One.
+                    </div>
+                  </div>
+                  <div className="setting-control">
+                    <span className="text-[15px] font-semibold tabular-nums text-foreground">
+                      {credits
+                        ? credits.unlimited
+                          ? `${Math.round(credits.used).toLocaleString()} checks · unlimited`
+                          : `${Math.round(credits.remaining).toLocaleString()} credits`
+                        : '—'}
+                      {' · '}
+                      {credits ? Math.round(credits.remainingCalls).toLocaleString() : '—'} calls
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
@@ -536,6 +843,34 @@ export function Settings() {
             </div>
           </section>
         )}
+
+        <section className="card settings-section">
+          <button
+            type="button"
+            className="settings-toggle"
+            aria-expanded={importOpen}
+            aria-controls="import-orders"
+            onClick={() => setImportOpen((v) => !v)}
+          >
+            <span className="kpi-icon safe">
+              <Icon name="cloud-upload" size={16} />
+            </span>
+            <span className="eyebrow">Import orders</span>
+            <Icon name="chevron-down" size={16} className="toggle-chevron" />
+          </button>
+
+          {importOpen && (
+            <div id="import-orders" className="settings-panel">
+              <p className="setting-desc" style={{ marginBottom: 'var(--s-4)' }}>
+                Bring order history in from another platform — an Instagram or WhatsApp order sheet,
+                Daraz, WooCommerce, or an older Verafo export. Re-importing is safe, and rows that
+                already arrived from Shopify are skipped. Courier delivery reports stay on the
+                Courier reports page, because they are what sets outcomes.
+              </p>
+              <OrderImport />
+            </div>
+          )}
+        </section>
 
         <section className="card settings-section">
           <button

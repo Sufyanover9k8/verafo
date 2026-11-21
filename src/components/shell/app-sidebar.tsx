@@ -15,6 +15,7 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { CallCredits } from './call-credits'
 import { StoreSwitcher } from './store-switcher'
 import { UserMenu } from './user-menu'
 
@@ -91,6 +92,7 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroup>
         ))}
+        <CallCredits />
         <SidebarGroup>
           <SidebarGroupLabel className={GROUP_LABEL_CLASS}>Account</SidebarGroupLabel>
           <SidebarMenu>

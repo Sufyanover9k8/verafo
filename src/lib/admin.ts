@@ -51,8 +51,10 @@ export function useIsAdmin(): AdminState {
       setAdmin(!error && data === true)
       setChecking(false)
     }
-
-    void supabase.auth.getUser().then(({ data }) => void apply(data.user?.email))
+    // Read the cached session instead of calling the auth server: this only
+    // decides what the UI shows, RLS still enforces everything server-side,
+    // and SessionProvider has already loaded the same session.
+    void supabase.auth.getSession().then(({ data }) => apply(data.session?.user?.email))
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       void apply(session?.user?.email)
     })

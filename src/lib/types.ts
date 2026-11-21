@@ -83,6 +83,8 @@ export interface OrderRow {
   city: string | null
   ordered_at: string | null
   stores?: { name: string } | null
+  /** Per-order name captured from Shopify (the courier label) or a call correction. */
+  order_fulfillment?: { customer_name: string | null } | null
   outcomes?: { status: OutcomeStatus | null; resolved_at: string | null; refusal_reason: string | null } | null
 }
 

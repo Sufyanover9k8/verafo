@@ -8,7 +8,7 @@ import { Reveal } from '../components/Reveal'
 import { EmptyState, NeedsSetup } from '../components/States'
 import { timeAgo } from '../lib/format'
 import { activeMention, mentionPhones, renderMentions, type ActiveMention } from '../lib/mentions'
-import { functionsBaseUrl, isConfigured, supabase } from '../lib/supabase'
+import { functionsBaseUrl, edgeFetch, isConfigured, supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import type { AnalyzeReport, ChatMessage, ChatRow, ChartSpec, FileSpec } from '../lib/types'
 
@@ -381,10 +381,9 @@ export function Chat() {
   )
 
   const loadSuggestions = useCallback(async () => {
-    const base = functionsBaseUrl()
-    if (!base) return
+    if (!functionsBaseUrl()) return
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'suggest' }),
@@ -747,9 +746,7 @@ export function Chat() {
         if (phone && !activeChat?.phone) {
           await supabase.from('chats').update({ phone }).eq('id', activeId)
         }
-        const base = functionsBaseUrl()
-        if (!base) throw new Error('Edge functions are not configured')
-        const res = await fetch(`${base}/verafo-ai`, {
+        const res = await edgeFetch('/verafo-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'chat', chat_id: activeId, prompt: raw, phone: phone ?? undefined }),
@@ -821,11 +818,9 @@ export function Chat() {
     e.preventDefault()
     const phone = analyzePhone.trim()
     if (!supabase || !activeId || !phone || featureBusy) return
-    const base = functionsBaseUrl()
-    if (!base) return
     setFeatureBusy(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'analyze', phone }),
@@ -845,11 +840,9 @@ export function Chat() {
 
   async function runTrends() {
     if (!supabase || !activeId || featureBusy) return
-    const base = functionsBaseUrl()
-    if (!base) return
     setFeatureBusy(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'trends' }),
@@ -867,11 +860,9 @@ export function Chat() {
 
   async function runSuggest() {
     if (!supabase || !activeId || featureBusy) return
-    const base = functionsBaseUrl()
-    if (!base) return
     setFeatureBusy(true)
     try {
-      const res = await fetch(`${base}/verafo-ai`, {
+      const res = await edgeFetch('/verafo-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'suggest' }),

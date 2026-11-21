@@ -62,6 +62,26 @@ if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-col
 document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 // Tells the stylesheet that script.js will run, so scroll reveals may start hidden.
 document.documentElement.className='js';
+// A merchant who is already signed in and lands on the public home page (for
+// example from "Open Verafo Dashboard" inside the Shopify admin) belongs in the
+// app, not on the marketing page. Signed-out visitors stay here.
+(function(){
+  try {
+    var key = null;
+    for (var i = 0; i < localStorage.length; i += 1) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('sb-') === 0 && k.slice(-11) === '-auth-token') { key = k; break; }
+    }
+    if (!key) return;
+    var raw = localStorage.getItem(key);
+    if (!raw) return;
+    var parsed = JSON.parse(raw);
+    var session = parsed && (parsed.currentSession || parsed);
+    if (session && (session.access_token || session.refresh_token)) {
+      window.location.replace('/dashboard');
+    }
+  } catch (e) { /* a broken store must never block the site */ }
+})();
 </script>
 <link rel="preload" href="assets/img/logo-cbc4dc73.webp" as="image" type="image/webp">
 <link rel="preload" href="styles.css" as="style">
@@ -649,7 +669,7 @@ document.documentElement.className='js';
       <div><b>Zero</b><span>operational effort from the seller</span></div>
       <div><b>3 steps</b><span>to install and start scoring</span></div>
       <div><b>Day one</b><span>works with no history and no training</span></div>
-      <div><b>100 a day</b><span>free checks, no card needed</span></div>
+      <div><b>100 a month</b><span>free checks, no card needed</span></div>
     </div>
   </div>
 </section>
@@ -671,7 +691,7 @@ document.documentElement.className='js';
         <p class="tier__price">PKR 0<small>/ forever</small></p>
 
         <ul class="tier__list">
-          <li>100 buyer risk checks per day</li>
+          <li>100 check credits a month, and 10 calls in total</li>
           <li>Basic risk dashboard</li>
           <li>Buyer lookup</li>
         </ul>
@@ -686,7 +706,8 @@ document.documentElement.className='js';
         <p class="tier__terms">7 days free</p>
 
         <ul class="tier__list">
-          <li>10,000 risk checks per day</li>
+          <li>1,500 check credits a month, then PKR 2 a credit — no cap</li>
+          <li>100 calls a month, then PKR 40 a call</li>
           <li>COD restriction or prepay nudge</li>
           <li>Address intelligence</li>
           <li>Full risk dashboard</li>
@@ -719,7 +740,8 @@ document.documentElement.className='js';
 
         <ul class="tier__list tier__list--valued">
           <li><span>Everything in Standard</span><em>Included</em></li>
-          <li><span>Unlimited risk checks</span><em>Upgrade</em></li>
+          <li><span>Unlimited check credits, and 300 calls a month, then PKR 30 a credit — no cap</span><em>Included</em></li>
+          <li><span>300 calls a month, then PKR 30 a call</span><em>Included</em></li>
           <li><span>Auto capture + full dashboard</span><em>PKR 5,000</em></li>
           <li><span>Sub-second scoring</span><em>PKR 2,000</em></li>
           <li><span>Dedicated onboarding</span><em class="is-bonus">Bonus</em></li>
