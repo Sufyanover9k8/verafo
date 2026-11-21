@@ -19,6 +19,7 @@ import { CountUp } from '@/components/app/count-up'
 import { briefingLine } from '@/components/app/briefing-line'
 import { FirstRunChecklist, MoneyRiskCards } from '@/components/app/dashboard-extras'
 import { InsightCards } from '@/components/app/insight-cards'
+import { AppDownload } from '@/components/app/app-download'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -799,6 +800,9 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* The Android build, for the merchant reading this on a laptop. */}
+      <AppDownload />
 
       {/* Recent activity. */}
       <Card className="gap-0 overflow-hidden py-0">
