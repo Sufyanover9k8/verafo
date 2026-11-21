@@ -382,6 +382,16 @@ export function Auth() {
                   <button className="link" type="button" onClick={() => switchMode('up')}>
                     Create an account
                   </button>
+                  , or{' '}
+                  <a
+                    className="link"
+                    href="https://apps.shopify.com/verafo"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    install it on Shopify
+                  </a>{' '}
+                  and your store signs in here.
                 </>
               ) : (
                 <>

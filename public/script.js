@@ -12,14 +12,13 @@ var VERAFO_FOUNDING = {
    VERAFO — site behaviour
    No framework, no build step. Open index.html directly.
 
-   DEPLOY NOTE: the onboarding form has no backend yet.
-   Set VERAFO_FORM_ENDPOINT below to a Google Apps Script,
-   Formspree, or Formspark URL and submissions post there.
-   Leave it empty and submissions are kept in the browser
-   and shown to the applicant with a copy button.
+   The onboarding form posts to public.applications over the REST
+   API with the publishable key. Anon may only insert; reading an
+   application back needs an admin session.
    ========================================================= */
 
-var VERAFO_FORM_ENDPOINT = '';
+var VERAFO_FORM_ENDPOINT = 'https://gvjbolyoeisyjsphnwze.supabase.co/rest/v1/applications';
+var VERAFO_FORM_KEY = 'sb_publishable_e1RjWCbNWBCd1kgxx_oEEg_tN2w0Gbf';
 
 /* DEPLOY NOTE: this page authenticates nobody itself. Once the form
    validates, the merchant is handed to the app, which owns the session.
@@ -1428,8 +1427,13 @@ var VERAFO_APP_URL = 'https://www.verafo.com/';
       if (VERAFO_FORM_ENDPOINT) {
         fetch(VERAFO_FORM_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: VERAFO_FORM_KEY,
+            Authorization: 'Bearer ' + VERAFO_FORM_KEY,
+            Prefer: 'return=minimal'
+          },
+          body: JSON.stringify({ payload: payload, source: 'verafo.com' })
         }).then(function (r) {
           finish(r && r.ok);
         }).catch(function () {
